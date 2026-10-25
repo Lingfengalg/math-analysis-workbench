@@ -1,7 +1,7 @@
 ---
 name: 缺陷 / 数学纠错
 about: 报告功能缺陷或数学内容错误
-title: "[问题] "
+title: '[问题] '
 labels: bug
 ---
 

@@ -1,0 +1,187 @@
+.hero {
+  background: #194e42;
+  border-radius: 16px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 310px;
+  overflow: hidden;
+}
+.heroCopy {
+  padding: 34px 40px;
+  position: relative;
+  z-index: 1;
+}
+.heroLabel {
+  font-size: 12px;
+  color: #b9d2c4;
+  letter-spacing: 2px;
+}
+.hero h2 {
+  color: #fffdf3;
+  font-size: 34px;
+  line-height: 1.45;
+  margin: 14px 0;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+.hero p {
+  color: #d0e0d7;
+  line-height: 1.8;
+  font-size: 13px;
+}
+.heroButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 22px;
+  background: #e5f6d2;
+  color: #194e42;
+  padding: 11px 18px;
+  border-radius: 7px;
+  font-weight: 600;
+  margin-top: 12px;
+}
+.heroButton:hover {
+  background: white;
+  color: #194e42;
+}
+.graph {
+  align-self: center;
+  position: relative;
+  margin-right: 28px;
+}
+.graph svg {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+.graphGrid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(#ffffff09 1px, transparent 1px),
+    linear-gradient(90deg, #ffffff09 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+.graphNote {
+  display: block;
+  text-align: right;
+  color: #b9d2c4;
+  font-size: 11px;
+  letter-spacing: 1px;
+  padding-right: 22px;
+}
+.moduleGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+.moduleCard {
+  display: block;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  background: white;
+  transition:
+    transform 0.18s,
+    border-color 0.18s;
+}
+.moduleCard:hover {
+  transform: translateY(-3px);
+  border-color: #96b9a9;
+  color: var(--text);
+}
+.cardTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 23px;
+  gap: 8px;
+}
+.cardTop :global(.ant-tag) {
+  margin: 0;
+  font-size: 10px;
+}
+.moduleIcon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  background: #eef4ed;
+  color: #176b5b;
+  border-radius: 10px;
+  font-size: 19px;
+}
+.moduleNumber {
+  font-size: 10px;
+  letter-spacing: 1.4px;
+  color: #829088;
+}
+.moduleCard h3 {
+  font-size: 18px;
+  margin: 9px 0;
+}
+.moduleCard p {
+  color: var(--muted);
+  font-size: 12px;
+}
+.cardLink {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  padding-top: 20px;
+  color: #176b5b;
+}
+.teamNote {
+  display: flex;
+  gap: 24px;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 28px;
+  padding: 25px 0;
+  border-bottom: 1px solid var(--border);
+}
+.teamNote h2 {
+  font-size: 17px;
+  margin: 9px 0;
+}
+.teamNote p {
+  font-size: 12px;
+  color: var(--muted);
+  max-width: 600px;
+  line-height: 1.8;
+}
+.teamNote a {
+  font-size: 12px;
+  color: #176b5b;
+  white-space: nowrap;
+}
+@media (max-width: 1100px) {
+  .moduleGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .heroCopy {
+    padding: 28px;
+  }
+  .hero h2 {
+    font-size: 29px;
+  }
+}
+@media (max-width: 640px) {
+  .hero {
+    grid-template-columns: 1fr;
+  }
+  .graph {
+    display: none;
+  }
+  .moduleGrid {
+    grid-template-columns: 1fr;
+  }
+  .teamNote {
+    display: block;
+  }
+  .teamNote a {
+    display: inline-block;
+    margin-top: 10px;
+  }
+}

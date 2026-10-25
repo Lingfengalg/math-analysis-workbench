@@ -1,6 +1,6 @@
 # 设计文档
 
-状态：初始设计提案，非已实现说明。
+状态：基础工程已提供知识导航与绘图示例；错题本、AI 助教仍未实现。完整开发规范见 [development.md](development.md)，接口约定见 [contracts.md](contracts.md)。
 
 ## 目标用户与场景
 
@@ -22,12 +22,14 @@
 └── AI 助教（可选）
 ```
 
-## 技术方案待决策
+## 技术方案
 
-- 在 Issue 中确定前端框架、数学表达式解析器、绘图库及测试工具。
-- 优先评估无需后端即可使用的 MVP，并验证最终部署或离线使用方式。
-- 数学内容与界面逻辑分离，便于审查、复用和独立贡献。
-- 数据结构建议：知识卡片含 `id`、`topic`、`title`、`definition`、`conditions`、`examples`、`pitfalls`、`references`。
+- React + TypeScript + Vite；Ant Design 与 CSS Modules；React Router hash 路由。
+- mathjs 白名单表达式在 Worker 内采样，ECharts 展示，KaTeX 渲染公式。
+- Zod 统一数据契约；版本化 localStorage 保存绘图默认设置。
+- Vitest / Testing Library 单元与组件测试，Playwright 验证完整流程，GitHub Actions 自动检查。
+- 初版无后端或账号系统；构建产物需 HTTP 服务访问，不支持 file:// 双击打开。
+- 数学内容与界面逻辑分离，知识数据位于 `src/content/knowledge`；卡片结构以 `shared/contracts` 为准。
 
 ## 质量设计
 
@@ -44,4 +46,4 @@
 3. 集成测试：导航切换、函数输入、图表更新与错误反馈。
 4. 人工验收：新用户依据 README 启动并完成示例流程。
 
-实现后补充架构决策、依赖版本、实际运行命令、截图和测试结果。
+依赖版本以锁文件为准，运行命令见 README。测试不代替数学人工核验；新增功能继续补充实际测试结果与截图。
