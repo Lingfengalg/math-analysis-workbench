@@ -1,7 +1,7 @@
 ---
 name: 功能 / 协作任务
 about: 提出功能、认领任务或改进文档
-title: "[任务] "
+title: '[任务] '
 labels: enhancement
 ---
 

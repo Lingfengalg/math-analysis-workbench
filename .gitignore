@@ -9,3 +9,6 @@ __pycache__/
 .venv/
 .DS_Store
 *.log
+playwright-report/
+test-results/
+*.tsbuildinfo
