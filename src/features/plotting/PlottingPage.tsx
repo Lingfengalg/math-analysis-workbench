@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import {
   Alert,
@@ -7,6 +7,7 @@ import {
   Form,
   Input,
   InputNumber,
+  Popconfirm,
   Space,
   Spin,
   Tag,
@@ -30,15 +31,20 @@ const preferences = createStorage('preferences', preferencesSchema);
 function PlottingWorkspace({
   initial,
   warning,
+  initialStorageError,
 }: {
   initial: PlotRequest;
   warning?: string;
+  initialStorageError?: string;
 }) {
   const [form] = Form.useForm<PlotRequest>();
   const [request, setRequest] = useState(initial);
   const [result, setResult] = useState<PlotResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [storageError, setStorageError] = useState(initialStorageError);
+  const saveController = useRef<AbortController | null>(null);
   const [saveStatus, setSaveStatus] = useState<{
     ok: boolean;
     text: string;
@@ -60,6 +66,7 @@ function PlottingWorkspace({
       });
     return () => controller.abort();
   }, [request]);
+  useEffect(() => () => saveController.current?.abort(), []);
 
   const draw = (value: PlotRequest) => {
     const valid = plotRequestSchema.safeParse(value);
@@ -78,17 +85,65 @@ function PlottingWorkspace({
     draw(next);
   };
   const save = async () => {
+    if (saveController.current) return;
+    const controller = new AbortController();
+    saveController.current = controller;
+    setSaving(true);
+    setSaveStatus(null);
     try {
-      const values = await form.validateFields();
-      const result = preferences.write({ defaultPlot: values });
+      let values: PlotRequest;
+      try {
+        values = await form.validateFields();
+      } catch {
+        return; // Form fields show validation errors.
+      }
+      if (controller.signal.aborted) return;
+      const valid = plotRequestSchema.safeParse(values);
+      if (!valid.success) {
+        setSaveStatus({ ok: false, text: valid.error.issues[0].message });
+        return;
+      }
+      await calculatePlot(valid.data, controller.signal);
+      if (controller.signal.aborted) return;
+      const stored = preferences.read({ defaultPlot: DEFAULT });
+      if (!stored.ok) {
+        setStorageError(stored.error);
+        setSaveStatus({ ok: false, text: '旧设置无法读取，未覆盖原始数据。' });
+        return;
+      }
+      const result = preferences.write({ defaultPlot: valid.data });
       setSaveStatus({
         ok: result.ok,
         text: result.ok
           ? '已保存到当前浏览器，下次访问绘图模块时生效。'
           : result.error,
       });
-    } catch {
-      /* Form fields show validation errors. */
+    } catch (cause: unknown) {
+      if (!controller.signal.aborted)
+        setSaveStatus({
+          ok: false,
+          text: `未保存：${cause instanceof Error ? cause.message : '计算失败'}`,
+        });
+    } finally {
+      if (!controller.signal.aborted) {
+        saveController.current = null;
+        setSaving(false);
+      }
+    }
+  };
+  const clearPreferences = () => {
+    const stored = preferences.read({ defaultPlot: DEFAULT });
+    if (stored.ok) {
+      setStorageError(undefined);
+      setSaveStatus({ ok: true, text: '设置已恢复可读取，未清除数据。' });
+      return;
+    }
+    const result = preferences.clear();
+    if (result.ok) {
+      setStorageError(undefined);
+      setSaveStatus({ ok: true, text: '旧设置已清除，可以重新保存。' });
+    } else {
+      setSaveStatus({ ok: false, text: result.error });
     }
   };
 
@@ -100,6 +155,28 @@ function PlottingWorkspace({
           showIcon
           title={warning}
           className="section-gap-bottom"
+        />
+      )}
+      {storageError && (
+        <Alert
+          type="warning"
+          showIcon
+          className="section-gap-bottom"
+          title="本地默认设置无法读取"
+          description={`${storageError} 原始数据未被覆盖。请先备份；确认不再需要后可清除。`}
+          action={
+            <Popconfirm
+              title="清除无法读取的默认设置？"
+              description="清除后无法恢复，请先备份。"
+              okText="确认清除"
+              cancelText="取消"
+              onConfirm={clearPreferences}
+            >
+              <Button danger size="small">
+                清除旧设置
+              </Button>
+            </Popconfirm>
+          }
         />
       )}
       {initial.sourceKnowledgeId && (
@@ -168,6 +245,7 @@ function PlottingWorkspace({
             className="section-gap"
             icon={<SaveOutlined />}
             onClick={() => void save()}
+            loading={saving}
             block
           >
             保存默认设置
@@ -246,12 +324,11 @@ function PlottingEntry({ search }: { search: URLSearchParams }) {
     const warning =
       search.has('expression') && !linked
         ? '链接参数无效，已使用默认设置。'
-        : !stored.ok
-          ? stored.error
-          : undefined;
+        : undefined;
     return {
       initial: linked ?? (stored.ok ? stored.data.defaultPlot : DEFAULT),
       warning,
+      initialStorageError: stored.ok ? undefined : stored.error,
     };
   });
   return <PlottingWorkspace {...entry} />;
