@@ -58,6 +58,8 @@ export const mistakeSchema = z.object({
     ),
   createdAt: z.number().int().nonnegative(),
   updatedAt: z.number().int().nonnegative(),
+  /** 最近一次复习时间；null 表示未复习。旧数据缺少该字段时按未复习处理。 */
+  reviewedAt: z.number().int().nonnegative().nullable().default(null),
 });
 
 export type Mistake = z.infer<typeof mistakeSchema>;
@@ -100,7 +102,13 @@ export function createMistake(
   draft: MistakeDraft,
   now: number = Date.now(),
 ): Mistake {
-  return { ...draft, id: createMistakeId(), createdAt: now, updatedAt: now };
+  return {
+    ...draft,
+    id: createMistakeId(),
+    createdAt: now,
+    updatedAt: now,
+    reviewedAt: null,
+  };
 }
 
 export function updateMistake(
@@ -117,6 +125,15 @@ export function sortMistakes(items: readonly Mistake[]): Mistake[] {
     (left, right) =>
       right.updatedAt - left.updatedAt || left.createdAt - right.createdAt,
   );
+}
+
+/** 标记或取消复习。复习会更新 updatedAt，但不改 createdAt。 */
+export function markReviewed(
+  item: Mistake,
+  reviewed: boolean,
+  now: number = Date.now(),
+): Mistake {
+  return { ...item, reviewedAt: reviewed ? now : null, updatedAt: now };
 }
 
 export function formatMistakeTime(timestamp: number): string {

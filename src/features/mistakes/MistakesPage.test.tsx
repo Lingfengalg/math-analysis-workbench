@@ -1,4 +1,10 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import MistakesPage from './MistakesPage';
@@ -126,5 +132,133 @@ describe('只读模式 (#23)', () => {
 
     expect(screen.getByText(/只读模式/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /记录错题/ })).toBeDisabled();
+  });
+});
+
+describe('错题本导出与导入', () => {
+  function exportPayload(title: string) {
+    return JSON.stringify({
+      format: 'math-analysis-workbench/mistakes',
+      version: 1,
+      exportedAt: '2026-10-29T00:00:00.000Z',
+      items: [
+        {
+          id: 'imported-1',
+          title,
+          topic: 'limit',
+          problem: '',
+          mistakeReason: '',
+          correction: '',
+          createdAt: 1000,
+          updatedAt: 1000,
+          reviewedAt: null,
+        },
+      ],
+    });
+  }
+
+  function importDialog() {
+    return screen
+      .getAllByRole('dialog')
+      .find((dialog) => within(dialog).queryByText('选择 JSON 文件'))!;
+  }
+  async function chooseFile(content: string, name = 'mistakes.json') {
+    const input = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
+    const file = new File([content], name, { type: 'application/json' });
+    fireEvent.change(input, { target: { files: [file] } });
+    await waitFor(() =>
+      expect(
+        screen.getByText(new RegExp(`已选择：${name}`)),
+      ).toBeInTheDocument(),
+    );
+  }
+
+  it('导出 JSON 时生成带日期文件名的 Blob', async () => {
+    render(<MistakesPage />);
+    const user = await addMistake('导出用的错题');
+    const createObjectURL = vi.fn<(blob: Blob) => string>(
+      () => 'blob:mock-url',
+    );
+    const revokeObjectURL = vi.fn();
+    Object.assign(URL, { createObjectURL, revokeObjectURL });
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => {});
+
+    await user.click(screen.getByRole('button', { name: /导出 JSON/ }));
+
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    const blob = createObjectURL.mock.calls[0][0] as Blob;
+    const text = await blob.text();
+    expect(text).toContain('math-analysis-workbench/mistakes');
+    expect(text).toContain('导出用的错题');
+    expect(click).toHaveBeenCalled();
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
+    expect(screen.getByText('已导出 1 条错题。')).toBeInTheDocument();
+  });
+
+  it('导入合法文件后合并到现有列表', async () => {
+    render(<MistakesPage />);
+    const user = await addMistake('已有的错题');
+    await user.click(screen.getByRole('button', { name: /导入/ }));
+    await chooseFile(exportPayload('导入的错题'));
+    await waitFor(() =>
+      expect(screen.getByText(/（1 条错题）/)).toBeInTheDocument(),
+    );
+    await user.click(
+      within(importDialog()).getByRole('button', { name: /导\s*入/ }),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText('已合并导入 1 条错题。')).toBeInTheDocument(),
+    );
+    expect(screen.getByText('导入的错题')).toBeInTheDocument();
+    expect(screen.getByText('已有的错题')).toBeInTheDocument();
+  });
+
+  it('导入非法文件时给出错误且不修改现有数据', async () => {
+    render(<MistakesPage />);
+    const user = await addMistake('原有错题');
+    await user.click(screen.getByRole('button', { name: /导入/ }));
+    await chooseFile('{ not json', 'broken.json');
+
+    await waitFor(() =>
+      expect(screen.getByText('导入失败')).toBeInTheDocument(),
+    );
+    expect(screen.getByText(/不是合法的 JSON/)).toBeInTheDocument();
+    await user.click(
+      within(importDialog()).getByRole('button', { name: /取\s*消/ }),
+    );
+    expect(screen.getByText('原有错题')).toBeInTheDocument();
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    expect(stored.data.items).toHaveLength(1);
+    expect(stored.data.items[0].title).toBe('原有错题');
+  });
+});
+
+describe('错题本复习标记', () => {
+  it('可以标记与取消复习，并按状态筛选', async () => {
+    render(<MistakesPage />);
+    const user = await addMistake('需要复习的错题');
+
+    await user.click(screen.getByRole('button', { name: /标记已复习/ }));
+    expect(screen.getByText('已标记为已复习。')).toBeInTheDocument();
+    expect(
+      screen.getByText('已复习', { selector: '.ant-tag' }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /取消复习/ }));
+    expect(screen.getByText('已取消复习标记。')).toBeInTheDocument();
+    expect(
+      screen.queryByText('已复习', { selector: '.ant-tag' }),
+    ).not.toBeInTheDocument();
+
+    const filter = screen.getByRole('radiogroup', {
+      name: '按复习状态筛选',
+    });
+    await user.click(within(filter).getByText('已复习'));
+    expect(screen.getByText(/没有匹配的错题/)).toBeInTheDocument();
   });
 });
