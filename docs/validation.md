@@ -67,6 +67,7 @@
 
 - `src/shared/math/plot-summary.ts`：从采样点推导数据摘要，相邻缺口合并为区间、孤立缺口保留单点，纯函数且不执行表达式；单测覆盖格式与合并规则。
 - `FunctionChart` 增加可选 `gapMarkers`：在单点间断位置画虚线标记；契约与依赖不变。
+- 虚线标记渲染修复：ECharts 6 会静默丢弃端点超出坐标轴范围的 markLine，端点改为钳制在有限数据范围内（平面函数时略加扩展），并在树摇构建下从 `echarts/components` 单独注册 `MarkLineComponent`；已用 Playwright 读取画布像素复核（1/x 的 x = 0 处检测到橙色虚线像素）。
 - 绘图结果卡片新增「采样数据摘要」区域，说明显示限制与键盘操作方式。
 
 ## 边界与后续
