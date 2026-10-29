@@ -5,9 +5,18 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { Button, Card, Segmented, Space, Tooltip, Typography } from 'antd';
+import {
+  Button,
+  Card,
+  Popconfirm,
+  Segmented,
+  Space,
+  Tooltip,
+  Typography,
+} from 'antd';
 import {
   ClearOutlined,
+  DeleteOutlined,
   EditOutlined,
   RedoOutlined,
   UndoOutlined,
@@ -24,7 +33,12 @@ import {
   type ToolMode,
   type ToolState,
 } from './model';
-import { clearAnnotation, loadAnnotation, saveAnnotation } from './storage';
+import {
+  clearAllAnnotations,
+  clearAnnotation,
+  loadAnnotation,
+  saveAnnotation,
+} from './storage';
 import styles from './AnnotationOverlay.module.css';
 
 const SAVE_DELAY_MS = 250;
@@ -171,6 +185,21 @@ export function AnnotationOverlay({ pageId, children }: Props) {
     setNotice(null);
   }, []);
 
+  const clearAll = useCallback(() => {
+    const error = clearAllAnnotations();
+    if (error) {
+      setNotice(error);
+      return;
+    }
+    const layer = layerRef.current;
+    layer?.setItems([]);
+    historyRef.current.reset([]);
+    setCanUndo(false);
+    setCanRedo(false);
+    blockedRef.current = false;
+    setNotice('已清空全部页面的批注。');
+  }, []);
+
   // 键盘快捷键：批注开启时 P / E / T 切换工具，Ctrl/Cmd + Z 撤销
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -286,6 +315,18 @@ export function AnnotationOverlay({ pageId, children }: Props) {
                 />
               </Tooltip>
             </Space.Compact>
+            <Popconfirm
+              title="清空全部页面的批注？"
+              description="所有页面保存的批注都会被删除，无法撤销。"
+              okText="全部清空"
+              cancelText="取消"
+              okButtonProps={{ danger: true }}
+              onConfirm={clearAll}
+            >
+              <Button block danger icon={<DeleteOutlined />}>
+                清空全部
+              </Button>
+            </Popconfirm>{' '}
             <Typography.Text type="secondary" className={styles.status}>
               {statusText}
             </Typography.Text>

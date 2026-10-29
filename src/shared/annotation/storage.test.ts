@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { clearAnnotation, loadAnnotation, saveAnnotation } from './storage';
+import {
+  clearAllAnnotations,
+  clearAnnotation,
+  loadAnnotation,
+  saveAnnotation,
+} from './storage';
 import type { AnnotationItem } from './model';
 
 const stroke: AnnotationItem = {
@@ -62,5 +67,31 @@ describe('annotation storage', () => {
     expect(clearAnnotation('/knowledge')).toBeNull();
     expect(loadAnnotation('/knowledge').doc.items).toHaveLength(0);
     expect(loadAnnotation('/plotting').doc.items).toHaveLength(1);
+  });
+});
+
+describe('clearAllAnnotations', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('只删除批注键，保留其他模块数据', () => {
+    saveAnnotation({ pageId: '/knowledge', items: [stroke] });
+    saveAnnotation({ pageId: '/plotting', items: [stroke] });
+    window.localStorage.setItem(
+      'math-workbench:preferences',
+      '{"schemaVersion":1,"data":{}}',
+    );
+
+    expect(clearAllAnnotations()).toBeNull();
+    expect(
+      window.localStorage.getItem('math-workbench:annotation:/knowledge'),
+    ).toBeNull();
+    expect(
+      window.localStorage.getItem('math-workbench:annotation:/plotting'),
+    ).toBeNull();
+    expect(
+      window.localStorage.getItem('math-workbench:preferences'),
+    ).not.toBeNull();
   });
 });

@@ -14,6 +14,8 @@ const LINE_HEIGHT = 21;
 const FONT_FAMILY =
   'ui-sans-serif, system-ui, "Microsoft YaHei", "PingFang SC", sans-serif';
 const MIN_POINT_GAP = 0.0018;
+/** 小于这个像素位移视为点击，用于区分「编辑文字」与「拖动文字」 */
+const CLICK_TOLERANCE_PX = 4;
 
 type LayerOptions = {
   /** 一次完整操作（画完一笔、擦除、拖动/提交文字）结束后触发 */
@@ -44,6 +46,12 @@ export class AnnotationLayer {
 
   private drawing: StrokeItem | null = null;
   private dragging: { item: TextItem; offset: Point } | null = null;
+  /** 文字按下时的位置，用于区分「点击编辑」与「拖动移动」 */
+  private pressed: {
+    item: TextItem;
+    start: Point;
+    moved: boolean;
+  } | null = null;
   private editor: HTMLTextAreaElement | null = null;
   private editing: TextItem | null = null;
   private editorPoint: Point = { x: 0, y: 0 };
@@ -268,6 +276,7 @@ export class AnnotationLayer {
         item: hit,
         offset: { x: point.x - hit.x, y: point.y - hit.y },
       };
+      this.pressed = { item: hit, start: point, moved: false };
       return;
     }
     this.openEditor(point, null);
@@ -287,6 +296,13 @@ export class AnnotationLayer {
 
     if (this.dragging) {
       const point = this.toNormalized(event);
+      if (this.pressed) {
+        const moved =
+          Math.abs(point.x - this.pressed.start.x) * this.cssWidth +
+            Math.abs(point.y - this.pressed.start.y) * this.cssHeight >
+          CLICK_TOLERANCE_PX;
+        if (moved) this.pressed.moved = true;
+      }
       this.dragging.item.x = clamp01(point.x - this.dragging.offset.x);
       this.dragging.item.y = clamp01(point.y - this.dragging.offset.y);
       this.render();
@@ -310,8 +326,16 @@ export class AnnotationLayer {
     }
 
     if (this.dragging) {
+      const target = this.dragging.item;
+      const wasClick = this.pressed ? !this.pressed.moved : false;
       this.dragging = null;
+      this.pressed = null;
       this.render();
+      // 没有移动就是一次点击：打开编辑器修改这段文字，而不是只结束拖动
+      if (wasClick) {
+        this.openEditor({ x: target.x, y: target.y }, target);
+        return;
+      }
       this.onChange(this.snapshot());
     }
   };
