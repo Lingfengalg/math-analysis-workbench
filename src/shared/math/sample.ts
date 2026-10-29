@@ -92,6 +92,129 @@ export function compileExpression(
   };
 }
 
+type Evaluator = (x: number) => number | null;
+
+// Interior probes between two adjacent finite samples.
+const PROBE_COUNT = 4;
+// Bisection refinement cap; enough for sub-pixel chart precision.
+const BISECT_STEPS = 40;
+// A sign flip counts as a pole only when the values around it clearly
+// outgrow the neighbouring samples; smaller flips fall through to the
+// deviation rule below.
+const POLE_BLOWUP = 2;
+// Conservative deviation tolerance kept from the previous midpoint
+// heuristic: probes that leave the linear interpolation between the
+// endpoints beyond this share of the local scale cut the line.
+const DEVIATION_TOLERANCE = 0.75;
+
+// Halve [left, right] around a sign change, keeping f(a) on the
+// `leftPositive` side. Stops early when a probe lands exactly on the
+// discontinuity (non-finite value).
+function bisectSignChange(
+  evaluate: Evaluator,
+  left: number,
+  leftPositive: boolean,
+  right: number,
+): number {
+  let a = left;
+  const aPositive = leftPositive;
+  let b = right;
+  for (let i = 0; i < BISECT_STEPS; i += 1) {
+    const mid = (a + b) / 2;
+    const value = evaluate(mid);
+    if (value === null) return mid;
+    if (value > 0 === aPositive) a = mid;
+    else b = mid;
+  }
+  return (a + b) / 2;
+}
+
+// Halve [finiteX, nullX] around a finite/non-finite transition.
+function bisectNullBoundary(
+  evaluate: Evaluator,
+  finiteX: number,
+  nullX: number,
+): number {
+  let a = finiteX;
+  let b = nullX;
+  for (let i = 0; i < BISECT_STEPS; i += 1) {
+    const mid = (a + b) / 2;
+    if (evaluate(mid) === null) b = mid;
+    else a = mid;
+  }
+  return (a + b) / 2;
+}
+
+/**
+ * Inspect the open interval between two finite samples for a discontinuity.
+ * Returns the x where the line should be cut, or null when the segment
+ * looks continuous. Sampling heuristics, not symbolic analysis: domain
+ * holes are located by bisection, poles by sign flip with magnitude
+ * blowup, and remaining jumps by conservative deviation from linear
+ * interpolation.
+ */
+function findGap(
+  evaluate: Evaluator,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+): number | null {
+  const probeX: number[] = [];
+  const probeY: Array<number | null> = [];
+  for (let k = 1; k <= PROBE_COUNT; k += 1) {
+    const x = x0 + ((x1 - x0) * k) / (PROBE_COUNT + 1);
+    probeX.push(x);
+    probeY.push(evaluate(x));
+  }
+  const xs = [x0, ...probeX, x1];
+  const ys: Array<number | null> = [y0, ...probeY, y1];
+
+  // 1. Domain hole: a non-finite probe between finite endpoints.
+  for (let i = 0; i + 1 < ys.length; i += 1) {
+    if ((ys[i] === null) !== (ys[i + 1] === null)) {
+      const finiteSide = ys[i] === null ? i + 1 : i;
+      const nullSide = finiteSide === i ? i + 1 : i;
+      return bisectNullBoundary(evaluate, xs[finiteSide], xs[nullSide]);
+    }
+  }
+
+  const scale = Math.max(1, Math.abs(y0), Math.abs(y1));
+
+  // 2. Pole: opposite-sign neighbours whose magnitudes clearly outgrow
+  // the surrounding samples.
+  for (let i = 0; i + 1 < ys.length; i += 1) {
+    const a = ys[i];
+    const b = ys[i + 1];
+    if (
+      a !== null &&
+      b !== null &&
+      a !== 0 &&
+      b !== 0 &&
+      a > 0 !== b > 0 &&
+      Math.max(Math.abs(a), Math.abs(b)) > POLE_BLOWUP * scale
+    ) {
+      return bisectSignChange(evaluate, xs[i], a > 0, xs[i + 1]);
+    }
+  }
+
+  // 3. Conservative deviation check: cut the line at the probe that
+  // deviates most from the linear interpolation between the endpoints.
+  let gapX: number | null = null;
+  let worst = 0;
+  for (let k = 0; k < probeY.length; k += 1) {
+    const y = probeY[k];
+    if (y === null) continue;
+    const interpolated = y0 + ((y1 - y0) * (k + 1)) / (PROBE_COUNT + 1);
+    const deviation = Math.abs(y - interpolated);
+    if (deviation > DEVIATION_TOLERANCE * scale && deviation > worst) {
+      worst = deviation;
+      gapX = probeX[k];
+    }
+  }
+  return gapX;
+}
+
 export function sampleFunction(
   request: PlotRequest,
   samples = 801,
@@ -109,15 +232,9 @@ export function sampleFunction(
     const x = xMin + ((xMax - xMin) * i) / (samples - 1);
     const y = evaluate(x);
     if (previous && previous[1] !== null && y !== null) {
-      const middleX = (previous[0] + x) / 2;
-      const middleY = evaluate(middleX);
-      // Conservative midpoint heuristic, not a symbolic discontinuity detector.
-      const scale = Math.max(1, Math.abs(y), Math.abs(previous[1]));
-      if (
-        middleY === null ||
-        Math.abs(middleY - (y + previous[1]) / 2) > 0.75 * scale
-      ) {
-        points.push([middleX, null]);
+      const gapX = findGap(evaluate, previous[0], previous[1], x, y);
+      if (gapX !== null) {
+        points.push([gapX, null]);
         gaps += 1;
       }
     }
