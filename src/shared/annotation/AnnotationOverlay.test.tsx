@@ -21,6 +21,19 @@ function renderOverlay(pageId = '/knowledge') {
   );
 }
 
+beforeEach(() => {
+  // 写入依赖跨标签页锁；jsdom 没有 Web Locks，这里提供与浏览器一致的串行实现
+  Object.defineProperty(navigator, 'locks', {
+    configurable: true,
+    value: {
+      request: async (
+        _name: string,
+        _options: { mode: 'exclusive' },
+        callback: () => unknown,
+      ) => callback(),
+    },
+  });
+});
 describe('AnnotationOverlay', () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -128,5 +141,67 @@ describe('清空全部批注', () => {
       window.localStorage.getItem('math-workbench:annotation:/plotting'),
     ).toBeNull();
     expect(screen.getByText('已清空全部页面的批注。')).toBeInTheDocument();
+  });
+});
+
+describe('快捷键边界 (#35)', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('批注关闭时不拦截撤销快捷键', () => {
+    renderOverlay();
+    const event = new KeyboardEvent('keydown', {
+      key: 'z',
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    document.body.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it('批注开启时接管撤销快捷键', async () => {
+    const user = userEvent.setup();
+    renderOverlay();
+    await user.click(screen.getByRole('button', { name: /批注$/ }));
+
+    const event = new KeyboardEvent('keydown', {
+      key: 'z',
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    document.body.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+  });
+  it('关闭批注时工具快捷键不改变工具状态', async () => {
+    const user = userEvent.setup();
+    renderOverlay();
+    await user.click(screen.getByRole('button', { name: /批注$/ }));
+    await user.keyboard('e');
+    expect(screen.getByText(/当前：橡皮/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /退出批注$/ }));
+    await user.keyboard('p');
+    await user.click(screen.getByRole('button', { name: /批注$/ }));
+
+    expect(screen.getByText(/当前：橡皮/)).toBeInTheDocument();
+  });
+});
+
+describe('无 Web Locks 时的只读提示 (#32)', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    Object.defineProperty(navigator, 'locks', {
+      configurable: true,
+      value: undefined,
+    });
+  });
+
+  it('禁用批注入口并给出只读说明', () => {
+    renderOverlay();
+    expect(screen.getByRole('button', { name: /批注$/ })).toBeDisabled();
+    expect(screen.getByText(/批注不可编辑/)).toBeInTheDocument();
   });
 });

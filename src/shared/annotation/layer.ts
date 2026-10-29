@@ -1,5 +1,6 @@
 import { clamp01, pointInRect, strokeHit } from './geometry';
 import {
+  ANNOTATION_LIMITS,
   cloneItems,
   newId,
   type AnnotationItem,
@@ -20,6 +21,8 @@ const CLICK_TOLERANCE_PX = 4;
 type LayerOptions = {
   /** 一次完整操作（画完一笔、擦除、拖动/提交文字）结束后触发 */
   onChange: (items: AnnotationItem[]) => void;
+  /** 达到条目或点数上限时提示，不静默丢弃 */
+  onLimit?: (message: string) => void;
 };
 
 /**
@@ -35,6 +38,7 @@ export class AnnotationLayer {
   private readonly host: HTMLElement;
   private readonly ctx: CanvasRenderingContext2D | null;
   private readonly onChange: (items: AnnotationItem[]) => void;
+  private readonly onLimit: (message: string) => void;
 
   private items: AnnotationItem[] = [];
   private tool: ToolState = { mode: 'pen', color: '#1f2937', width: 4 };
@@ -60,6 +64,11 @@ export class AnnotationLayer {
   constructor(host: HTMLElement, options: LayerOptions) {
     this.host = host;
     this.onChange = options.onChange;
+    this.onLimit =
+      options.onLimit ??
+      (() => {
+        /* 默认不提示，由调用方决定 */
+      });
 
     this.canvas = document.createElement('canvas');
     this.canvas.dataset.annotationCanvas = 'true';
@@ -254,6 +263,12 @@ export class AnnotationLayer {
     const point = this.toNormalized(event);
 
     if (this.tool.mode === 'pen') {
+      if (this.items.length >= ANNOTATION_LIMITS.items) {
+        this.onLimit(
+          `本页最多 ${ANNOTATION_LIMITS.items} 条批注，请先删除部分内容`,
+        );
+        return;
+      }
       this.drawing = {
         kind: 'stroke',
         id: newId(),
@@ -287,6 +302,10 @@ export class AnnotationLayer {
       const point = this.toNormalized(event);
       const points = this.drawing.points;
       const last = points[points.length - 1];
+      if (points.length >= ANNOTATION_LIMITS.points) {
+        this.onLimit(`单笔最多 ${ANNOTATION_LIMITS.points} 个点，已停止追加`);
+        return;
+      }
       if (Math.hypot(point.x - last.x, point.y - last.y) > MIN_POINT_GAP) {
         points.push(point);
         this.render();
@@ -406,6 +425,7 @@ export class AnnotationLayer {
     area.dataset.annotationEditor = 'true';
     area.value = existing?.text ?? '';
     area.rows = 2;
+    area.maxLength = ANNOTATION_LIMITS.text;
     area.setAttribute('aria-label', '批注文字');
     area.spellcheck = false;
     Object.assign(area.style, {
@@ -485,6 +505,13 @@ export class AnnotationLayer {
       return;
     }
 
+    if (this.items.length >= ANNOTATION_LIMITS.items) {
+      this.onLimit(
+        `本页最多 ${ANNOTATION_LIMITS.items} 条批注，文字未添加，请先删除部分内容`,
+      );
+      this.render();
+      return;
+    }
     this.items.push({
       kind: 'text',
       id: newId(),

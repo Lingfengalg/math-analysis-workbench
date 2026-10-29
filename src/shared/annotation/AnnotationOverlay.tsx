@@ -15,6 +15,7 @@ import {
 } from '@ant-design/icons';
 import { createHistory } from './history';
 import { AnnotationLayer } from './layer';
+import { supportsAnnotationLock, withAnnotationLock } from './lock';
 import {
   COLORS,
   COLOR_LABELS,
@@ -31,6 +32,12 @@ import {
   loadAnnotation,
   saveAnnotation,
 } from './storage';
+import {
+  applyChanges,
+  diffItems,
+  isEmptyChanges,
+  type AnnotationChanges,
+} from './sync';
 import styles from './AnnotationOverlay.module.css';
 
 const SAVE_DELAY_MS = 250;
@@ -71,13 +78,18 @@ export function AnnotationOverlay({ pageId, children }: Props) {
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [saveFailed, setSaveFailed] = useState(false);
   // 读到损坏/不兼容数据时暂停自动保存，避免把用户原数据覆盖掉
   const blockedRef = useRef(false);
 
-  /** 防抖期间待落盘的内容；必须记录自己的 pageId，避免切页后写到新页面。 */
+  /** 已落盘（或刚载入）的快照，用于计算增量改动。 */
+  const lastSyncedRef = useRef<AnnotationItem[]>([]);
+  const [canWrite] = useState(() => supportsAnnotationLock());
+
+  /** 防抖期间待落盘的增量；记录 pageId，避免切页后写到新页面。 */
   const pendingRef = useRef<{
     pageId: string;
-    items: AnnotationItem[];
+    changes: AnnotationChanges;
   } | null>(null);
 
   const cancelPending = useCallback(() => {
@@ -88,24 +100,94 @@ export function AnnotationOverlay({ pageId, children }: Props) {
     pendingRef.current = null;
   }, []);
 
-  const flushPending = useCallback(() => {
+  const flushPending = useCallback(async () => {
     if (saveTimer.current) {
       clearTimeout(saveTimer.current);
       saveTimer.current = null;
     }
     const pending = pendingRef.current;
-    pendingRef.current = null;
     if (!pending) return;
-    const error = saveAnnotation(pending);
-    if (error) setNotice(error);
+
+    if (!canWrite) {
+      setSaveFailed(true);
+      setNotice(
+        '当前环境不支持跨标签页写入锁，批注未保存。请换用支持 Web Locks 的浏览器或通过 https / localhost 访问。',
+      );
+      return;
+    }
+
+    const outcome = await withAnnotationLock(pending.pageId, () => {
+      const latest = loadAnnotation(pending.pageId);
+      if (latest.error) return { error: latest.error } as const;
+      const merged = applyChanges(latest.doc.items, pending.changes);
+      const error = saveAnnotation({
+        pageId: pending.pageId,
+        items: merged,
+      });
+      if (error) return { error } as const;
+      return { items: merged } as const;
+    });
+
+    if ('error' in outcome) {
+      // 保留草稿，等待用户重试；不能假报成功，也不能直接丢弃
+      pendingRef.current = pending;
+      setSaveFailed(true);
+      setNotice(`${outcome.error} 未保存的批注已保留，可点击「重试保存」。`);
+      return;
+    }
+
+    pendingRef.current = null;
+    setSaveFailed(false);
+    lastSyncedRef.current = outcome.items;
+
+    // 合并结果可能包含其他标签页的笔迹：同步到画布，避免下一次增量把它们当成删除
+    const layer = layerRef.current;
+    if (layer && !isEmptyChanges(pending.changes)) {
+      const current = layer.snapshot();
+      if (JSON.stringify(current) !== JSON.stringify(outcome.items)) {
+        layer.setItems(outcome.items);
+        historyRef.current.reset(outcome.items);
+        setCanUndo(false);
+        setCanRedo(false);
+      }
+    }
+  }, [canWrite]);
+
+  /**
+   * 页面隐藏/卸载时的同步兜底：浏览器不会等待异步锁，因此这里跳��锁，
+   * 但仍按增量合并写入，避免整页快照覆盖其他标签页的笔迹。
+   */
+  const flushPendingSync = useCallback(() => {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    const pending = pendingRef.current;
+    if (!pending) return;
+    const latest = loadAnnotation(pending.pageId);
+    if (latest.error) {
+      setSaveFailed(true);
+      return;
+    }
+    const merged = applyChanges(latest.doc.items, pending.changes);
+    const error = saveAnnotation({ pageId: pending.pageId, items: merged });
+    if (error) {
+      setSaveFailed(true);
+      return;
+    }
+    pendingRef.current = null;
+    lastSyncedRef.current = merged;
   }, []);
 
   const persist = useCallback(
     (items: AnnotationItem[]) => {
       if (blockedRef.current) return;
-      pendingRef.current = { pageId: pageIdRef.current, items };
+      pendingRef.current = {
+        pageId: pageIdRef.current,
+        changes: diffItems(lastSyncedRef.current, items),
+      };
       if (saveTimer.current) clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(flushPending, SAVE_DELAY_MS);
+      saveTimer.current = setTimeout(() => void flushPending(), SAVE_DELAY_MS);
     },
     [flushPending],
   );
@@ -126,12 +208,15 @@ export function AnnotationOverlay({ pageId, children }: Props) {
     const host = hostRef.current;
     if (!host) return;
 
-    const layer = new AnnotationLayer(host, { onChange: handleChange });
+    const layer = new AnnotationLayer(host, {
+      onChange: handleChange,
+      onLimit: (message) => setNotice(message),
+    });
     layerRef.current = layer;
     layer.setEnabled(false);
 
     return () => {
-      flushPending();
+      void flushPending();
       layer.destroy();
       layerRef.current = null;
     };
@@ -139,14 +224,16 @@ export function AnnotationOverlay({ pageId, children }: Props) {
 
   // 切页：写入上一页未落盘内容后载入当前页
   useEffect(() => {
-    // 先落盘上一页，再切 pageId；否则防抖中的改动会被写到新页面
-    flushPending();
+    // 先落盘上一页，再切 pageId；否则防抖中的改动会被写到新页面。
+    // 放到微任务里，避免在 effect 同步阶段触发状态更新。
+    queueMicrotask(() => void flushPending());
     pageIdRef.current = pageId;
     const layer = layerRef.current;
     if (!layer) return;
 
     const { doc, error } = loadAnnotation(pageId);
     layer.setItems(doc.items);
+    lastSyncedRef.current = doc.items;
     historyRef.current.reset(layer.snapshot());
     setCanUndo(false);
     setCanRedo(false);
@@ -162,6 +249,19 @@ export function AnnotationOverlay({ pageId, children }: Props) {
     layerRef.current?.setEnabled(enabled);
   }, [enabled]);
 
+  // 刷新、关闭或切到后台时同步落盘，不依赖 React 卸载（#33）
+  useEffect(() => {
+    const handlePageHide = () => flushPendingSync();
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') flushPendingSync();
+    };
+    window.addEventListener('pagehide', handlePageHide);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.removeEventListener('pagehide', handlePageHide);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [flushPendingSync]);
   const undo = useCallback(() => {
     const layer = layerRef.current;
     if (!layer) return;
@@ -191,6 +291,7 @@ export function AnnotationOverlay({ pageId, children }: Props) {
     // 数据损坏被暂停保存时，「清空本页」是用户显式的重置操作，允许覆盖
     if (!blockedRef.current && layer.isEmpty()) return;
     layer.setItems([]);
+    lastSyncedRef.current = [];
     historyRef.current.record([]);
     setCanUndo(historyRef.current.canUndo());
     setCanRedo(historyRef.current.canRedo());
@@ -212,6 +313,7 @@ export function AnnotationOverlay({ pageId, children }: Props) {
     }
     const layer = layerRef.current;
     layer?.setItems([]);
+    lastSyncedRef.current = [];
     historyRef.current.reset([]);
     setCanUndo(false);
     setCanRedo(false);
@@ -232,6 +334,8 @@ export function AnnotationOverlay({ pageId, children }: Props) {
         return;
       }
 
+      if (!enabled) return;
+
       const withMeta = event.ctrlKey || event.metaKey;
       const key = event.key.toLowerCase();
 
@@ -246,8 +350,6 @@ export function AnnotationOverlay({ pageId, children }: Props) {
         redo();
         return;
       }
-      if (!enabled) return;
-
       if (key === 'p') setTool((current) => ({ ...current, mode: 'pen' }));
       else if (key === 'e')
         setTool((current) => ({ ...current, mode: 'eraser' }));
@@ -344,6 +446,11 @@ export function AnnotationOverlay({ pageId, children }: Props) {
                 清空全部
               </Button>
             </Popconfirm>{' '}
+            {saveFailed && (
+              <Button block danger onClick={flushPending}>
+                重试保存
+              </Button>
+            )}
             <Typography.Text type="secondary" className={styles.status}>
               {statusText}
             </Typography.Text>
@@ -354,10 +461,16 @@ export function AnnotationOverlay({ pageId, children }: Props) {
             )}
           </Card>
         )}
+        {!canWrite && (
+          <Typography.Text type="danger" className={styles.status}>
+            当前环境不支持跨标签页写入锁，批注不可编辑
+          </Typography.Text>
+        )}
         <Button
           type={enabled ? 'primary' : 'default'}
           icon={<EditOutlined />}
           aria-pressed={enabled}
+          disabled={!canWrite}
           onClick={() => setEnabled((value) => !value)}
         >
           {enabled ? '退出批注' : '批注'}
