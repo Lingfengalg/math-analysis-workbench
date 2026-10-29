@@ -51,6 +51,16 @@
     0 0 0 1px rgb(15 23 42 / 20%);
 }
 
+.actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.actions :global(.ant-btn) {
+  width: 100%;
+}
+
 .status {
   font-size: 12px;
   line-height: 1.5;

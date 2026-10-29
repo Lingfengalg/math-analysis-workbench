@@ -5,15 +5,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import {
-  Button,
-  Card,
-  Popconfirm,
-  Segmented,
-  Space,
-  Tooltip,
-  Typography,
-} from 'antd';
+import { Button, Card, Popconfirm, Segmented, Tooltip, Typography } from 'antd';
 import {
   ClearOutlined,
   DeleteOutlined,
@@ -82,15 +74,41 @@ export function AnnotationOverlay({ pageId, children }: Props) {
   // 读到损坏/不兼容数据时暂停自动保存，避免把用户原数据覆盖掉
   const blockedRef = useRef(false);
 
-  const persist = useCallback((items: AnnotationItem[]) => {
-    if (blockedRef.current) return;
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
+  /** 防抖期间待落盘的内容；必须记录自己的 pageId，避免切页后写到新页面。 */
+  const pendingRef = useRef<{
+    pageId: string;
+    items: AnnotationItem[];
+  } | null>(null);
+
+  const cancelPending = useCallback(() => {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
       saveTimer.current = null;
-      const error = saveAnnotation({ pageId: pageIdRef.current, items });
-      if (error) setNotice(error);
-    }, SAVE_DELAY_MS);
+    }
+    pendingRef.current = null;
   }, []);
+
+  const flushPending = useCallback(() => {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    const pending = pendingRef.current;
+    pendingRef.current = null;
+    if (!pending) return;
+    const error = saveAnnotation(pending);
+    if (error) setNotice(error);
+  }, []);
+
+  const persist = useCallback(
+    (items: AnnotationItem[]) => {
+      if (blockedRef.current) return;
+      pendingRef.current = { pageId: pageIdRef.current, items };
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      saveTimer.current = setTimeout(flushPending, SAVE_DELAY_MS);
+    },
+    [flushPending],
+  );
 
   const handleChange = useCallback(
     (items: AnnotationItem[]) => {
@@ -113,17 +131,16 @@ export function AnnotationOverlay({ pageId, children }: Props) {
     layer.setEnabled(false);
 
     return () => {
-      if (saveTimer.current) {
-        clearTimeout(saveTimer.current);
-        saveTimer.current = null;
-      }
+      flushPending();
       layer.destroy();
       layerRef.current = null;
     };
-  }, [handleChange]);
+  }, [handleChange, flushPending]);
 
   // 切页：写入上一页未落盘内容后载入当前页
   useEffect(() => {
+    // 先落盘上一页，再切 pageId；否则防抖中的改动会被写到新页面
+    flushPending();
     pageIdRef.current = pageId;
     const layer = layerRef.current;
     if (!layer) return;
@@ -135,7 +152,7 @@ export function AnnotationOverlay({ pageId, children }: Props) {
     setCanRedo(false);
     blockedRef.current = Boolean(error);
     setNotice(error ? `${error} 已暂停自动保存，避免覆盖本页原有批注。` : null);
-  }, [pageId]);
+  }, [pageId, flushPending]);
 
   useEffect(() => {
     layerRef.current?.setTool(tool);
@@ -168,6 +185,7 @@ export function AnnotationOverlay({ pageId, children }: Props) {
   }, [persist]);
 
   const clearPage = useCallback(() => {
+    cancelPending();
     const layer = layerRef.current;
     if (!layer) return;
     // 数据损坏被暂停保存时，「清空本页」是用户显式的重置操作，允许覆盖
@@ -183,9 +201,10 @@ export function AnnotationOverlay({ pageId, children }: Props) {
     }
     blockedRef.current = false;
     setNotice(null);
-  }, []);
+  }, [cancelPending]);
 
   const clearAll = useCallback(() => {
+    cancelPending();
     const error = clearAllAnnotations();
     if (error) {
       setNotice(error);
@@ -198,7 +217,7 @@ export function AnnotationOverlay({ pageId, children }: Props) {
     setCanRedo(false);
     blockedRef.current = false;
     setNotice('已清空全部页面的批注。');
-  }, []);
+  }, [cancelPending]);
 
   // 键盘快捷键：批注开启时 P / E / T 切换工具，Ctrl/Cmd + Z 撤销
   useEffect(() => {
@@ -287,10 +306,9 @@ export function AnnotationOverlay({ pageId, children }: Props) {
                 }))
               }
             />
-            <Space.Compact block>
+            <div className={styles.actions}>
               <Tooltip title="撤销（Ctrl/Cmd + Z）">
                 <Button
-                  block
                   icon={<UndoOutlined />}
                   aria-label="撤销"
                   disabled={!canUndo}
@@ -299,7 +317,6 @@ export function AnnotationOverlay({ pageId, children }: Props) {
               </Tooltip>
               <Tooltip title="重做（Ctrl/Cmd + Shift + Z）">
                 <Button
-                  block
                   icon={<RedoOutlined />}
                   aria-label="重做"
                   disabled={!canRedo}
@@ -308,13 +325,13 @@ export function AnnotationOverlay({ pageId, children }: Props) {
               </Tooltip>
               <Tooltip title="清空本页（可撤销）">
                 <Button
-                  block
+                  danger
                   icon={<ClearOutlined />}
                   aria-label="清空本页批注"
                   onClick={clearPage}
                 />
               </Tooltip>
-            </Space.Compact>
+            </div>
             <Popconfirm
               title="清空全部页面的批注？"
               description="所有页面保存的批注都会被删除，无法撤销。"
