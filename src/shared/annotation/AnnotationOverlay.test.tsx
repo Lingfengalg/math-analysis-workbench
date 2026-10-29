@@ -188,6 +188,43 @@ describe('快捷键边界 (#35)', () => {
 
     expect(screen.getByText(/当前：橡皮/)).toBeInTheDocument();
   });
+  it('键盘路径：批注列表可朗读、可删除（#38）', async () => {
+    const user = userEvent.setup();
+    window.localStorage.setItem(
+      'math-workbench:annotation:/knowledge',
+      JSON.stringify({
+        schemaVersion: 1,
+        data: {
+          pageId: '/knowledge',
+          items: [
+            {
+              kind: 'text',
+              id: 't1',
+              color: '#1f2937',
+              x: 0.2,
+              y: 0.2,
+              text: '容易忽略条件',
+            },
+          ],
+        },
+      }),
+    );
+
+    render(
+      <AnnotationOverlay pageId="/knowledge">
+        <p>知识点内容</p>
+      </AnnotationOverlay>,
+    );
+    await user.click(screen.getByRole('button', { name: /批注$/ }));
+
+    expect(screen.getByText(/文字批注 1：容易忽略条件/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '删除第 1 条批注' }));
+
+    await waitFor(() =>
+      expect(screen.queryByText(/文字批注 1/)).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('已删除第 1 条批注');
+  });
 });
 
 describe('无 Web Locks 时的只读提示 (#32)', () => {

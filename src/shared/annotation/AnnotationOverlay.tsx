@@ -52,6 +52,15 @@ const WIDTH_OPTIONS = WIDTHS.map((value) => ({
   label: WIDTH_LABELS[value] ?? String(value),
 }));
 
+/** 供读屏朗读的条目描述；笔迹没有文字内容，用点数与锚点代替 */
+function describeItem(item: AnnotationItem, index: number): string {
+  if (item.kind === 'text') {
+    const text = item.text.replace(/\s+/g, ' ').slice(0, 30);
+    return `文字批注 ${index + 1}：${text}`;
+  }
+  const anchor = item.anchor ? `，锚定 ${item.anchor.key}` : '';
+  return `手写批注 ${index + 1}：${item.points.length} 个点${anchor}`;
+}
 type Props = {
   /** 页面标识，通常取路由 pathname；不同页面各自保存批注 */
   pageId: string;
@@ -80,6 +89,9 @@ export function AnnotationOverlay({ pageId, children }: Props) {
   const [notice, setNotice] = useState<string | null>(null);
   /** 锚定内容块已不在页面上、被暂时隐藏的批注数量 */
   const [staleCount, setStaleCount] = useState(0);
+  /** 供键盘/读屏使用的批注清单与播报文本 */
+  const [items, setItems] = useState<AnnotationItem[]>([]);
+  const [announcement, setAnnouncement] = useState('');
   const [saveFailed, setSaveFailed] = useState(false);
   // 读到损坏/不兼容数据时暂停自动保存，避免把用户原数据覆盖掉
   const blockedRef = useRef(false);
@@ -145,6 +157,7 @@ export function AnnotationOverlay({ pageId, children }: Props) {
           JSON.stringify(layer.snapshot()) !== JSON.stringify(outcome.items)
         ) {
           layer.setItems(outcome.items);
+          setItems(outcome.items);
           historyRef.current.reset(outcome.items);
           setCanUndo(false);
           setCanRedo(false);
@@ -203,6 +216,7 @@ export function AnnotationOverlay({ pageId, children }: Props) {
       history.record(items);
       setCanUndo(history.canUndo());
       setCanRedo(history.canRedo());
+      setItems(items);
       persist(items);
     },
     [persist],
@@ -242,6 +256,7 @@ export function AnnotationOverlay({ pageId, children }: Props) {
     const pending = pendingRef.current.get(pageId);
     if (!pending) syncedRef.current.set(pageId, doc.items);
     layer.setItems(pending?.items ?? doc.items);
+    setItems(pending?.items ?? doc.items);
     if (pending && !error) void flushPending(pageId);
     historyRef.current.reset(layer.snapshot());
     setCanUndo(false);
@@ -277,6 +292,7 @@ export function AnnotationOverlay({ pageId, children }: Props) {
     const previous = historyRef.current.undo();
     if (!previous) return;
     layer.setItems(previous);
+    setItems(previous);
     setCanUndo(historyRef.current.canUndo());
     setCanRedo(historyRef.current.canRedo());
     persist(previous);
@@ -288,6 +304,7 @@ export function AnnotationOverlay({ pageId, children }: Props) {
     const next = historyRef.current.redo();
     if (!next) return;
     layer.setItems(next);
+    setItems(next);
     setCanUndo(historyRef.current.canUndo());
     setCanRedo(historyRef.current.canRedo());
     persist(next);
@@ -301,6 +318,7 @@ export function AnnotationOverlay({ pageId, children }: Props) {
     if (!blockedRef.current && layer.isEmpty()) return;
     layer.setItems([]);
     syncedRef.current.set(pageIdRef.current, []);
+    setItems([]);
     historyRef.current.record([]);
     setCanUndo(historyRef.current.canUndo());
     setCanRedo(historyRef.current.canRedo());
@@ -324,6 +342,7 @@ export function AnnotationOverlay({ pageId, children }: Props) {
     layer?.setItems([]);
     syncedRef.current.clear();
     syncedRef.current.set(pageIdRef.current, []);
+    setItems([]);
     historyRef.current.reset([]);
     setCanUndo(false);
     setCanRedo(false);
@@ -471,6 +490,61 @@ export function AnnotationOverlay({ pageId, children }: Props) {
             <Typography.Text type="secondary" className={styles.status}>
               {statusText}
             </Typography.Text>
+            <div
+              className={styles.a11y}
+              role="group"
+              aria-label="批注的键盘与读屏入口"
+            >
+              <Button
+                size="small"
+                block
+                onClick={() => layerRef.current?.createTextAtCenter()}
+              >
+                添加文字批注
+              </Button>
+              {items.length > 0 && (
+                <details className={styles.list}>
+                  <summary>批注列表（{items.length}）</summary>
+                  <ul className={styles.listItems}>
+                    {items.map((item, index) => (
+                      <li key={item.id}>
+                        <span>{describeItem(item, index)}</span>
+                        <span className={styles.listActions}>
+                          {item.kind === 'text' && (
+                            <Button
+                              size="small"
+                              aria-label={`编辑第 ${index + 1} 条批注`}
+                              onClick={() => {
+                                layerRef.current?.editText(item.id);
+                                setAnnouncement(
+                                  `正在编辑第 ${index + 1} 条批注`,
+                                );
+                              }}
+                            >
+                              编辑
+                            </Button>
+                          )}
+                          <Button
+                            size="small"
+                            aria-label={`删除第 ${index + 1} 条批注`}
+                            onClick={() => {
+                              if (layerRef.current?.removeItem(item.id)) {
+                                setAnnouncement(`已删除第 ${index + 1} 条批注`);
+                              }
+                            }}
+                          >
+                            删除
+                          </Button>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+              <p className={styles.srOnly} role="status" aria-live="polite">
+                {announcement}
+              </p>
+            </div>{' '}
             {notice && (
               <Typography.Text type="danger" className={styles.status}>
                 {notice}

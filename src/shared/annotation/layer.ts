@@ -152,6 +152,45 @@ export class AnnotationLayer {
     return cloneItems(this.items);
   }
 
+  /** 键盘路径：在页面中部新建一条文字批注 */
+  createTextAtCenter(): void {
+    this.openEditor(
+      { x: this.cssWidth / 2, y: this.cssHeight / 2 },
+      hostFrame(this.cssWidth, this.cssHeight),
+      null,
+      null,
+    );
+  }
+
+  /** 键盘路径：编辑指定文字批注 */
+  editText(id: string): void {
+    const item = this.items.find(
+      (entry): entry is TextItem => entry.kind === 'text' && entry.id === id,
+    );
+    if (!item) return;
+    const frame =
+      this.frameOf(item) ?? hostFrame(this.cssWidth, this.cssHeight);
+    this.openEditor(
+      {
+        x: frame.left + item.x * frame.width,
+        y: frame.top + item.y * frame.height,
+      },
+      frame,
+      item.anchor?.key ?? null,
+      item,
+    );
+  }
+
+  /** 键盘路径：删除单条批注，返回是否真的删掉了内容 */
+  removeItem(id: string): boolean {
+    const next = this.items.filter((item) => item.id !== id);
+    if (next.length === this.items.length) return false;
+    this.items = next;
+    this.render();
+    this.onChange(this.snapshot());
+    return true;
+  }
+
   isEmpty(): boolean {
     return this.items.length === 0;
   }
