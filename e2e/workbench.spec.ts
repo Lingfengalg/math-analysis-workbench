@@ -34,6 +34,59 @@ test('表达式与区间错误有明确反馈', async ({ page }) => {
   ).toBeVisible();
 });
 
+test('绘图结果提供数据摘要与间断标记，键盘可操作', async ({ page }) => {
+  await page.goto('/#/plotting');
+  await expect(page.getByRole('status')).toContainText('f(x)', {
+    timeout: 20000,
+  });
+  // 键盘激活预设按钮：Tab 聚焦后 Enter 触发，不依赖鼠标
+  await page.getByRole('button', { name: '1/x', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('status')).toContainText('f(x) = 1/x');
+  await expect(
+    page.getByRole('img', { name: '函数 1/x 的采样图像' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: '采样数据摘要' }),
+  ).toBeVisible();
+  await expect(page.getByText(/有效数据点：/)).toBeVisible();
+  await expect(page.getByText(/有限值范围：/)).toBeVisible();
+  await expect(page.getByText(/检测到.*处缺口位置：.*x = 0/)).toBeVisible();
+  // Verify the actual canvas marker, not just the surrounding text.
+  await expect
+    .poll(async () =>
+      page.locator('.function-chart canvas').evaluateAll(
+        (canvases) =>
+          canvases.some((element) => {
+            const canvas = element as HTMLCanvasElement;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return false;
+            const pixels = ctx.getImageData(
+              0,
+              0,
+              canvas.width,
+              canvas.height,
+            ).data;
+            let count = 0;
+            for (let i = 0; i < pixels.length; i += 4) {
+              if (
+                pixels[i] >= 180 &&
+                pixels[i] <= 220 &&
+                pixels[i + 1] >= 100 &&
+                pixels[i + 1] <= 155 &&
+                pixels[i + 2] <= 70 &&
+                pixels[i + 3] > 100
+              )
+                count++;
+            }
+            return count > 10;
+          }),
+        { timeout: 10000 },
+      ),
+    )
+    .toBe(true);
+});
+
 test('默认绘图设置可在刷新后保留', async ({ page }) => {
   await page.goto('/#/plotting');
   await expect(page.getByRole('status')).toContainText('f(x)', {

@@ -325,6 +325,23 @@ input {
   line-height: 1.8;
   word-break: break-word;
 }
+.plot-summary {
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+.plot-summary h3 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+.plot-summary ul {
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 2;
+  color: #62766b;
+  margin: 0;
+}
 .task-index {
   display: inline-block;
   font-size: 11px;

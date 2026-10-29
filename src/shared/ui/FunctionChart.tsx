@@ -2,10 +2,11 @@ import { useEffect, useRef } from 'react';
 import { init, use as registerCharts } from 'echarts/core';
 import { LineChart } from 'echarts/charts';
 import {
-  GridComponent,
-  TooltipComponent,
-  DataZoomComponent,
   AriaComponent,
+  DataZoomComponent,
+  GridComponent,
+  MarkLineComponent,
+  TooltipComponent,
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import type { PlotPoint } from '@/shared/contracts';
@@ -16,19 +17,34 @@ registerCharts([
   TooltipComponent,
   DataZoomComponent,
   AriaComponent,
+  MarkLineComponent,
   CanvasRenderer,
 ]);
 
 export function FunctionChart({
   points,
   expression,
+  gapMarkers = [],
 }: {
   points: PlotPoint[];
   expression: string;
+  gapMarkers?: number[];
 }) {
   const element = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!element.current) return;
+    // ECharts discards marker lines whose endpoints fall outside the axis
+    // extent, so span only the finite data range (which stays inside the
+    // auto-scaled axis thanks to its default margin).
+    const finiteYs = points
+      .map((point) => point[1])
+      .filter((y): y is number => y !== null);
+    const dataMin = finiteYs.length > 0 ? Math.min(...finiteYs) : 0;
+    const dataMax = finiteYs.length > 0 ? Math.max(...finiteYs) : 1;
+    // For flat data the data range degenerates to a point; widen it a bit
+    // so the marker line still has a visible length.
+    const span = dataMax - dataMin;
+    const pad = span > 0 ? 0 : Math.max(Math.abs(dataMin) * 0.05, 0.5);
     const chart = init(element.current);
     chart.setOption({
       animation: false,
@@ -59,6 +75,19 @@ export function FunctionChart({
           showSymbol: false,
           connectNulls: false,
           lineStyle: { color: '#176b5b', width: 2.5 },
+          markLine:
+            gapMarkers.length > 0
+              ? {
+                  silent: true,
+                  symbol: 'none',
+                  label: { show: false },
+                  lineStyle: { type: 'dashed', color: '#c47f17', width: 1.5 },
+                  data: gapMarkers.map((x) => [
+                    { coord: [x, dataMin - pad] },
+                    { coord: [x, dataMax + pad] },
+                  ]),
+                }
+              : undefined,
         },
       ],
     });
@@ -68,7 +97,7 @@ export function FunctionChart({
       observer.disconnect();
       chart.dispose();
     };
-  }, [points, expression]);
+  }, [points, expression, gapMarkers]);
   return (
     <div
       ref={element}
