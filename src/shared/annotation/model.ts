@@ -18,12 +18,25 @@ const pointSchema = z.object({
   y: z.number(),
 });
 
+/**
+ * 锚定到的内容块。
+ *
+ * 存在 anchor 时，同一条目的坐标是相对该块（`data-annotation-anchor`）的归一化值；
+ * 不存在时沿用旧行为：相对整个批注容器。旧数据没有这个字段，解析与渲染都保持兼容。
+ */
+export const anchorSchema = z.object({
+  key: z.string().min(1).max(200),
+});
+
+export type AnchorRef = z.infer<typeof anchorSchema>;
+
 export const strokeSchema = z.object({
   kind: z.literal('stroke'),
   id: z.string().min(1),
   color: colorSchema,
   width: z.number().positive().max(64),
   points: z.array(pointSchema).min(1).max(ANNOTATION_LIMITS.points),
+  anchor: anchorSchema.optional(),
 });
 
 export const textSchema = z.object({
@@ -33,6 +46,7 @@ export const textSchema = z.object({
   x: z.number(),
   y: z.number(),
   text: z.string().min(1).max(ANNOTATION_LIMITS.text),
+  anchor: anchorSchema.optional(),
 });
 
 export const annotationItemSchema = z.discriminatedUnion('kind', [

@@ -78,6 +78,8 @@ export function AnnotationOverlay({ pageId, children }: Props) {
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  /** 锚定内容块已不在页面上、被暂时隐藏的批注数量 */
+  const [staleCount, setStaleCount] = useState(0);
   const [saveFailed, setSaveFailed] = useState(false);
   // 读到损坏/不兼容数据时暂停自动保存，避免把用户原数据覆盖掉
   const blockedRef = useRef(false);
@@ -214,6 +216,7 @@ export function AnnotationOverlay({ pageId, children }: Props) {
     const layer = new AnnotationLayer(host, {
       onChange: handleChange,
       onLimit: (message) => setNotice(message),
+      onStale: (count) => setStaleCount(count),
     });
     layerRef.current = layer;
     layer.setEnabled(false);
@@ -471,6 +474,11 @@ export function AnnotationOverlay({ pageId, children }: Props) {
             {notice && (
               <Typography.Text type="danger" className={styles.status}>
                 {notice}
+              </Typography.Text>
+            )}
+            {staleCount > 0 && (
+              <Typography.Text type="secondary" className={styles.status}>
+                {staleCount} 条批注锚定的内容不在当前页面，已暂时隐藏
               </Typography.Text>
             )}
           </Card>

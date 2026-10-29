@@ -63,6 +63,7 @@ export default function KnowledgePage() {
         {cards.map((card) => (
           <Card
             key={card.id}
+            data-annotation-anchor={`knowledge:${card.id}`}
             title={card.title}
             extra={<Tag>{labels[card.topic]}</Tag>}
           >
