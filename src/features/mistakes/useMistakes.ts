@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   createMistake,
   EMPTY_MISTAKES,
+  MISTAKE_LIMITS,
   MISTAKE_STORAGE_KEY,
+  markReviewed,
   mistakeDraftSchema,
   mistakeStorage,
   sortMistakes,
@@ -10,6 +12,7 @@ import {
   type Mistake,
   type MistakeDraft,
 } from './model';
+import { resolveImport, type ImportMode } from './transfer';
 
 interface BootState {
   items: Mistake[];
@@ -45,6 +48,11 @@ export interface MistakesController {
   add: (draft: MistakeDraft) => Promise<boolean>;
   edit: (original: Mistake, draft: MistakeDraft) => Promise<boolean>;
   remove: (original: Mistake) => Promise<boolean>;
+  setReviewed: (id: string, reviewed: boolean) => Promise<boolean>;
+  importMistakes: (
+    items: readonly Mistake[],
+    mode: ImportMode,
+  ) => Promise<boolean>;
   reset: () => Promise<boolean>;
 }
 
@@ -197,6 +205,52 @@ export function useMistakes(): MistakesController {
     [commit],
   );
 
+  const setReviewed = useCallback(
+    async (id: string, reviewed: boolean): Promise<boolean> => {
+      let missing = false;
+      const saved = await commit((current) => {
+        if (!current.some((item) => item.id === id)) {
+          missing = true;
+          return null;
+        }
+        return current.map((item) =>
+          item.id === id ? markReviewed(item, reviewed) : item,
+        );
+      });
+      if (missing) {
+        setSaveError('这条错题已不存在，可能已在其他标签页删除。');
+        return false;
+      }
+      return saved;
+    },
+    [commit],
+  );
+
+  const importMistakes = useCallback(
+    async (
+      incoming: readonly Mistake[],
+      mode: ImportMode,
+    ): Promise<boolean> => {
+      let overflow = 0;
+      const saved = await commit((current) => {
+        const next = resolveImport(current, incoming, mode);
+        if (next.length > MISTAKE_LIMITS.items) {
+          overflow = next.length;
+          return null;
+        }
+        return next;
+      });
+      if (overflow > 0) {
+        setSaveError(
+          `导入后共 ${overflow} 条，超过本地 ${MISTAKE_LIMITS.items} 条上限，未导入任何数据。`,
+        );
+        return false;
+      }
+      return saved;
+    },
+    [commit],
+  );
+
   const reset = useCallback(
     (): Promise<boolean> =>
       locked(() => {
@@ -213,5 +267,16 @@ export function useMistakes(): MistakesController {
     [locked],
   );
 
-  return { items, loadError, saveError, canWrite, add, edit, remove, reset };
+  return {
+    items,
+    loadError,
+    saveError,
+    canWrite,
+    add,
+    edit,
+    remove,
+    setReviewed,
+    importMistakes,
+    reset,
+  };
 }
