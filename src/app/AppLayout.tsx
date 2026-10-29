@@ -10,6 +10,7 @@ import {
   ArrowUpOutlined,
 } from '@ant-design/icons';
 import { modules, type ModuleId } from '@/shared/navigation/modules';
+import { AnnotationOverlay } from '@/shared/annotation/AnnotationOverlay';
 
 const icons = {
   dashboard: AppstoreOutlined,
@@ -96,7 +97,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
           tabIndex={-1}
           className="main-content"
         >
-          {children}
+          <AnnotationOverlay pageId={location.pathname}>
+            {children}
+          </AnnotationOverlay>
         </main>
         <footer className="footer">
           <span>析知 · 把知识连接起来</span>
