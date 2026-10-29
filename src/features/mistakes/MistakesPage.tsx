@@ -57,19 +57,19 @@ export default function MistakesPage() {
     setEditing(null);
   };
 
-  const submit = (draft: MistakeDraft) => {
-    const saved = editing ? edit(editing.id, draft) : add(draft);
+  const submit = async (draft: MistakeDraft) => {
+    const saved = editing ? await edit(editing, draft) : await add(draft);
     if (!saved) return;
     setNotice(editing ? '已更新这条错题。' : '已记录一条错题。');
     closeForm();
   };
 
-  const confirmRemove = (id: string) => {
-    if (remove(id)) setNotice('已删除这条错题。');
+  const confirmRemove = async (id: string) => {
+    if (await remove(id)) setNotice('已删除这条错题。');
   };
 
-  const clearAll = () => {
-    if (reset()) setNotice('已清除本地错题数据。');
+  const clearAll = async () => {
+    if (await reset()) setNotice('已清除本地错题数据。');
   };
 
   return (
@@ -103,7 +103,7 @@ export default function MistakesPage() {
               okText="确认清除"
               cancelText="取消"
               okButtonProps={{ danger: true }}
-              onConfirm={clearAll}
+              onConfirm={() => void clearAll()}
             >
               <Button danger size="small">
                 清空并重新开始
@@ -112,7 +112,7 @@ export default function MistakesPage() {
           }
         />
       )}
-      {saveError && (
+      {saveError && !formOpen && (
         <Alert
           className="section-gap-bottom"
           type="error"
@@ -185,7 +185,7 @@ export default function MistakesPage() {
                 okText="确认删除"
                 cancelText="取消"
                 okButtonProps={{ danger: true }}
-                onConfirm={() => confirmRemove(item.id)}
+                onConfirm={() => void confirmRemove(item.id)}
               >
                 <Button type="link" danger icon={<DeleteOutlined />}>
                   删除
@@ -230,6 +230,7 @@ export default function MistakesPage() {
         initial={editing}
         onCancel={closeForm}
         onSubmit={submit}
+        error={saveError}
       />
     </>
   );

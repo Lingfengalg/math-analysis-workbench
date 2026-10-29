@@ -30,10 +30,10 @@ export interface MistakesController {
   items: Mistake[];
   loadError: string | null;
   saveError: string | null;
-  add: (draft: MistakeDraft) => boolean;
-  edit: (id: string, draft: MistakeDraft) => boolean;
-  remove: (id: string) => boolean;
-  reset: () => boolean;
+  add: (draft: MistakeDraft) => Promise<boolean>;
+  edit: (original: Mistake, draft: MistakeDraft) => Promise<boolean>;
+  remove: (id: string) => Promise<boolean>;
+  reset: () => Promise<boolean>;
 }
 
 /**
@@ -50,23 +50,46 @@ export function useMistakes(): MistakesController {
   const [loadError, setLoadError] = useState<string | null>(boot.error);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const commit = useCallback((mutate: Mutator): boolean => {
-    const latest = mistakeStorage.read(EMPTY_MISTAKES);
-    if (!latest.ok) {
-      setSaveError(latest.error);
-      return false;
-    }
-    const updated = mutate(latest.data.items);
-    if (updated === null) return false;
-    const result = mistakeStorage.write({ items: sortMistakes(updated) });
-    if (!result.ok) {
-      setSaveError(result.error);
-      return false;
-    }
-    setSaveError(null);
-    setItems(sortMistakes(result.data.items));
-    return true;
-  }, []);
+  const locked = useCallback(
+    async (action: () => boolean): Promise<boolean> => {
+      if (!navigator.locks) {
+        setSaveError('浏览器不支持安全的跨标签页写入，未修改数据。');
+        return false;
+      }
+      try {
+        return await navigator.locks.request(
+          'math-workbench:mistakes-write',
+          action,
+        );
+      } catch {
+        setSaveError('无法获取跨标签页写入锁，未修改数据。');
+        return false;
+      }
+    },
+    [],
+  );
+
+  const commit = useCallback(
+    (mutate: Mutator): Promise<boolean> =>
+      locked(() => {
+        const latest = mistakeStorage.read(EMPTY_MISTAKES);
+        if (!latest.ok) {
+          setSaveError(latest.error);
+          return false;
+        }
+        const updated = mutate(latest.data.items);
+        if (updated === null) return false;
+        const result = mistakeStorage.write({ items: sortMistakes(updated) });
+        if (!result.ok) {
+          setSaveError(result.error);
+          return false;
+        }
+        setSaveError(null);
+        setItems(sortMistakes(result.data.items));
+        return true;
+      }),
+    [locked],
+  );
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
@@ -79,7 +102,7 @@ export function useMistakes(): MistakesController {
   }, []);
 
   const add = useCallback(
-    (draft: MistakeDraft): boolean => {
+    async (draft: MistakeDraft): Promise<boolean> => {
       const parsed = mistakeDraftSchema.safeParse(draft);
       if (!parsed.success) {
         setSaveError(parsed.error.issues[0]?.message ?? '错题内容不完整');
@@ -91,24 +114,27 @@ export function useMistakes(): MistakesController {
   );
 
   const edit = useCallback(
-    (id: string, draft: MistakeDraft): boolean => {
+    async (original: Mistake, draft: MistakeDraft): Promise<boolean> => {
       const parsed = mistakeDraftSchema.safeParse(draft);
       if (!parsed.success) {
         setSaveError(parsed.error.issues[0]?.message ?? '错题内容不完整');
         return false;
       }
-      let missing = false;
-      const saved = commit((current) => {
-        if (!current.some((item) => item.id === id)) {
-          missing = true;
+      let conflict = false;
+      const saved = await commit((current) => {
+        const latest = current.find((item) => item.id === original.id);
+        if (!latest || JSON.stringify(latest) !== JSON.stringify(original)) {
+          conflict = true;
           return null;
         }
         return current.map((item) =>
-          item.id === id ? updateMistake(item, parsed.data) : item,
+          item.id === original.id ? updateMistake(item, parsed.data) : item,
         );
       });
-      if (missing) {
-        setSaveError('这条错题已不存在，可能已在其他标签页删除。');
+      if (conflict) {
+        setSaveError(
+          '这条错题已不存在或已在其他标签页修改，请复制草稿并重新打开后再试。',
+        );
         return false;
       }
       return saved;
@@ -117,22 +143,26 @@ export function useMistakes(): MistakesController {
   );
 
   const remove = useCallback(
-    (id: string): boolean =>
+    (id: string): Promise<boolean> =>
       commit((current) => current.filter((item) => item.id !== id)),
     [commit],
   );
 
-  const reset = useCallback((): boolean => {
-    const result = mistakeStorage.clear();
-    if (!result.ok) {
-      setSaveError(result.error);
-      return false;
-    }
-    setItems([]);
-    setLoadError(null);
-    setSaveError(null);
-    return true;
-  }, []);
+  const reset = useCallback(
+    (): Promise<boolean> =>
+      locked(() => {
+        const result = mistakeStorage.clear();
+        if (!result.ok) {
+          setSaveError(result.error);
+          return false;
+        }
+        setItems([]);
+        setLoadError(null);
+        setSaveError(null);
+        return true;
+      }),
+    [locked],
+  );
 
   return { items, loadError, saveError, add, edit, remove, reset };
 }

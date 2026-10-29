@@ -8,156 +8,116 @@ import {
 } from './model';
 import { useMistakes } from './useMistakes';
 
-function draft(title: string): MistakeDraft {
-  return {
-    title,
-    topic: 'limit',
-    problem: '',
-    mistakeReason: '',
-    correction: '',
-  };
-}
-
+const draft = (title: string): MistakeDraft => ({
+  title,
+  topic: 'limit',
+  problem: '',
+  mistakeReason: '',
+  correction: '',
+});
 function storedItems() {
   const result = mistakeStorage.read(EMPTY_MISTAKES);
   if (!result.ok) throw new Error('storage unreadable');
   return result.data.items;
 }
-
-function storedTitles() {
-  return storedItems()
-    .map((item) => item.title)
-    .sort();
-}
-
-/** 真实浏览器会在其他标签页写入后自动派发 storage 事件，jsdom 需要手动模拟。 */
 function fireStorageEvent() {
   window.dispatchEvent(
     new StorageEvent('storage', { key: MISTAKE_STORAGE_KEY }),
   );
 }
-
 beforeEach(() => {
   localStorage.clear();
   vi.restoreAllMocks();
+  let queue = Promise.resolve();
+  Object.defineProperty(navigator, 'locks', {
+    configurable: true,
+    value: {
+      request: (_name: string, action: () => boolean) => {
+        const result = queue.then(action);
+        queue = result.then(
+          () => undefined,
+          () => undefined,
+        );
+        return result;
+      },
+    },
+  });
 });
 
 describe('错题本跨标签页一致性', () => {
-  it('两个标签页交替新增都不会丢失', () => {
-    const tabA = renderHook(() => useMistakes());
-    const tabB = renderHook(() => useMistakes());
-
-    act(() => {
-      tabA.result.current.add(draft('A 页新增'));
+  it('两个标签页同时新增都不会丢失', async () => {
+    const a = renderHook(() => useMistakes());
+    const b = renderHook(() => useMistakes());
+    await act(async () => {
+      await Promise.all([
+        a.result.current.add(draft('A')),
+        b.result.current.add(draft('B')),
+      ]);
     });
-    act(() => {
-      tabB.result.current.add(draft('B 页新增'));
-    });
-
-    expect(storedTitles()).toEqual(['A 页新增', 'B 页新增']);
-    expect(tabB.result.current.items.map((item) => item.title).sort()).toEqual([
-      'A 页新增',
-      'B 页新增',
-    ]);
-
+    expect(
+      storedItems()
+        .map((x) => x.title)
+        .sort(),
+    ).toEqual(['A', 'B']);
     act(fireStorageEvent);
-    expect(tabA.result.current.items.map((item) => item.title).sort()).toEqual([
-      'A 页新增',
-      'B 页新增',
+    expect(a.result.current.items.map((x) => x.title).sort()).toEqual([
+      'A',
+      'B',
     ]);
   });
-
-  it('旧快照标签页编辑其他标签页新增的记录时基于最新数据生效', () => {
-    const tabB = renderHook(() => useMistakes());
-    const tabA = renderHook(() => useMistakes());
-
-    act(() => {
-      tabA.result.current.add(draft('A 页新增'));
+  it('同一记录被其他页面修改时保留新值并提示冲突', async () => {
+    const a = renderHook(() => useMistakes());
+    const b = renderHook(() => useMistakes());
+    await act(async () => {
+      await a.result.current.add(draft('原题'));
     });
-    const id = storedItems()[0].id;
-
-    let saved = false;
-    act(() => {
-      saved = tabB.result.current.edit(id, draft('B 页改名'));
+    const original = storedItems()[0];
+    await act(async () => {
+      expect(await a.result.current.edit(original, draft('A 修改'))).toBe(true);
     });
-
-    expect(saved).toBe(true);
-    expect(storedTitles()).toEqual(['B 页改名']);
+    await act(async () => {
+      expect(await b.result.current.edit(original, draft('B 草稿'))).toBe(
+        false,
+      );
+    });
+    expect(storedItems()[0].title).toBe('A 修改');
+    expect(b.result.current.saveError).toContain('其他标签页修改');
   });
-
-  it('记录已在其他标签页删除时，编辑会报冲突且不复活', () => {
-    const tabA = renderHook(() => useMistakes());
-    const tabB = renderHook(() => useMistakes());
-
-    act(() => {
-      tabA.result.current.add(draft('共享记录'));
+  it('其他页面删除后不能复活记录', async () => {
+    const a = renderHook(() => useMistakes());
+    const b = renderHook(() => useMistakes());
+    await act(async () => {
+      await a.result.current.add(draft('共享'));
     });
-    const id = storedItems()[0].id;
-    act(() => {
-      tabA.result.current.remove(id);
+    const original = storedItems()[0];
+    await act(async () => {
+      await a.result.current.remove(original.id);
     });
-
-    let saved = true;
-    act(() => {
-      saved = tabB.result.current.edit(id, draft('试图编辑'));
+    await act(async () => {
+      expect(await b.result.current.edit(original, draft('草稿'))).toBe(false);
     });
-
-    expect(saved).toBe(false);
-    expect(tabB.result.current.saveError).toContain('已不存在');
     expect(storedItems()).toHaveLength(0);
+    expect(b.result.current.saveError).toContain('已不存在');
   });
-
-  it('删除不会被旧快照复活', () => {
-    const tabA = renderHook(() => useMistakes());
-    const tabB = renderHook(() => useMistakes());
-
-    act(() => {
-      tabA.result.current.add(draft('保留'));
-      tabA.result.current.add(draft('待删除'));
-    });
-    const target = storedItems().find((item) => item.title === '待删除')!;
-
-    act(() => {
-      tabB.result.current.remove(target.id);
-    });
-
-    expect(storedTitles()).toEqual(['保留']);
-  });
-
-  it('storage 事件让其他标签页即时同步', () => {
-    const tabA = renderHook(() => useMistakes());
-    act(() => {
-      tabA.result.current.add(draft('来自 A'));
-    });
-
-    act(() => {
-      const envelope = JSON.parse(localStorage.getItem(MISTAKE_STORAGE_KEY)!);
-      envelope.data.items.push({
-        ...envelope.data.items[0],
-        id: 'from-b',
-        title: '来自 B',
-      });
-      localStorage.setItem(MISTAKE_STORAGE_KEY, JSON.stringify(envelope));
-      fireStorageEvent();
-    });
-
-    expect(tabA.result.current.items.map((item) => item.title)).toContain(
-      '来自 B',
-    );
-  });
-
-  it('读取失败时放弃写入并保留原始数据', () => {
+  it('读取失败时保留原始数据', async () => {
     const corrupt = '{"schemaVersion":1,"data":{"items":"broken"}}';
     localStorage.setItem(MISTAKE_STORAGE_KEY, corrupt);
-    const tab = renderHook(() => useMistakes());
-    expect(tab.result.current.loadError).toBeTruthy();
-
-    let saved = true;
-    act(() => {
-      saved = tab.result.current.add(draft('不该写入'));
+    const a = renderHook(() => useMistakes());
+    await act(async () => {
+      expect(await a.result.current.add(draft('不写入'))).toBe(false);
     });
-
-    expect(saved).toBe(false);
     expect(localStorage.getItem(MISTAKE_STORAGE_KEY)).toBe(corrupt);
+  });
+  it('不支持 Web Locks 时拒绝写入', async () => {
+    Object.defineProperty(navigator, 'locks', {
+      configurable: true,
+      value: undefined,
+    });
+    const a = renderHook(() => useMistakes());
+    await act(async () => {
+      expect(await a.result.current.add(draft('不写入'))).toBe(false);
+    });
+    expect(localStorage.getItem(MISTAKE_STORAGE_KEY)).toBeNull();
+    expect(a.result.current.saveError).toContain('不支持');
   });
 });

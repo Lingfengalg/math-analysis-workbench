@@ -17,6 +17,13 @@ async function addMistake(title: string) {
 beforeEach(() => {
   localStorage.clear();
   vi.restoreAllMocks();
+  Object.defineProperty(navigator, 'locks', {
+    configurable: true,
+    value: {
+      request: (_name: string, action: () => boolean) =>
+        Promise.resolve().then(action),
+    },
+  });
 });
 
 describe('错题本', () => {

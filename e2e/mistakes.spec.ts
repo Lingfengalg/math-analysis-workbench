@@ -125,3 +125,54 @@ test('另一页删除后，本页编辑会提示冲突而不是复活记录', as
   await page.reload();
   await expect(page.getByText(/还没有错题记录/)).toBeVisible();
 });
+
+test('同一错题在两页同时编辑时保留草稿并拒绝覆盖', async ({
+  page,
+  context,
+}) => {
+  await page.goto('/#/mistakes');
+  await page.getByRole('button', { name: /记录错题/ }).click();
+  await page.getByLabel('题目', { exact: true }).fill('共享错题');
+  await page.getByRole('button', { name: /保\s*存/ }).click();
+  await expect(page.getByText('共享错题')).toBeVisible();
+  const second = await context.newPage();
+  await second.goto('/#/mistakes');
+  await page.getByRole('button', { name: /编辑/ }).click();
+  await second.getByRole('button', { name: /编辑/ }).click();
+  await page.getByLabel('题目', { exact: true }).fill('A 的修改');
+  await second.getByLabel('题目', { exact: true }).fill('B 的草稿');
+  await page.getByRole('button', { name: /保\s*存/ }).click();
+  await expect(page.getByText('A 的修改')).toBeVisible();
+  await second.getByRole('button', { name: /保\s*存/ }).click();
+  await expect(second.getByText(/已在其他标签页修改/)).toBeVisible();
+  await expect(second.getByLabel('题目', { exact: true })).toHaveValue(
+    'B 的草稿',
+  );
+  await page.reload();
+  await expect(page.getByText('A 的修改')).toBeVisible();
+  await second.close();
+});
+
+test('两个标签页同时新增不会互相覆盖', async ({ page, context }) => {
+  await page.goto('/#/mistakes');
+  const second = await context.newPage();
+  await second.goto('/#/mistakes');
+  for (const [p, title] of [
+    [page, '并发 A'],
+    [second, '并发 B'],
+  ] as const) {
+    await p.getByRole('button', { name: /记录错题/ }).click();
+    await p.getByLabel('题目', { exact: true }).fill(title);
+  }
+  await Promise.all(
+    [page, second].map((p) =>
+      p.getByRole('button', { name: /保\s*存/ }).click(),
+    ),
+  );
+  await expect(page.getByText('并发 A')).toBeVisible();
+  await expect(page.getByText('并发 B')).toBeVisible();
+  await page.reload();
+  await expect(page.getByText('并发 A')).toBeVisible();
+  await expect(page.getByText('并发 B')).toBeVisible();
+  await second.close();
+});

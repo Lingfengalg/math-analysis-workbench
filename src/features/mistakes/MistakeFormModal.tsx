@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { Form, Input, Modal, Select } from 'antd';
+import { useEffect, useRef, useState } from 'react';
+import { Alert, Form, Input, Modal, Select } from 'antd';
 import {
   MISTAKE_LIMITS,
   MISTAKE_TOPICS,
@@ -20,11 +20,20 @@ interface Props {
   open: boolean;
   initial: Mistake | null;
   onCancel: () => void;
-  onSubmit: (draft: MistakeDraft) => void;
+  onSubmit: (draft: MistakeDraft) => Promise<void>;
+  error: string | null;
 }
 
-export function MistakeFormModal({ open, initial, onCancel, onSubmit }: Props) {
+export function MistakeFormModal({
+  open,
+  initial,
+  onCancel,
+  onSubmit,
+  error,
+}: Props) {
   const [form] = Form.useForm<MistakeDraft>();
+  const pending = useRef(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -41,10 +50,16 @@ export function MistakeFormModal({ open, initial, onCancel, onSubmit }: Props) {
   }, [open, initial, form]);
 
   const submit = async () => {
+    if (pending.current) return;
+    pending.current = true;
+    setSaving(true);
     try {
-      onSubmit(await form.validateFields());
+      await onSubmit(await form.validateFields());
     } catch {
       /* 校验失败时表单自身展示错误，弹窗保持打开。 */
+    } finally {
+      pending.current = false;
+      setSaving(false);
     }
   };
 
@@ -56,8 +71,16 @@ export function MistakeFormModal({ open, initial, onCancel, onSubmit }: Props) {
       cancelText="取消"
       onOk={() => void submit()}
       onCancel={onCancel}
+      confirmLoading={saving}
+      closable={!saving}
+      cancelButtonProps={{ disabled: saving }}
+      maskClosable={!saving}
+      keyboard={!saving}
       width={620}
     >
+      {error && (
+        <Alert type="error" showIcon title="保存失败" description={error} />
+      )}
       <Form
         form={form}
         layout="vertical"
