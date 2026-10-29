@@ -29,6 +29,15 @@ npm run test:e2e          # 构建并自动启动生产预览服务器
 npm run preview          # 先 build，再本地预览生产包
 ```
 
+跨浏览器基线（可选，不改变 Chromium 验收基线）：
+
+```bash
+npx playwright install firefox webkit   # 首次，约 180 MB
+npm run test:e2e:cross-browser          # 只跑 e2e/cross-browser.spec.ts，Chromium + Firefox + WebKit
+```
+
+CI 中对应独立的 `Cross-browser baseline` 工作流：在 Actions 里手动触发（workflow_dispatch），或给 PR 加上 `cross-browser` 标签时运行。
+
 如修改内容，先运行 `npm run format`。`typecheck` 负责类型检查，Vite 不能替代它。
 构建产物是静态站点，需通过 HTTP 服务或在线托管访问，不支持双击 `index.html` 的 `file://` 模式。
 
