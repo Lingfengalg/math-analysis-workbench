@@ -14,32 +14,29 @@ export interface PlotSummary {
 
 /**
  * Derive a text-friendly summary from sampled points. Neighbouring gap x
- * values whose spacing is at most a few sample steps are merged into one
- * range (domain holes); isolated gaps (poles, jumps) stay single points.
+ * values are grouped only while consecutive in the sampled sequence;
+ * a finite point always separates two gaps. These are sampled gaps, not
+ * proof that every point between them is undefined.
  * Pure derivation from already sampled data — no expression evaluation.
  */
 export function summarizePlot(points: PlotPoint[]): PlotSummary {
-  const gapXs: number[] = [];
+  const gapRanges: GapRange[] = [];
+  let previousWasGap = false;
   let minY: number | null = null;
   let maxY: number | null = null;
   let finiteCount = 0;
   for (const [x, y] of points) {
-    if (y === null) gapXs.push(x);
-    else {
+    if (y === null) {
+      const last = gapRanges[gapRanges.length - 1];
+      if (previousWasGap && last) last.to = x;
+      else gapRanges.push({ from: x, to: x });
+      previousWasGap = true;
+    } else {
+      previousWasGap = false;
       finiteCount += 1;
       if (minY === null || y < minY) minY = y;
       if (maxY === null || y > maxY) maxY = y;
     }
-  }
-  const range =
-    points.length > 0 ? points[points.length - 1][0] - points[0][0] : 0;
-  const mergeThreshold =
-    (Math.max(range, Number.EPSILON) / Math.max(points.length, 2)) * 3;
-  const gapRanges: GapRange[] = [];
-  for (const x of gapXs) {
-    const last = gapRanges[gapRanges.length - 1];
-    if (last && x - last.to <= mergeThreshold) last.to = x;
-    else gapRanges.push({ from: x, to: x });
   }
   return { finiteCount, minY, maxY, gapRanges };
 }
@@ -54,5 +51,5 @@ export function formatNumber(value: number): string {
 
 export function formatGapRange(range: GapRange): string {
   if (range.from === range.to) return `x = ${formatNumber(range.from)}`;
-  return `x ∈ [${formatNumber(range.from)}, ${formatNumber(range.to)}]`;
+  return `采样缺口从 x = ${formatNumber(range.from)} 到 x = ${formatNumber(range.to)}`;
 }

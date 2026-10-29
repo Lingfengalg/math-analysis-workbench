@@ -44,6 +44,18 @@ describe('采样数据摘要', () => {
     ]);
     expect(summary.gapRanges).toEqual([{ from: -1, to: -0.5 }]);
   });
+  it('有效采样点分隔缺口，不能误合并', () => {
+    const summary = summarizePlot([
+      [0, null],
+      [1, 5],
+      [2, null],
+      [3, 5],
+    ]);
+    expect(summary.gapRanges).toEqual([
+      { from: 0, to: 0 },
+      { from: 2, to: 2 },
+    ]);
+  });
   it('tan(x)：孤立缺口各自保留', () => {
     const summary = summarizePlot([
       [0, 0],
@@ -101,6 +113,8 @@ describe('数值格式', () => {
   });
   it('formatGapRange', () => {
     expect(formatGapRange({ from: 0, to: 0 })).toBe('x = 0');
-    expect(formatGapRange({ from: -1, to: -0.5 })).toBe('x ∈ [-1, -0.5]');
+    expect(formatGapRange({ from: -1, to: -0.5 })).toBe(
+      '采样缺口从 x = -1 到 x = -0.5',
+    );
   });
 });
