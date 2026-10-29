@@ -115,3 +115,16 @@ describe('错题本', () => {
     expect(screen.queryByText('写不进去的错题')).not.toBeInTheDocument();
   });
 });
+
+describe('只读模式 (#23)', () => {
+  it('不支持 Web Locks 时给出只读提示并禁用写操作', () => {
+    Object.defineProperty(navigator, 'locks', {
+      configurable: true,
+      value: undefined,
+    });
+    render(<MistakesPage />);
+
+    expect(screen.getByText(/只读模式/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /记录错题/ })).toBeDisabled();
+  });
+});

@@ -23,16 +23,28 @@ function loadMistakes(): BootState {
     : { items: [], error: result.error };
 }
 
-/** 返回 null 表示目标记录已不存在，放弃本次写入。 */
+/** 返回 null 表示放弃本次写入（调用方负责给出具体原因）。 */
 type Mutator = (current: readonly Mistake[]) => Mistake[] | null;
+
+/**
+ * 是否支持 Web Locks。写入一致性依赖它，因此按能力探测而不是嗅探 UA。
+ * 需要安全上下文（https 或 localhost），且 API 必须真的可调用。
+ */
+export function supportsCrossTabLock(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const locks = (navigator as Navigator & { locks?: LockManager }).locks;
+  return typeof locks?.request === 'function';
+}
 
 export interface MistakesController {
   items: Mistake[];
   loadError: string | null;
   saveError: string | null;
+  /** 不支持 Web Locks 时为只读模式，界面据此禁用写操作。 */
+  canWrite: boolean;
   add: (draft: MistakeDraft) => Promise<boolean>;
   edit: (original: Mistake, draft: MistakeDraft) => Promise<boolean>;
-  remove: (id: string) => Promise<boolean>;
+  remove: (original: Mistake) => Promise<boolean>;
   reset: () => Promise<boolean>;
 }
 
@@ -41,7 +53,8 @@ export interface MistakesController {
  *
  * 并发策略：写入前始终重新从存储读取最新列表，再做增量修改，
  * 因此其他标签页的新增/编辑/删除不会被本页的旧快照回声覆盖；
- * 同时监听 storage 事件，让其他标签页的改动即时反映到当前界面。
+ * 同时监听 storage 事件，让其他标签页的改动即时反映到当前界面，
+ * 并把「数据不可读 / 恢复可读」的变化同步到 loadError。
  * 读取失败时直接放弃写入，避免覆盖无法解析的原始数据。
  */
 export function useMistakes(): MistakesController {
@@ -49,11 +62,14 @@ export function useMistakes(): MistakesController {
   const [items, setItems] = useState<Mistake[]>(boot.items);
   const [loadError, setLoadError] = useState<string | null>(boot.error);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [canWrite] = useState<boolean>(() => supportsCrossTabLock());
 
   const locked = useCallback(
     async (action: () => boolean): Promise<boolean> => {
-      if (!navigator.locks) {
-        setSaveError('浏览器不支持安全的跨标签页写入，未修改数据。');
+      if (!canWrite) {
+        setSaveError(
+          '当前浏览器不支持跨标签页写入锁，错题本处于只读模式，未修改数据。',
+        );
         return false;
       }
       try {
@@ -66,7 +82,7 @@ export function useMistakes(): MistakesController {
         return false;
       }
     },
-    [],
+    [canWrite],
   );
 
   const commit = useCallback(
@@ -93,9 +109,16 @@ export function useMistakes(): MistakesController {
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
-      if (event.key !== MISTAKE_STORAGE_KEY) return;
+      // key 为 null 表示 localStorage.clear()，同样需要重新同步
+      if (event.key !== null && event.key !== MISTAKE_STORAGE_KEY) return;
       const latest = mistakeStorage.read(EMPTY_MISTAKES);
-      if (latest.ok) setItems(sortMistakes(latest.data.items));
+      if (latest.ok) {
+        setItems(sortMistakes(latest.data.items));
+        setLoadError(null);
+        return;
+      }
+      // 其他标签页写入了不可读取的数据：同步错误状态，并保持原数据不动
+      setLoadError(latest.error);
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
@@ -143,8 +166,34 @@ export function useMistakes(): MistakesController {
   );
 
   const remove = useCallback(
-    (id: string): Promise<boolean> =>
-      commit((current) => current.filter((item) => item.id !== id)),
+    async (original: Mistake): Promise<boolean> => {
+      let conflict = false;
+      let missing = false;
+      const saved = await commit((current) => {
+        const latest = current.find((item) => item.id === original.id);
+        if (!latest) {
+          missing = true;
+          return null;
+        }
+        // 确认删除期间其他标签页改过这条记录：不删除新版本，要求重新确认
+        if (JSON.stringify(latest) !== JSON.stringify(original)) {
+          conflict = true;
+          return null;
+        }
+        return current.filter((item) => item.id !== original.id);
+      });
+      if (missing) {
+        setSaveError('这条错题已在其他标签页被删除。');
+        return false;
+      }
+      if (conflict) {
+        setSaveError(
+          '这条错题已在其他标签页被修改，未删除。请重新确认后再试。',
+        );
+        return false;
+      }
+      return saved;
+    },
     [commit],
   );
 
@@ -164,5 +213,5 @@ export function useMistakes(): MistakesController {
     [locked],
   );
 
-  return { items, loadError, saveError, add, edit, remove, reset };
+  return { items, loadError, saveError, canWrite, add, edit, remove, reset };
 }
