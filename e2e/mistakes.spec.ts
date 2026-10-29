@@ -53,3 +53,75 @@ test('错题本可以按主题筛选并搜索', async ({ page }) => {
   await page.getByText('导数', { exact: true }).click();
   await expect(page.getByText(/没有匹配的错题/)).toBeVisible();
 });
+
+test('两个标签页交替新增与删除不会互相覆盖', async ({ page, context }) => {
+  await page.goto('/#/mistakes');
+  const second = await context.newPage();
+  await second.goto('/#/mistakes');
+  await expect(page.getByText(/还没有错题记录/)).toBeVisible();
+  await expect(second.getByText(/还没有错题记录/)).toBeVisible();
+
+  await page.getByRole('button', { name: /记录错题/ }).click();
+  await page.getByLabel('题目', { exact: true }).fill('A 页新增');
+  await page.getByRole('button', { name: /保\s*存/ }).click();
+  await expect(page.getByText('A 页新增')).toBeVisible();
+
+  // 另一个标签页无需刷新即可看到 A 页的写入
+  await expect(second.getByText('A 页新增')).toBeVisible();
+
+  // B 页此时状态是新的，但旧实现仍会用整表覆盖；这里验证两条都在
+  await second.getByRole('button', { name: /记录错题/ }).click();
+  await second.getByLabel('题目', { exact: true }).fill('B 页新增');
+  await second.getByRole('button', { name: /保\s*存/ }).click();
+  await expect(second.getByText('B 页新增')).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByText('A 页新增')).toBeVisible();
+  await expect(page.getByText('B 页新增')).toBeVisible();
+  await expect(page.getByText(/共 2 条错题/)).toBeVisible();
+
+  await page
+    .locator('.ant-card', { hasText: 'A 页新增' })
+    .getByRole('button', { name: /删除/ })
+    .click();
+  await page.getByRole('button', { name: '确认删除' }).click();
+  await expect(page.getByText('A 页新增')).toBeHidden();
+
+  await expect(second.getByText('A 页新增')).toBeHidden();
+  await expect(second.getByText('B 页新增')).toBeVisible();
+  await second.close();
+});
+
+test('另一页删除后，本页编辑会提示冲突而不是复活记录', async ({
+  page,
+  context,
+}) => {
+  await page.goto('/#/mistakes');
+  const second = await context.newPage();
+  await second.goto('/#/mistakes');
+
+  await page.getByRole('button', { name: /记录错题/ }).click();
+  await page.getByLabel('题目', { exact: true }).fill('共享记录');
+  await page.getByRole('button', { name: /保\s*存/ }).click();
+  await expect(second.getByText('共享记录')).toBeVisible();
+
+  await second
+    .locator('.ant-card', { hasText: '共享记录' })
+    .getByRole('button', { name: /编辑/ })
+    .click();
+
+  await page
+    .locator('.ant-card', { hasText: '共享记录' })
+    .getByRole('button', { name: /删除/ })
+    .click();
+  await page.getByRole('button', { name: '确认删除' }).click();
+  await expect(page.getByText(/还没有错题记录/)).toBeVisible();
+
+  await second.getByLabel('题目', { exact: true }).fill('试图编辑');
+  await second.getByRole('button', { name: /保\s*存/ }).click();
+  await expect(second.getByText(/已不存在/)).toBeVisible();
+
+  await second.close();
+  await page.reload();
+  await expect(page.getByText(/还没有错题记录/)).toBeVisible();
+});

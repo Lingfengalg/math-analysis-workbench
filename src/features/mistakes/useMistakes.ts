@@ -1,14 +1,14 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   createMistake,
   EMPTY_MISTAKES,
+  MISTAKE_STORAGE_KEY,
   mistakeDraftSchema,
   mistakeStorage,
   sortMistakes,
   updateMistake,
   type Mistake,
   type MistakeDraft,
-  type MistakeList,
 } from './model';
 
 interface BootState {
@@ -23,6 +23,9 @@ function loadMistakes(): BootState {
     : { items: [], error: result.error };
 }
 
+/** 返回 null 表示目标记录已不存在，放弃本次写入。 */
+type Mutator = (current: readonly Mistake[]) => Mistake[] | null;
+
 export interface MistakesController {
   items: Mistake[];
   loadError: string | null;
@@ -34,8 +37,12 @@ export interface MistakesController {
 }
 
 /**
- * 错题本状态。所有写入都先经过 Zod 校验再落 storage；
- * 写入失败时保留内存中的旧列表，并暴露错误给界面提示。
+ * 错题本状态。
+ *
+ * 并发策略：写入前始终重新从存储读取最新列表，再做增量修改，
+ * 因此其他标签页的新增/编辑/删除不会被本页的旧快照回声覆盖；
+ * 同时监听 storage 事件，让其他标签页的改动即时反映到当前界面。
+ * 读取失败时直接放弃写入，避免覆盖无法解析的原始数据。
  */
 export function useMistakes(): MistakesController {
   const [boot] = useState<BootState>(loadMistakes);
@@ -43,8 +50,15 @@ export function useMistakes(): MistakesController {
   const [loadError, setLoadError] = useState<string | null>(boot.error);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const persist = useCallback((next: MistakeList): boolean => {
-    const result = mistakeStorage.write(next);
+  const commit = useCallback((mutate: Mutator): boolean => {
+    const latest = mistakeStorage.read(EMPTY_MISTAKES);
+    if (!latest.ok) {
+      setSaveError(latest.error);
+      return false;
+    }
+    const updated = mutate(latest.data.items);
+    if (updated === null) return false;
+    const result = mistakeStorage.write({ items: sortMistakes(updated) });
     if (!result.ok) {
       setSaveError(result.error);
       return false;
@@ -54,6 +68,16 @@ export function useMistakes(): MistakesController {
     return true;
   }, []);
 
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== MISTAKE_STORAGE_KEY) return;
+      const latest = mistakeStorage.read(EMPTY_MISTAKES);
+      if (latest.ok) setItems(sortMistakes(latest.data.items));
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
   const add = useCallback(
     (draft: MistakeDraft): boolean => {
       const parsed = mistakeDraftSchema.safeParse(draft);
@@ -61,36 +85,41 @@ export function useMistakes(): MistakesController {
         setSaveError(parsed.error.issues[0]?.message ?? '错题内容不完整');
         return false;
       }
-      return persist({ items: [createMistake(parsed.data), ...items] });
+      return commit((current) => [createMistake(parsed.data), ...current]);
     },
-    [items, persist],
+    [commit],
   );
 
   const edit = useCallback(
     (id: string, draft: MistakeDraft): boolean => {
-      const target = items.find((item) => item.id === id);
-      if (!target) {
-        setSaveError('这条错题已不存在，可能已在其他标签页删除。');
-        return false;
-      }
       const parsed = mistakeDraftSchema.safeParse(draft);
       if (!parsed.success) {
         setSaveError(parsed.error.issues[0]?.message ?? '错题内容不完整');
         return false;
       }
-      return persist({
-        items: items.map((item) =>
+      let missing = false;
+      const saved = commit((current) => {
+        if (!current.some((item) => item.id === id)) {
+          missing = true;
+          return null;
+        }
+        return current.map((item) =>
           item.id === id ? updateMistake(item, parsed.data) : item,
-        ),
+        );
       });
+      if (missing) {
+        setSaveError('这条错题已不存在，可能已在其他标签页删除。');
+        return false;
+      }
+      return saved;
     },
-    [items, persist],
+    [commit],
   );
 
   const remove = useCallback(
     (id: string): boolean =>
-      persist({ items: items.filter((item) => item.id !== id) }),
-    [items, persist],
+      commit((current) => current.filter((item) => item.id !== id)),
+    [commit],
   );
 
   const reset = useCallback((): boolean => {

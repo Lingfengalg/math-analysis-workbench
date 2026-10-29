@@ -83,6 +83,9 @@ export type MistakeList = z.infer<typeof mistakeListSchema>;
 
 export const EMPTY_MISTAKES: MistakeList = { items: [] };
 
+/** 跨标签页 storage 事件按这个键筛选，需与 createStorage 的键前缀拼接结果一致。 */
+export const MISTAKE_STORAGE_KEY = 'math-workbench:mistakes';
+
 export const mistakeStorage = createStorage('mistakes', mistakeListSchema);
 
 function createMistakeId(): string {
