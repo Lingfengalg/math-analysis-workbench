@@ -101,3 +101,68 @@ test('文字输入阶段就限制长度，不会先显示后保存失败 (#36)',
     )
     .toBe(500);
 });
+
+test('达到单页条目上限时拒绝新增并提示 (#36)', async ({ page }) => {
+  await page.goto('/#/knowledge');
+  await page.evaluate((key) => {
+    const items = Array.from({ length: 2000 }, (_, index) => ({
+      kind: 'text',
+      id: `t${index}`,
+      color: '#1f2937',
+      x: 0.01,
+      y: 0.01,
+      text: 'x',
+    }));
+    localStorage.setItem(
+      key,
+      JSON.stringify({
+        schemaVersion: 1,
+        data: { pageId: '/knowledge', items },
+      }),
+    );
+  }, KEY);
+  await page.reload();
+  await enable(page);
+  await draw(page);
+
+  await expect(page.getByText(/本页最多 2000 条批注/)).toBeVisible();
+  expect(await storedCount(page)).toBe(2000);
+});
+
+test('保存失败后切页，草稿不会写到别的页面 (#33 #34)', async ({ page }) => {
+  await page.goto('/#/knowledge');
+  await enable(page);
+
+  await page.evaluate(() => {
+    const original = Storage.prototype.setItem;
+    (window as unknown as { __restoreSetItem: () => void }).__restoreSetItem =
+      () => {
+        Storage.prototype.setItem = original;
+      };
+    Storage.prototype.setItem = () => {
+      throw new Error('quota');
+    };
+  });
+  await draw(page);
+  await expect(page.getByText(/未保存的批注已保留/)).toBeVisible({
+    timeout: 5000,
+  });
+
+  // 切到绘图页：pending 仍属于 /knowledge
+  await page.getByRole('link', { name: /绘图计算/ }).click();
+  await page.waitForTimeout(500);
+  await page.evaluate(() =>
+    (window as unknown as { __restoreSetItem: () => void }).__restoreSetItem(),
+  );
+
+  // 回到知识页：切页时会先 flush，待保存的草稿应写回 /knowledge
+  await page.getByRole('link', { name: /知识导航/ }).click();
+  await page.waitForTimeout(600);
+
+  await expect.poll(async () => storedCount(page)).toBe(1);
+  const plotting = await page.evaluate(() =>
+    localStorage.getItem('math-workbench:annotation:/plotting'),
+  );
+  const plottingCount = plotting ? JSON.parse(plotting).data.items.length : 0;
+  expect(plottingCount).toBe(0);
+});

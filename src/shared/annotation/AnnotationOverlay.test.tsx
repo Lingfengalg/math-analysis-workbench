@@ -162,4 +162,17 @@ describe('快捷键边界 (#35)', () => {
     document.body.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(true);
   });
+  it('关闭批注时工具快捷键不改变工具状态', async () => {
+    const user = userEvent.setup();
+    renderOverlay();
+    await user.click(screen.getByRole('button', { name: /批注$/ }));
+    await user.keyboard('e');
+    expect(screen.getByText(/当前：橡皮/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /退出批注$/ }));
+    await user.keyboard('p');
+    await user.click(screen.getByRole('button', { name: /批注$/ }));
+
+    expect(screen.getByText(/当前：橡皮/)).toBeInTheDocument();
+  });
 });
