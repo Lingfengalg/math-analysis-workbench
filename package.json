@@ -18,6 +18,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:e2e": "playwright test",
+    "test:e2e:cross-browser": "node scripts/e2e-cross-browser.mjs",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm run test:run && npm run build"
   },
   "dependencies": {

@@ -167,3 +167,26 @@
 - 导入只做结构与版本校验，不校验内容真实性；导入的文件由使用者自行确认来源。
 - 只支持本工作台导出的 JSON，不支持 CSV 或其他应用的数据格式。
 - 仍然只保存在当前浏览器，不涉及账号与跨设备同步。
+
+## 2026-10-29 跨浏览器基线（#29）
+
+本地 Windows 11 + Node.js 22.23.4，Playwright 1.64.1，对比 Chromium 156 / Firefox 157 / WebKit 27.2 三个引擎，
+只跑 `e2e/cross-browser.spec.ts` 的关键路径（导航与 404、绘图错误反馈、错题本写入与刷新、损坏数据不覆盖）。
+
+| 检查                         | Chromium | Firefox | WebKit |
+| ---------------------------- | -------- | ------- | ------ |
+| 关键路径 4 项                | 通过     | 通过    | 通过   |
+| `navigator.locks` 可用       | 是       | 是      | 是     |
+| 安全上下文 / Worker / Canvas | 是       | 是      | 是     |
+
+命令与成本：
+
+- 默认 `npm run test:e2e` 仍只跑 Chromium，验收基线不变。
+- `npm run test:e2e:cross-browser` 额外跑 Firefox 与 WebKit，只执行 `e2e/cross-browser.spec.ts`；本地首次需 `npx playwright install firefox webkit`（约 180 MB）。
+- CI 中该检查是独立可选 job `Cross-browser baseline (optional)`，只在手动触发（workflow_dispatch）或 PR 带 `cross-browser` 标签时运行，不阻塞默认流程。
+
+未覆盖 / 不能声称：
+
+- Playwright WebKit 是自动化构建，不等于真实 Safari（macOS / iOS）；本轮没有在真机 Safari 上验证。
+- 未覆盖移动端触摸、屏幕阅读器与 Firefox/WebKit 下的全部交互（如批注绘制手感）；这些仍以 Chromium 基线加人工验收为准。
+- 三引擎本次均支持 Web Locks，因此「不支持时只读」的分支仅在 Chromium 单元/组件测试中通过能力桩覆盖，未在真实不支持环境验证。

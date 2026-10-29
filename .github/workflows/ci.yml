@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -40,5 +41,25 @@ jobs:
         if: failure()
         with:
           name: browser-test-results
+          path: test-results/
+          retention-days: 7
+  cross-browser:
+    name: Cross-browser baseline (optional)
+    # 仅在手动触发或 PR 打了 cross-browser 标签时运行，不改变 Chromium 验收基线
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'cross-browser')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium firefox webkit
+      - run: npm run test:e2e:cross-browser
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: cross-browser-test-results
           path: test-results/
           retention-days: 7
