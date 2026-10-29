@@ -46,6 +46,27 @@ test('默认绘图设置可在刷新后保留', async ({ page }) => {
   await expect(page.getByLabel('函数表达式 f(x)')).toHaveValue('sin(x)');
 });
 
+test('无效表达式或区间不会覆盖已保存的默认设置', async ({ page }) => {
+  await page.goto('/#/plotting');
+  await expect(page.getByRole('status')).toContainText('f(x)', {
+    timeout: 20000,
+  });
+  await page.getByRole('button', { name: 'sin(x)', exact: true }).click();
+  await page.getByRole('button', { name: /保存默认设置/ }).click();
+  await expect(page.getByText(/已保存到当前浏览器/)).toBeVisible();
+
+  await page.getByLabel('函数表达式 f(x)').fill('unknown(x)');
+  await page.getByRole('button', { name: /保存默认设置/ }).click();
+  await expect(page.getByText(/未保存：/)).toBeVisible();
+  await page.getByLabel('函数表达式 f(x)').fill('x');
+  await page.getByLabel('左端点').fill('10');
+  await page.getByRole('button', { name: /保存默认设置/ }).click();
+  await expect(page.getByText('左端点必须小于右端点')).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByLabel('函数表达式 f(x)')).toHaveValue('sin(x)');
+});
+
 test('扩展模块与未知路由有真实状态', async ({ page }) => {
   await page.goto('/#/assistant');
   await expect(page.getByText('这是扩展入口，不是已完成功能')).toBeVisible();

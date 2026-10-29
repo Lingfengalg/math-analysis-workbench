@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import {
   Alert,
@@ -39,6 +39,8 @@ function PlottingWorkspace({
   const [result, setResult] = useState<PlotResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const saveController = useRef<AbortController | null>(null);
   const [saveStatus, setSaveStatus] = useState<{
     ok: boolean;
     text: string;
@@ -60,6 +62,7 @@ function PlottingWorkspace({
       });
     return () => controller.abort();
   }, [request]);
+  useEffect(() => () => saveController.current?.abort(), []);
 
   const draw = (value: PlotRequest) => {
     const valid = plotRequestSchema.safeParse(value);
@@ -78,17 +81,44 @@ function PlottingWorkspace({
     draw(next);
   };
   const save = async () => {
+    if (saveController.current) return;
+    const controller = new AbortController();
+    saveController.current = controller;
+    setSaving(true);
+    setSaveStatus(null);
     try {
-      const values = await form.validateFields();
-      const result = preferences.write({ defaultPlot: values });
+      let values: PlotRequest;
+      try {
+        values = await form.validateFields();
+      } catch {
+        return; // Form fields show validation errors.
+      }
+      if (controller.signal.aborted) return;
+      const valid = plotRequestSchema.safeParse(values);
+      if (!valid.success) {
+        setSaveStatus({ ok: false, text: valid.error.issues[0].message });
+        return;
+      }
+      await calculatePlot(valid.data, controller.signal);
+      if (controller.signal.aborted) return;
+      const result = preferences.write({ defaultPlot: valid.data });
       setSaveStatus({
         ok: result.ok,
         text: result.ok
           ? '已保存到当前浏览器，下次访问绘图模块时生效。'
           : result.error,
       });
-    } catch {
-      /* Form fields show validation errors. */
+    } catch (cause: unknown) {
+      if (!controller.signal.aborted)
+        setSaveStatus({
+          ok: false,
+          text: `未保存：${cause instanceof Error ? cause.message : '计算失败'}`,
+        });
+    } finally {
+      if (!controller.signal.aborted) {
+        saveController.current = null;
+        setSaving(false);
+      }
     }
   };
 
@@ -168,6 +198,7 @@ function PlottingWorkspace({
             className="section-gap"
             icon={<SaveOutlined />}
             onClick={() => void save()}
+            loading={saving}
             block
           >
             保存默认设置
