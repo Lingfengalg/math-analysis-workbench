@@ -32,6 +32,8 @@ test('表达式与区间错误有明确反馈', async ({ page }) => {
   await expect(
     page.getByText('左端点必须小于右端点', { exact: true }),
   ).toBeVisible();
+  await expect(page.getByRole('status')).toHaveCount(0);
+  await expect(page.getByRole('img', { name: /采样图像/ })).toHaveCount(0);
 });
 
 test('绘图结果提供数据摘要与间断标记，键盘可操作', async ({ page }) => {
