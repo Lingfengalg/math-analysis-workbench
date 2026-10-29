@@ -17,7 +17,6 @@ import {
   plotRequestSchema,
   preferencesSchema,
   type PlotRequest,
-  type PlotResult,
 } from '@/shared/contracts';
 import { parsePlotSearch } from '@/shared/navigation/plot-link';
 import { createStorage } from '@/shared/storage';
@@ -30,6 +29,7 @@ import {
 } from '@/shared/math/plot-summary';
 import { FunctionChart } from '@/shared/ui/FunctionChart';
 import { PageHeader } from '@/shared/ui/PageHeader';
+import { usePlotCalculation } from './usePlotCalculation';
 
 const DEFAULT: PlotRequest = { expression: 'x^2', xMin: -5, xMax: 5 };
 const preferences = createStorage('preferences', preferencesSchema);
@@ -87,10 +87,7 @@ function PlottingWorkspace({
   initialStorageError?: string;
 }) {
   const [form] = Form.useForm<PlotRequest>();
-  const [request, setRequest] = useState(initial);
-  const [result, setResult] = useState<PlotResult | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const { state: plot, draw: drawPlot } = usePlotCalculation(initial);
   const [saving, setSaving] = useState(false);
   const [storageError, setStorageError] = useState(initialStorageError);
   const saveController = useRef<AbortController | null>(null);
@@ -98,23 +95,7 @@ function PlottingWorkspace({
     ok: boolean;
     text: string;
   } | null>(null);
-  useEffect(() => {
-    const controller = new AbortController();
-    calculatePlot(request, controller.signal)
-      .then((data) => {
-        if (!controller.signal.aborted) {
-          setResult(data);
-          setLoading(false);
-        }
-      })
-      .catch((cause: unknown) => {
-        if (!controller.signal.aborted) {
-          setError(cause instanceof Error ? cause.message : '计算失败');
-          setLoading(false);
-        }
-      });
-    return () => controller.abort();
-  }, [request]);
+  const result = plot.status === 'ready' ? plot.result : null;
   const summary = useMemo(
     () => (result ? summarizePlot(result.points) : null),
     [result],
@@ -132,15 +113,7 @@ function PlottingWorkspace({
   useEffect(() => () => saveController.current?.abort(), []);
 
   const draw = (value: PlotRequest) => {
-    const valid = plotRequestSchema.safeParse(value);
-    if (!valid.success) {
-      setError(valid.error.issues[0].message);
-      return;
-    }
-    setLoading(true);
-    setError('');
-    setResult(null);
-    setRequest({ ...valid.data, sourceKnowledgeId: initial.sourceKnowledgeId });
+    drawPlot({ ...value, sourceKnowledgeId: initial.sourceKnowledgeId });
   };
   const preset = (expression: string) => {
     const next = { expression, xMin: -5, xMax: 5 };
@@ -299,7 +272,7 @@ function PlottingWorkspace({
               htmlType="submit"
               icon={<LineChartOutlined />}
               block
-              loading={loading}
+              loading={plot.status === 'loading'}
             >
               绘制函数
             </Button>
@@ -339,25 +312,30 @@ function PlottingWorkspace({
           )}
         </Card>
         <Card title="函数图像" extra={<Tag>数值采样 · 非符号计算</Tag>}>
-          {loading && (
+          {plot.status === 'loading' && (
             <div className="chart-loading">
               <Spin />
               <p>正在计算采样点…</p>
             </div>
           )}
-          {error && (
-            <Alert type="error" showIcon title="无法绘制" description={error} />
+          {plot.status === 'error' && (
+            <Alert
+              type="error"
+              showIcon
+              title="无法绘制"
+              description={plot.message}
+            />
           )}
-          {!loading && result && summary && (
+          {plot.status === 'ready' && result && summary && (
             <>
               <FunctionChart
                 points={result.points}
-                expression={request.expression}
+                expression={plot.request.expression}
                 gapMarkers={gapMarkers}
               />
               <p className="chart-summary" role="status">
-                f(x) = {request.expression} · 区间 [{request.xMin},{' '}
-                {request.xMax}] · {result.points.length} 个图像点 ·{' '}
+                f(x) = {plot.request.expression} · 区间 [{plot.request.xMin},{' '}
+                {plot.request.xMax}] · {result.points.length} 个图像点 ·{' '}
                 {result.gaps} 处采样缺口
               </p>
               {result.points.every((point) => point[1] === null) && (
