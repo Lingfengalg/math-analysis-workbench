@@ -46,6 +46,75 @@ test('默认绘图设置可在刷新后保留', async ({ page }) => {
   await expect(page.getByLabel('函数表达式 f(x)')).toHaveValue('sin(x)');
 });
 
+test('无效表达式或区间不会覆盖已保存的默认设置', async ({ page }) => {
+  await page.goto('/#/plotting');
+  await expect(page.getByRole('status')).toContainText('f(x)', {
+    timeout: 20000,
+  });
+  await page.getByRole('button', { name: 'sin(x)', exact: true }).click();
+  await page.getByRole('button', { name: /保存默认设置/ }).click();
+  await expect(page.getByText(/已保存到当前浏览器/)).toBeVisible();
+
+  await page.getByLabel('函数表达式 f(x)').fill('unknown(x)');
+  await page.getByRole('button', { name: /保存默认设置/ }).click();
+  await expect(page.getByText(/未保存：/)).toBeVisible();
+  await page.getByLabel('函数表达式 f(x)').fill('x');
+  await page.getByLabel('左端点').fill('10');
+  await page.getByRole('button', { name: /保存默认设置/ }).click();
+  await expect(page.getByText('左端点必须小于右端点')).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByLabel('函数表达式 f(x)')).toHaveValue('sin(x)');
+});
+
+test('不兼容的默认设置不会被覆盖，清除需明确确认', async ({ page }) => {
+  await page.goto('/#/plotting');
+  const raw = JSON.stringify({ schemaVersion: 2, data: { sentinel: 'keep' } });
+  await page.evaluate(
+    (value) => localStorage.setItem('math-workbench:preferences', value),
+    raw,
+  );
+  await page.reload();
+  await expect(page.getByText('本地默认设置无法读取')).toBeVisible();
+  await page.getByRole('button', { name: /保存默认设置/ }).click();
+  await expect(
+    page.getByText('旧设置无法读取，未覆盖原始数据。'),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      localStorage.getItem('math-workbench:preferences'),
+    ),
+  ).toBe(raw);
+  await page.getByRole('button', { name: '清除旧设置' }).click();
+  await page.getByRole('button', { name: /取\s*消/ }).click();
+  expect(
+    await page.evaluate(() =>
+      localStorage.getItem('math-workbench:preferences'),
+    ),
+  ).toBe(raw);
+  await page.getByRole('button', { name: '清除旧设置' }).click();
+  await page.getByRole('button', { name: '确认清除' }).click();
+  expect(
+    await page.evaluate(() =>
+      localStorage.getItem('math-workbench:preferences'),
+    ),
+  ).toBeNull();
+});
+
+test('矮窗口可以滚动侧栏访问全部导航项', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 300 });
+  await page.goto('/');
+  const last = page
+    .getByRole('navigation', { name: '主导航' })
+    .getByRole('link', { name: /AI 助教/ });
+  await last.scrollIntoViewIfNeeded();
+  const visible = await last.evaluate((el) => {
+    const rect = el.getBoundingClientRect();
+    return rect.top >= 0 && rect.bottom <= window.innerHeight;
+  });
+  expect(visible).toBe(true);
+});
+
 test('扩展模块与未知路由有真实状态', async ({ page }) => {
   await page.goto('/#/assistant');
   await expect(page.getByText('这是扩展入口，不是已完成功能')).toBeVisible();
