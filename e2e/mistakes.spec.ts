@@ -176,3 +176,65 @@ test('两个标签页同时新增不会互相覆盖', async ({ page, context }) 
   await expect(page.getByText('并发 B')).toBeVisible();
   await second.close();
 });
+
+test('删除确认期间被另一页修改时拒绝删除并保留新内容', async ({
+  page,
+  context,
+}) => {
+  await page.goto('/#/mistakes');
+  const second = await context.newPage();
+  await second.goto('/#/mistakes');
+
+  await page.getByRole('button', { name: /记录错题/ }).click();
+  await page.getByLabel('题目', { exact: true }).fill('待删除的错题');
+  await page.getByRole('button', { name: /保\s*存/ }).click();
+  await expect(second.getByText('待删除的错题')).toBeVisible();
+
+  // A 打开删除确认
+  await page
+    .locator('.ant-card', { hasText: '待删除的错题' })
+    .getByRole('button', { name: /删除/ })
+    .click();
+
+  // B 在此期间修改同一条记录
+  await second
+    .locator('.ant-card', { hasText: '待删除的错题' })
+    .getByRole('button', { name: /编辑/ })
+    .click();
+  await second.getByLabel('题目', { exact: true }).fill('B 页改过的版本');
+  await second.getByRole('button', { name: /保\s*存/ }).click();
+  await expect(second.getByText('B 页改过的版本')).toBeVisible();
+
+  // A 再确认删除：应被拒绝
+  await page.getByRole('button', { name: '确认删除' }).click();
+  await expect(page.getByText(/未删除/)).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByText('B 页改过的版本')).toBeVisible();
+  await second.close();
+});
+
+test('另一页写入损坏数据时当前页同步显示读取错误，恢复后消失', async ({
+  page,
+  context,
+}) => {
+  await page.goto('/#/mistakes');
+  const second = await context.newPage();
+  await second.goto('/#/mistakes');
+  await expect(page.getByText(/还没有错题记录/)).toBeVisible();
+
+  await second.evaluate(() => {
+    localStorage.setItem(
+      'math-workbench:mistakes',
+      '{"schemaVersion":1,"data":{"items":"broken"}}',
+    );
+  });
+  await expect(page.getByText('本地错题数据无法读取')).toBeVisible();
+
+  await second.evaluate(() => {
+    localStorage.removeItem('math-workbench:mistakes');
+  });
+  await expect(page.getByText('本地错题数据无法读取')).toBeHidden();
+
+  await second.close();
+});

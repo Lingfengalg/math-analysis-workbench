@@ -22,12 +22,14 @@ import styles from './MistakesPage.module.css';
 type TopicFilter = 'all' | MistakeTopic;
 
 export default function MistakesPage() {
-  const { items, loadError, saveError, add, edit, remove, reset } =
+  const { items, loadError, saveError, canWrite, add, edit, remove, reset } =
     useMistakes();
   const [query, setQuery] = useState('');
   const [topic, setTopic] = useState<TopicFilter>('all');
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Mistake | null>(null);
+  // 打开删除确认时记录快照：期间若被其他标签页修改，确认时要能发现
+  const [pendingDelete, setPendingDelete] = useState<Mistake | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const visible = useMemo(() => {
@@ -64,8 +66,8 @@ export default function MistakesPage() {
     closeForm();
   };
 
-  const confirmRemove = async (id: string) => {
-    if (await remove(id)) setNotice('已删除这条错题。');
+  const confirmRemove = async (item: Mistake) => {
+    if (await remove(item)) setNotice('已删除这条错题。');
   };
 
   const clearAll = async () => {
@@ -83,12 +85,21 @@ export default function MistakesPage() {
             type="primary"
             icon={<PlusOutlined />}
             onClick={openCreate}
-            disabled={Boolean(loadError)}
+            disabled={Boolean(loadError) || !canWrite}
           >
             记录错题
           </Button>
         }
       />
+      {!canWrite && (
+        <Alert
+          className="section-gap-bottom"
+          type="warning"
+          showIcon
+          title="当前环境不支持跨标签页写入锁，错题本为只读模式"
+          description="为避免多个标签页同时写入造成数据丢失，写操作已禁用。已有数据仍可查看和导出备份。如需编辑，请使用支持 Web Locks 的浏览器（Chrome/Edge 79+、Firefox 96+、Safari 15.4+），并通过 https 或 localhost 访问。"
+        />
+      )}
       {loadError && (
         <Alert
           className="section-gap-bottom"
@@ -105,7 +116,7 @@ export default function MistakesPage() {
               okButtonProps={{ danger: true }}
               onConfirm={() => void clearAll()}
             >
-              <Button danger size="small">
+              <Button danger size="small" disabled={!canWrite}>
                 清空并重新开始
               </Button>
             </Popconfirm>
@@ -174,6 +185,7 @@ export default function MistakesPage() {
                 key="edit"
                 type="link"
                 icon={<EditOutlined />}
+                disabled={!canWrite}
                 onClick={() => openEdit(item)}
               >
                 编辑
@@ -185,9 +197,19 @@ export default function MistakesPage() {
                 okText="确认删除"
                 cancelText="取消"
                 okButtonProps={{ danger: true }}
-                onConfirm={() => void confirmRemove(item.id)}
+                onOpenChange={(open) => setPendingDelete(open ? item : null)}
+                onConfirm={() => {
+                  const target = pendingDelete ?? item;
+                  setPendingDelete(null);
+                  void confirmRemove(target);
+                }}
               >
-                <Button type="link" danger icon={<DeleteOutlined />}>
+                <Button
+                  type="link"
+                  danger
+                  icon={<DeleteOutlined />}
+                  disabled={!canWrite}
+                >
                   删除
                 </Button>
               </Popconfirm>,
