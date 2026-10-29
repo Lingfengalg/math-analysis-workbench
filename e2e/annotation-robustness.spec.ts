@@ -166,3 +166,47 @@ test('保存失败后切页，草稿不会写到别的页面 (#33 #34)', async (
   const plottingCount = plotting ? JSON.parse(plotting).data.items.length : 0;
   expect(plottingCount).toBe(0);
 });
+
+test('两个标签页在同一页画批注不会互相覆盖 (#32)', async ({
+  page,
+  context,
+}) => {
+  await page.goto('/#/knowledge');
+  const second = await context.newPage();
+  await second.goto('/#/knowledge');
+
+  await enable(page);
+  await enable(second);
+
+  await draw(page);
+  await page.waitForTimeout(500);
+  await draw(second);
+  await page.waitForTimeout(600);
+
+  expect(await storedCount(page)).toBe(2);
+  await second.close();
+});
+
+test('已清空的页面继续写入不会复活旧批注 (#32)', async ({ page, context }) => {
+  await page.goto('/#/knowledge');
+  const second = await context.newPage();
+  await second.goto('/#/knowledge');
+  await enable(page);
+  await enable(second);
+
+  await draw(page);
+  await page.waitForTimeout(400);
+  await draw(page);
+  await page.waitForTimeout(500);
+  expect(await storedCount(page)).toBe(2);
+
+  await page.locator('button[aria-label="清空本页批注"]').click();
+  await page.waitForTimeout(500);
+  expect(await storedCount(page)).toBe(0);
+
+  // 第二个标签页仍停留在旧视图，画一笔后只能新增这一笔
+  await draw(second);
+  await page.waitForTimeout(600);
+  expect(await storedCount(page)).toBe(1);
+  await second.close();
+});

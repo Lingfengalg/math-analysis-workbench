@@ -21,6 +21,19 @@ function renderOverlay(pageId = '/knowledge') {
   );
 }
 
+beforeEach(() => {
+  // 写入依赖跨标签页锁；jsdom 没有 Web Locks，这里提供与浏览器一致的串行实现
+  Object.defineProperty(navigator, 'locks', {
+    configurable: true,
+    value: {
+      request: async (
+        _name: string,
+        _options: { mode: 'exclusive' },
+        callback: () => unknown,
+      ) => callback(),
+    },
+  });
+});
 describe('AnnotationOverlay', () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -174,5 +187,21 @@ describe('快捷键边界 (#35)', () => {
     await user.click(screen.getByRole('button', { name: /批注$/ }));
 
     expect(screen.getByText(/当前：橡皮/)).toBeInTheDocument();
+  });
+});
+
+describe('无 Web Locks 时的只读提示 (#32)', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    Object.defineProperty(navigator, 'locks', {
+      configurable: true,
+      value: undefined,
+    });
+  });
+
+  it('禁用批注入口并给出只读说明', () => {
+    renderOverlay();
+    expect(screen.getByRole('button', { name: /批注$/ })).toBeDisabled();
+    expect(screen.getByText(/批注不可编辑/)).toBeInTheDocument();
   });
 });
