@@ -2,6 +2,4 @@
 1,2026-10-25,Codex（本次会话）,生成模块化基础工程及测试,你直接写项目的基本框架方便添加其他功能的,源代码与docs/development.md,ECharts的use导入命名被Hooks规则识别为顶层Hook,npm run lint报错,将导入别名改为registerCharts并重新检查,待组员复核；自动检查结果见docs/validation.md
 2,2026-10-29,Claude Code,完成 issue #7 与 #13 绘图无障碍替代与数据摘要并提交 PR,帮我在绘图模块加数据摘要和间断点虚线标记并解决 issue #7 #13,源代码与docs/validation.md,JSX 三元表达式中 summary.minY 的可空类型未被 TypeScript 收窄,npm run build 报 TS2345,抽成 PlotSummaryPanel 组件并解构局部变量后重新检查,待组员复核；实际运行结果见docs/validation.md
 3,2026-10-29,Claude Code,修复绘图间断虚线标记未渲染问题（PR #14 追加提交）,,源代码与docs/validation.md,ECharts 6 会静默丢弃端点超出坐标轴范围的 markLine；树摇构建下 MarkLineComponent 需从 echarts/components 单独注册,浏览器像素扫描（Playwright 读取画布像素）发现虚线颜色为零像素,将虚线端点钳制在有限数据范围内并注册 MarkLineComponent 后复核,待组员复核；实际运行结果见docs/validation.md
-
 4,2026-10-29,Claude Code,完成 issue #3 绘图间断点启发式与边界测试并提交 PR,帮我完成 math-analysis-workbench issue #3（绘图计算模块与边界测试）并提交 PR,源代码与docs/validation.md,bisectSignChange 中 aPositive 声明为 let 但从未重新赋值,npm run lint 报 prefer-const,改为 const 并重新运行全部检查,待组员复核；实际运行结果见docs/validation.md
-
