@@ -5,7 +5,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { Button, Card, Segmented, Space, Tooltip, Typography } from 'antd';
+import { Button, Card, Segmented, Tooltip, Typography } from 'antd';
 import {
   ClearOutlined,
   EditOutlined,
@@ -78,6 +78,20 @@ export function AnnotationOverlay({ pageId, children }: Props) {
     }, SAVE_DELAY_MS);
   }, []);
 
+  /** 立即落盘：切页、卸载、页面隐藏时调用，避免防抖窗口内的改动丢失。 */
+  const flush = useCallback(() => {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    const layer = layerRef.current;
+    if (!layer || blockedRef.current) return;
+    const items = layer.snapshot();
+    if (items.length === 0) return;
+    const error = saveAnnotation({ pageId: pageIdRef.current, items });
+    if (error) setNotice(error);
+  }, []);
+
   const handleChange = useCallback(
     (items: AnnotationItem[]) => {
       const history = historyRef.current;
@@ -99,17 +113,26 @@ export function AnnotationOverlay({ pageId, children }: Props) {
     layer.setEnabled(false);
 
     return () => {
-      if (saveTimer.current) {
-        clearTimeout(saveTimer.current);
-        saveTimer.current = null;
-      }
+      flush();
       layer.destroy();
       layerRef.current = null;
     };
-  }, [handleChange]);
+  }, [handleChange, flush]);
 
-  // 切页：写入上一页未落盘内容后载入当前页
+  // 页面隐藏或刷新时立即落盘，避免丢掉防抖窗口内的最后一笔
   useEffect(() => {
+    const onHide = () => flush();
+    window.addEventListener('pagehide', onHide);
+    window.addEventListener('beforeunload', onHide);
+    return () => {
+      window.removeEventListener('pagehide', onHide);
+      window.removeEventListener('beforeunload', onHide);
+    };
+  }, [flush]);
+
+  // 切页：先把上一页未落盘的内容写出去，再载入当前页
+  useEffect(() => {
+    flush();
     pageIdRef.current = pageId;
     const layer = layerRef.current;
     if (!layer) return;
@@ -121,7 +144,7 @@ export function AnnotationOverlay({ pageId, children }: Props) {
     setCanRedo(false);
     blockedRef.current = Boolean(error);
     setNotice(error ? `${error} 已暂停自动保存，避免覆盖本页原有批注。` : null);
-  }, [pageId]);
+  }, [pageId, flush]);
 
   useEffect(() => {
     layerRef.current?.setTool(tool);
@@ -258,10 +281,9 @@ export function AnnotationOverlay({ pageId, children }: Props) {
                 }))
               }
             />
-            <Space.Compact block>
+            <div className={styles.actions}>
               <Tooltip title="撤销（Ctrl/Cmd + Z）">
                 <Button
-                  block
                   icon={<UndoOutlined />}
                   aria-label="撤销"
                   disabled={!canUndo}
@@ -270,7 +292,6 @@ export function AnnotationOverlay({ pageId, children }: Props) {
               </Tooltip>
               <Tooltip title="重做（Ctrl/Cmd + Shift + Z）">
                 <Button
-                  block
                   icon={<RedoOutlined />}
                   aria-label="重做"
                   disabled={!canRedo}
@@ -279,13 +300,12 @@ export function AnnotationOverlay({ pageId, children }: Props) {
               </Tooltip>
               <Tooltip title="清空本页（可撤销）">
                 <Button
-                  block
                   icon={<ClearOutlined />}
                   aria-label="清空本页批注"
                   onClick={clearPage}
                 />
               </Tooltip>
-            </Space.Compact>
+            </div>
             <Typography.Text type="secondary" className={styles.status}>
               {statusText}
             </Typography.Text>
