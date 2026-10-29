@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import {
   Alert,
@@ -21,11 +21,60 @@ import {
 import { parsePlotSearch } from '@/shared/navigation/plot-link';
 import { createStorage } from '@/shared/storage';
 import { calculatePlot } from '@/shared/math/client';
+import {
+  formatGapRange,
+  formatNumber,
+  summarizePlot,
+  type PlotSummary,
+} from '@/shared/math/plot-summary';
 import { FunctionChart } from '@/shared/ui/FunctionChart';
 import { PageHeader } from '@/shared/ui/PageHeader';
 
 const DEFAULT: PlotRequest = { expression: 'x^2', xMin: -5, xMax: 5 };
 const preferences = createStorage('preferences', preferencesSchema);
+
+function PlotSummaryPanel({
+  summary,
+  totalPoints,
+}: {
+  summary: PlotSummary;
+  totalPoints: number;
+}) {
+  const { finiteCount, minY, maxY, gapRanges } = summary;
+  const rangeText =
+    minY === null || maxY === null
+      ? '没有可显示的有限实数值。'
+      : `有限值范围：f(x) ≈ ${formatNumber(minY)} 至 ${formatNumber(maxY)}`;
+  const gapsText =
+    gapRanges.length === 0
+      ? '未检测到间断或缺口。'
+      : `检测到 ${gapRanges.length} 处缺口位置：${gapRanges
+          .slice(0, 6)
+          .map(formatGapRange)
+          .join(
+            '；',
+          )}${gapRanges.length > 6 ? ` 等 ${gapRanges.length} 处` : ''}`;
+  return (
+    <section className="plot-summary" aria-labelledby="plot-summary-heading">
+      <h3 id="plot-summary-heading">采样数据摘要</h3>
+      <p className="chart-summary">
+        键盘与屏幕阅读器可用的文本替代；有限采样不等于数学证明。
+      </p>
+      <ul>
+        <li>
+          有效数据点：{finiteCount} 个（共 {totalPoints} 个图像点）
+        </li>
+        <li>{rangeText}</li>
+        <li>{gapsText}</li>
+      </ul>
+      <p className="chart-summary">
+        显示限制：超出定义域、非有限值或 |f(x)| 大于 10⁶
+        的点留空；虚线为启发式检测的间断位置，可能漏检或误判。
+        可用键盘在左/右端点调整观察范围，代替鼠标缩放。
+      </p>
+    </section>
+  );
+}
 
 function PlottingWorkspace({
   initial,
@@ -60,6 +109,20 @@ function PlottingWorkspace({
       });
     return () => controller.abort();
   }, [request]);
+  const summary = useMemo(
+    () => (result ? summarizePlot(result.points) : null),
+    [result],
+  );
+  // Only isolated gap points (poles, jumps) get a dashed marker; merged
+  // domain-hole ranges stay unmarked. Cap keeps dense cases readable.
+  const gapMarkers = useMemo(
+    () =>
+      (summary?.gapRanges ?? [])
+        .filter((range) => range.from === range.to)
+        .map((range) => range.from)
+        .slice(0, 8),
+    [summary],
+  );
 
   const draw = (value: PlotRequest) => {
     const valid = plotRequestSchema.safeParse(value);
@@ -207,11 +270,12 @@ function PlottingWorkspace({
           {error && (
             <Alert type="error" showIcon title="无法绘制" description={error} />
           )}
-          {!loading && result && (
+          {!loading && result && summary && (
             <>
               <FunctionChart
                 points={result.points}
                 expression={request.expression}
+                gapMarkers={gapMarkers}
               />
               <p className="chart-summary" role="status">
                 f(x) = {request.expression} · 区间 [{request.xMin},{' '}
@@ -224,6 +288,10 @@ function PlottingWorkspace({
                   title="该范围内没有可显示的有限实数值，请调整表达式或范围。"
                 />
               )}
+              <PlotSummaryPanel
+                summary={summary}
+                totalPoints={result.points.length}
+              />
             </>
           )}
         </Card>

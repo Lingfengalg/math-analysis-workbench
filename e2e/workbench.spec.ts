@@ -34,6 +34,26 @@ test('表达式与区间错误有明确反馈', async ({ page }) => {
   ).toBeVisible();
 });
 
+test('绘图结果提供数据摘要与间断标记，键盘可操作', async ({ page }) => {
+  await page.goto('/#/plotting');
+  await expect(page.getByRole('status')).toContainText('f(x)', {
+    timeout: 20000,
+  });
+  // 键盘激活预设按钮：Tab 聚焦后 Enter 触发，不依赖鼠标
+  await page.getByRole('button', { name: '1/x', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('status')).toContainText('f(x) = 1/x');
+  await expect(
+    page.getByRole('img', { name: '函数 1/x 的采样图像' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: '采样数据摘要' }),
+  ).toBeVisible();
+  await expect(page.getByText(/有效数据点：/)).toBeVisible();
+  await expect(page.getByText(/有限值范围：/)).toBeVisible();
+  await expect(page.getByText(/检测到.*处缺口位置：.*x = 0/)).toBeVisible();
+});
+
 test('默认绘图设置可在刷新后保留', async ({ page }) => {
   await page.goto('/#/plotting');
   await expect(page.getByRole('status')).toContainText('f(x)', {

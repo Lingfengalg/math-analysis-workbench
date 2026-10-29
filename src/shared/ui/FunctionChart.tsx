@@ -22,9 +22,11 @@ registerCharts([
 export function FunctionChart({
   points,
   expression,
+  gapMarkers = [],
 }: {
   points: PlotPoint[];
   expression: string;
+  gapMarkers?: number[];
 }) {
   const element = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -59,6 +61,16 @@ export function FunctionChart({
           showSymbol: false,
           connectNulls: false,
           lineStyle: { color: '#176b5b', width: 2.5 },
+          markLine:
+            gapMarkers.length > 0
+              ? {
+                  silent: true,
+                  symbol: 'none',
+                  label: { show: false },
+                  lineStyle: { type: 'dashed', color: '#c47f17', width: 1.5 },
+                  data: gapMarkers.map((x) => ({ xAxis: x })),
+                }
+              : undefined,
         },
       ],
     });
@@ -68,7 +80,7 @@ export function FunctionChart({
       observer.disconnect();
       chart.dispose();
     };
-  }, [points, expression]);
+  }, [points, expression, gapMarkers]);
   return (
     <div
       ref={element}
