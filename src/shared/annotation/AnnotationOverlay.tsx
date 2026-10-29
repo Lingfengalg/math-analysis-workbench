@@ -71,6 +71,7 @@ export function AnnotationOverlay({ pageId, children }: Props) {
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [saveFailed, setSaveFailed] = useState(false);
   // 读到损坏/不兼容数据时暂停自动保存，避免把用户原数据覆盖掉
   const blockedRef = useRef(false);
 
@@ -94,10 +95,17 @@ export function AnnotationOverlay({ pageId, children }: Props) {
       saveTimer.current = null;
     }
     const pending = pendingRef.current;
-    pendingRef.current = null;
     if (!pending) return;
     const error = saveAnnotation(pending);
-    if (error) setNotice(error);
+    if (error) {
+      // 保留草稿，等待用户重试；不能假报成功，也不能直接丢弃
+      pendingRef.current = pending;
+      setSaveFailed(true);
+      setNotice(`${error} 未保存的批注已保留，可点击「重试保存」。`);
+      return;
+    }
+    pendingRef.current = null;
+    setSaveFailed(false);
   }, []);
 
   const persist = useCallback(
@@ -126,7 +134,10 @@ export function AnnotationOverlay({ pageId, children }: Props) {
     const host = hostRef.current;
     if (!host) return;
 
-    const layer = new AnnotationLayer(host, { onChange: handleChange });
+    const layer = new AnnotationLayer(host, {
+      onChange: handleChange,
+      onLimit: (message) => setNotice(message),
+    });
     layerRef.current = layer;
     layer.setEnabled(false);
 
@@ -162,6 +173,19 @@ export function AnnotationOverlay({ pageId, children }: Props) {
     layerRef.current?.setEnabled(enabled);
   }, [enabled]);
 
+  // 刷新、关闭或切到后台时同步落盘，不依赖 React 卸载（#33）
+  useEffect(() => {
+    const handlePageHide = () => flushPending();
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') flushPending();
+    };
+    window.addEventListener('pagehide', handlePageHide);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.removeEventListener('pagehide', handlePageHide);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [flushPending]);
   const undo = useCallback(() => {
     const layer = layerRef.current;
     if (!layer) return;
@@ -232,6 +256,8 @@ export function AnnotationOverlay({ pageId, children }: Props) {
         return;
       }
 
+      if (!enabled) return;
+
       const withMeta = event.ctrlKey || event.metaKey;
       const key = event.key.toLowerCase();
 
@@ -246,8 +272,6 @@ export function AnnotationOverlay({ pageId, children }: Props) {
         redo();
         return;
       }
-      if (!enabled) return;
-
       if (key === 'p') setTool((current) => ({ ...current, mode: 'pen' }));
       else if (key === 'e')
         setTool((current) => ({ ...current, mode: 'eraser' }));
@@ -344,6 +368,11 @@ export function AnnotationOverlay({ pageId, children }: Props) {
                 清空全部
               </Button>
             </Popconfirm>{' '}
+            {saveFailed && (
+              <Button block danger onClick={flushPending}>
+                重试保存
+              </Button>
+            )}
             <Typography.Text type="secondary" className={styles.status}>
               {statusText}
             </Typography.Text>

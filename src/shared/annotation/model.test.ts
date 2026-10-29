@@ -98,3 +98,43 @@ describe('annotation model', () => {
     expect(original.kind === 'stroke' ? original.points.length : 0).toBe(1);
   });
 });
+
+describe('批注上限边界 (#36)', () => {
+  const stroke = (pointCount: number) => ({
+    kind: 'stroke' as const,
+    id: 's1',
+    color: '#dc2626',
+    width: 4,
+    points: Array.from({ length: pointCount }, (_, index) => ({
+      x: index / pointCount,
+      y: 0.5,
+    })),
+  });
+  const text = (length: number) => ({
+    kind: 'text' as const,
+    id: 't1',
+    color: '#1f2937',
+    x: 0.1,
+    y: 0.1,
+    text: 'x'.repeat(length),
+  });
+
+  it('文字 500 允许、501 拒绝', () => {
+    expect(annotationItemSchema.safeParse(text(500)).success).toBe(true);
+    expect(annotationItemSchema.safeParse(text(501)).success).toBe(false);
+  });
+
+  it('单笔 4000 点允许、4001 拒绝', () => {
+    expect(annotationItemSchema.safeParse(stroke(4000)).success).toBe(true);
+    expect(annotationItemSchema.safeParse(stroke(4001)).success).toBe(false);
+  });
+
+  it('每页 2000 条允许、2001 拒绝', () => {
+    const doc = (count: number) => ({
+      pageId: '/knowledge',
+      items: Array.from({ length: count }, () => text(1)),
+    });
+    expect(annotationDocSchema.safeParse(doc(2000)).success).toBe(true);
+    expect(annotationDocSchema.safeParse(doc(2001)).success).toBe(false);
+  });
+});

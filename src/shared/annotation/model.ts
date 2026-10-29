@@ -6,6 +6,13 @@ export type Point = { x: number; y: number };
 /** 颜色只允许 6 位十六进制，避免把任意字符串写进 canvas 上下文。 */
 const colorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 
+/** 与界面输入限制共用的上限，避免「先画/先写，保存时才失败」。 */
+export const ANNOTATION_LIMITS = {
+  text: 500,
+  points: 4000,
+  items: 2000,
+} as const;
+
 const pointSchema = z.object({
   x: z.number(),
   y: z.number(),
@@ -16,7 +23,7 @@ export const strokeSchema = z.object({
   id: z.string().min(1),
   color: colorSchema,
   width: z.number().positive().max(64),
-  points: z.array(pointSchema).min(1).max(4000),
+  points: z.array(pointSchema).min(1).max(ANNOTATION_LIMITS.points),
 });
 
 export const textSchema = z.object({
@@ -25,7 +32,7 @@ export const textSchema = z.object({
   color: colorSchema,
   x: z.number(),
   y: z.number(),
-  text: z.string().min(1).max(500),
+  text: z.string().min(1).max(ANNOTATION_LIMITS.text),
 });
 
 export const annotationItemSchema = z.discriminatedUnion('kind', [
@@ -35,7 +42,7 @@ export const annotationItemSchema = z.discriminatedUnion('kind', [
 
 export const annotationDocSchema = z.object({
   pageId: z.string().min(1),
-  items: z.array(annotationItemSchema).max(2000),
+  items: z.array(annotationItemSchema).max(ANNOTATION_LIMITS.items),
 });
 
 export type AnnotationItem = z.infer<typeof annotationItemSchema>;

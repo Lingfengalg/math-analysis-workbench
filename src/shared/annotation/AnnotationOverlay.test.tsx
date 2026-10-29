@@ -130,3 +130,36 @@ describe('清空全部批注', () => {
     expect(screen.getByText('已清空全部页面的批注。')).toBeInTheDocument();
   });
 });
+
+describe('快捷键边界 (#35)', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('批注关闭时不拦截撤销快捷键', () => {
+    renderOverlay();
+    const event = new KeyboardEvent('keydown', {
+      key: 'z',
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    document.body.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it('批注开启时接管撤销快捷键', async () => {
+    const user = userEvent.setup();
+    renderOverlay();
+    await user.click(screen.getByRole('button', { name: /批注$/ }));
+
+    const event = new KeyboardEvent('keydown', {
+      key: 'z',
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    document.body.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+  });
+});
