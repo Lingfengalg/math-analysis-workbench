@@ -1,17 +1,236 @@
-import { ModulePlaceholder } from '@/shared/ui/ModulePlaceholder';
+import { useMemo, useState } from 'react';
+import { Alert, Button, Card, Input, Popconfirm, Segmented, Tag } from 'antd';
+import {
+  DeleteOutlined,
+  EditOutlined,
+  PlusOutlined,
+  SearchOutlined,
+} from '@ant-design/icons';
+import { PageHeader } from '@/shared/ui/PageHeader';
+import { MistakeFormModal } from './MistakeFormModal';
+import { useMistakes } from './useMistakes';
+import {
+  formatMistakeTime,
+  MISTAKE_TOPICS,
+  topicLabels,
+  type Mistake,
+  type MistakeDraft,
+  type MistakeTopic,
+} from './model';
+import styles from './MistakesPage.module.css';
+
+type TopicFilter = 'all' | MistakeTopic;
 
 export default function MistakesPage() {
+  const { items, loadError, saveError, add, edit, remove, reset } =
+    useMistakes();
+  const [query, setQuery] = useState('');
+  const [topic, setTopic] = useState<TopicFilter>('all');
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<Mistake | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const visible = useMemo(() => {
+    const keyword = query.trim();
+    return items.filter(
+      (item) =>
+        (topic === 'all' || item.topic === topic) &&
+        (keyword === '' ||
+          `${item.title} ${item.problem} ${item.mistakeReason} ${item.correction}`.includes(
+            keyword,
+          )),
+    );
+  }, [items, query, topic]);
+
+  const openCreate = () => {
+    setEditing(null);
+    setFormOpen(true);
+  };
+
+  const openEdit = (item: Mistake) => {
+    setEditing(item);
+    setFormOpen(true);
+  };
+
+  const closeForm = () => {
+    setFormOpen(false);
+    setEditing(null);
+  };
+
+  const submit = (draft: MistakeDraft) => {
+    const saved = editing ? edit(editing.id, draft) : add(draft);
+    if (!saved) return;
+    setNotice(editing ? '已更新这条错题。' : '已记录一条错题。');
+    closeForm();
+  };
+
+  const confirmRemove = (id: string) => {
+    if (remove(id)) setNotice('已删除这条错题。');
+  };
+
+  const clearAll = () => {
+    if (reset()) setNotice('已清除本地错题数据。');
+  };
+
   return (
-    <ModulePlaceholder
-      title="错题本"
-      description="把一次错误，变成下一次理解的起点。"
-      directory="src/features/mistakes/"
-      tasks={[
-        '先在 shared/contracts 中定义错题结构与 Zod 校验。',
-        '实现新增、编辑、删除，记录错误原因和订正。',
-        '复用 shared/storage，增加版本校验与 JSON 导入导出。',
-        '为损坏数据、空状态和存储失败添加测试。',
-      ]}
-    />
+    <>
+      <PageHeader
+        eyebrow="MISTAKE NOTEBOOK"
+        title="把一次错误，变成下一次理解的起点。"
+        description="记录题目、错误原因与订正，标注知识主题，随时回看。数据只保存在当前浏览器。"
+        extra={
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={openCreate}
+            disabled={Boolean(loadError)}
+          >
+            记录错题
+          </Button>
+        }
+      />
+      {loadError && (
+        <Alert
+          className="section-gap-bottom"
+          type="warning"
+          showIcon
+          title="本地错题数据无法读取"
+          description={`${loadError} 原始数据仍保留在浏览器中，未被自动覆盖。`}
+          action={
+            <Popconfirm
+              title="清空本地错题数据？"
+              description="清除后无法恢复，仅在已确认数据无用或已备份时继续。"
+              okText="确认清除"
+              cancelText="取消"
+              okButtonProps={{ danger: true }}
+              onConfirm={clearAll}
+            >
+              <Button danger size="small">
+                清空并重新开始
+              </Button>
+            </Popconfirm>
+          }
+        />
+      )}
+      {saveError && (
+        <Alert
+          className="section-gap-bottom"
+          type="error"
+          showIcon
+          title="保存失败"
+          description={saveError}
+        />
+      )}
+      {notice && (
+        <Alert
+          className="section-gap-bottom"
+          type="success"
+          showIcon
+          title={notice}
+        />
+      )}
+      {items.length > 0 && (
+        <div className="filter-bar">
+          <Segmented
+            aria-label="按知识主题筛选"
+            value={topic}
+            onChange={(value) => setTopic(value as TopicFilter)}
+            options={[
+              { label: '全部', value: 'all' },
+              ...MISTAKE_TOPICS.map((item) => ({
+                label: topicLabels[item],
+                value: item,
+              })),
+            ]}
+          />
+          <Input
+            aria-label="搜索错题"
+            placeholder="搜索题目、错误原因或订正"
+            prefix={<SearchOutlined />}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            allowClear
+          />
+        </div>
+      )}
+      {items.length === 0 && !loadError && (
+        <div className="empty-state">
+          还没有错题记录。点击“记录错题”，把第一道错题留下来。
+        </div>
+      )}
+      {items.length > 0 && (
+        <p className={styles.count}>
+          共 {items.length} 条错题，当前显示 {visible.length} 条。
+        </p>
+      )}
+      <div className={styles.grid}>
+        {visible.map((item) => (
+          <Card
+            key={item.id}
+            title={item.title}
+            extra={<Tag>{topicLabels[item.topic]}</Tag>}
+            actions={[
+              <Button
+                key="edit"
+                type="link"
+                icon={<EditOutlined />}
+                onClick={() => openEdit(item)}
+              >
+                编辑
+              </Button>,
+              <Popconfirm
+                key="delete"
+                title="删除这条错题？"
+                description="删除后无法恢复。"
+                okText="确认删除"
+                cancelText="取消"
+                okButtonProps={{ danger: true }}
+                onConfirm={() => confirmRemove(item.id)}
+              >
+                <Button type="link" danger icon={<DeleteOutlined />}>
+                  删除
+                </Button>
+              </Popconfirm>,
+            ]}
+          >
+            <p className={styles.meta}>
+              最近更新：{formatMistakeTime(item.updatedAt)}
+            </p>
+            {item.problem && (
+              <>
+                <h4 className={styles.heading}>题目</h4>
+                <p className={styles.text}>{item.problem}</p>
+              </>
+            )}
+            {item.mistakeReason && (
+              <>
+                <h4 className={styles.heading}>错误原因</h4>
+                <p className={styles.text}>{item.mistakeReason}</p>
+              </>
+            )}
+            {item.correction && (
+              <>
+                <h4 className={styles.heading}>订正与正确思路</h4>
+                <p className={styles.text}>{item.correction}</p>
+              </>
+            )}
+            {!item.problem && !item.mistakeReason && !item.correction && (
+              <p className={styles.text}>这条记录还没有补充详细内容。</p>
+            )}
+          </Card>
+        ))}
+      </div>
+      {items.length > 0 && visible.length === 0 && (
+        <div className="empty-state">
+          没有匹配的错题，换个关键词或选择“全部”。
+        </div>
+      )}
+      <MistakeFormModal
+        open={formOpen}
+        initial={editing}
+        onCancel={closeForm}
+        onSubmit={submit}
+      />
+    </>
   );
 }

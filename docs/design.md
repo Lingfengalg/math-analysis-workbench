@@ -18,7 +18,7 @@
 │   ├── 函数与范围输入
 │   ├── 图像与错误提示
 │   └── 数学解释与适用边界
-├── 错题本（可选）
+├── 错题本（MVP 基础版）
 └── AI 助教（可选）
 ```
 
@@ -26,10 +26,11 @@
 
 - React + TypeScript + Vite；Ant Design 与 CSS Modules；React Router hash 路由。
 - mathjs 白名单表达式在 Worker 内采样，ECharts 展示，KaTeX 渲染公式。
-- Zod 统一数据契约；版本化 localStorage 保存绘图默认设置。
+- Zod 统一数据契约；版本化 localStorage 保存绘图默认设置与本地错题记录。
 - Vitest / Testing Library 单元与组件测试，Playwright 验证完整流程，GitHub Actions 自动检查。
 - 初版无后端或账号系统；构建产物需 HTTP 服务访问，不支持 file:// 双击打开。
 - 数学内容与界面逻辑分离，知识数据位于 `src/content/knowledge`；卡片结构以 `shared/contracts` 为准。
+- 错题记录含 `title`、`topic`、`problem`、`mistakeReason`、`correction` 与时间戳，字段语义见 [模块接口契约](contracts.md#错题本存储)。
 
 ## 质量设计
 
