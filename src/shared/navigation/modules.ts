@@ -25,7 +25,7 @@ export const modules = [
     path: '/mistakes',
     title: '错题本',
     caption: '记录错误，整理思路',
-    status: 'planned',
+    status: 'available',
   },
   {
     id: 'assistant',

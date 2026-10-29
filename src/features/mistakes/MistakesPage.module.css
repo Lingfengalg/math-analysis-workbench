@@ -1,0 +1,43 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+@media (max-width: 1200px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.grid .ant-card {
+  height: 100%;
+}
+
+.count {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0 0 14px;
+}
+
+.meta {
+  color: #7e8e84;
+  font-size: 11px;
+  margin: 0 0 12px;
+}
+
+.heading {
+  font-size: 12px;
+  font-weight: 600;
+  color: #253b36;
+  margin: 14px 0 6px;
+}
+
+.text {
+  font-size: 13px;
+  line-height: 1.85;
+  color: #52665c;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 0;
+}
