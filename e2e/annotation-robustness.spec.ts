@@ -210,3 +210,95 @@ test('已清空的页面继续写入不会复活旧批注 (#32)', async ({ page,
   expect(await storedCount(page)).toBe(1);
   await second.close();
 });
+
+async function holdAnnotationLock(page: Page, pageId: string) {
+  await page.evaluate((id) => {
+    const state = window as unknown as {
+      __annotationLockHeld: boolean;
+      __releaseAnnotationLock: () => void;
+    };
+    state.__annotationLockHeld = false;
+    void navigator.locks.request(
+      `math-workbench:annotation-write:${id}`,
+      async () => {
+        state.__annotationLockHeld = true;
+        await new Promise<void>((resolve) => {
+          state.__releaseAnnotationLock = resolve;
+        });
+      },
+    );
+  }, pageId);
+  await page.waitForFunction(
+    () =>
+      (window as unknown as { __annotationLockHeld: boolean })
+        .__annotationLockHeld,
+  );
+}
+
+async function releaseAnnotationLock(page: Page) {
+  await page.evaluate(() =>
+    (
+      window as unknown as { __releaseAnnotationLock: () => void }
+    ).__releaseAnnotationLock(),
+  );
+}
+
+test('等待写入锁时继续书写，两次修改都保存', async ({ page }) => {
+  await page.goto('/#/knowledge');
+  await enable(page);
+  await holdAnnotationLock(page, '/knowledge');
+  await draw(page);
+  await page.waitForTimeout(400);
+  await draw(page);
+  await releaseAnnotationLock(page);
+  await expect.poll(() => storedCount(page)).toBe(2);
+  await page.reload();
+  await expect.poll(() => storedCount(page)).toBe(2);
+});
+
+test('等待旧页写入时切页，旧页结果不会覆盖新页草稿', async ({ page }) => {
+  await page.goto('/#/knowledge');
+  await enable(page);
+  await holdAnnotationLock(page, '/knowledge');
+  await draw(page);
+  await page.waitForTimeout(400);
+  await page.evaluate(() => {
+    location.hash = '#/plotting';
+  });
+  await expect(page).toHaveURL(/plotting/);
+  await expect(
+    page.getByRole('heading', { name: /让抽象的变化/ }),
+  ).toBeVisible();
+  await draw(page);
+  await releaseAnnotationLock(page);
+  await expect.poll(() => storedCount(page)).toBe(1);
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const raw = localStorage.getItem('math-workbench:annotation:/plotting');
+        return raw ? JSON.parse(raw).data.items.length : 0;
+      }),
+    )
+    .toBe(1);
+  await page.reload();
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const raw = localStorage.getItem('math-workbench:annotation:/plotting');
+        return raw ? JSON.parse(raw).data.items.length : 0;
+      }),
+    )
+    .toBe(1);
+});
+
+test('清空时取消排队写入，不会重新出现已删除的批注', async ({ page }) => {
+  await page.goto('/#/knowledge');
+  await enable(page);
+  await holdAnnotationLock(page, '/knowledge');
+  await draw(page);
+  await page.waitForTimeout(400);
+  await page.locator('button[aria-label="清空本页批注"]').click();
+  await releaseAnnotationLock(page);
+  await page.waitForTimeout(500);
+  expect(await storedCount(page)).toBe(0);
+});

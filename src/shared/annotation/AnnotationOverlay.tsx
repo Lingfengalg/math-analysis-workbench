@@ -82,112 +82,115 @@ export function AnnotationOverlay({ pageId, children }: Props) {
   // 读到损坏/不兼容数据时暂停自动保存，避免把用户原数据覆盖掉
   const blockedRef = useRef(false);
 
-  /** 已落盘（或刚载入）的快照，用于计算增量改动。 */
-  const lastSyncedRef = useRef<AnnotationItem[]>([]);
+  /** 每页独立保存基线与草稿，切页或等待锁期间不能互相覆盖。 */
+  const syncedRef = useRef(new Map<string, AnnotationItem[]>());
+  const pendingRef = useRef(
+    new Map<string, { changes: AnnotationChanges; items: AnnotationItem[] }>(),
+  );
   const [canWrite] = useState(() => supportsAnnotationLock());
 
-  /** 防抖期间待落盘的增量；记录 pageId，避免切页后写到新页面。 */
-  const pendingRef = useRef<{
-    pageId: string;
-    changes: AnnotationChanges;
-  } | null>(null);
-
-  const cancelPending = useCallback(() => {
+  const cancelPending = useCallback((all = false) => {
     if (saveTimer.current) {
       clearTimeout(saveTimer.current);
       saveTimer.current = null;
     }
-    pendingRef.current = null;
+    if (all) pendingRef.current.clear();
+    else pendingRef.current.delete(pageIdRef.current);
   }, []);
 
-  const flushPending = useCallback(async () => {
-    if (saveTimer.current) {
-      clearTimeout(saveTimer.current);
-      saveTimer.current = null;
-    }
-    const pending = pendingRef.current;
-    if (!pending) return;
-
-    if (!canWrite) {
-      setSaveFailed(true);
-      setNotice(
-        '当前环境不支持跨标签页写入锁，批注未保存。请换用支持 Web Locks 的浏览器或通过 https / localhost 访问。',
-      );
-      return;
-    }
-
-    const outcome = await withAnnotationLock(pending.pageId, () => {
-      const latest = loadAnnotation(pending.pageId);
-      if (latest.error) return { error: latest.error } as const;
-      const merged = applyChanges(latest.doc.items, pending.changes);
-      const error = saveAnnotation({
-        pageId: pending.pageId,
-        items: merged,
-      });
-      if (error) return { error } as const;
-      return { items: merged } as const;
-    });
-
-    if ('error' in outcome) {
-      // 保留草稿，等待用户重试；不能假报成功，也不能直接丢弃
-      pendingRef.current = pending;
-      setSaveFailed(true);
-      setNotice(`${outcome.error} 未保存的批注已保留，可点击「重试保存」。`);
-      return;
-    }
-
-    pendingRef.current = null;
-    setSaveFailed(false);
-    lastSyncedRef.current = outcome.items;
-
-    // 合并结果可能包含其他标签页的笔迹：同步到画布，避免下一次增量把它们当成删除
-    const layer = layerRef.current;
-    if (layer && !isEmptyChanges(pending.changes)) {
-      const current = layer.snapshot();
-      if (JSON.stringify(current) !== JSON.stringify(outcome.items)) {
-        layer.setItems(outcome.items);
-        historyRef.current.reset(outcome.items);
-        setCanUndo(false);
-        setCanRedo(false);
+  const flushPending = useCallback(
+    async (targetPage = pageIdRef.current) => {
+      if (!pendingRef.current.has(targetPage)) return;
+      if (!canWrite) {
+        setSaveFailed(true);
+        setNotice('当前环境不支持跨标签页写入锁，批注未保存。');
+        return;
       }
-    }
-  }, [canWrite]);
 
-  /**
-   * 页面隐藏/卸载时的同步兜底：浏览器不会等待异步锁，因此这里跳��锁，
-   * 但仍按增量合并写入，避免整页快照覆盖其他标签页的笔迹。
-   */
+      try {
+        const outcome = await withAnnotationLock(targetPage, () => {
+          // 取得锁后重新读取草稿，而不是使用排队时的旧快照。
+          // 读取、写入和移除草稿均为同步操作，不会与本标签页的新输入交错。
+          const pending = pendingRef.current.get(targetPage);
+          if (!pending) return { skipped: true } as const;
+          const latest = loadAnnotation(targetPage);
+          if (latest.error) return { error: latest.error } as const;
+          const merged = applyChanges(latest.doc.items, pending.changes);
+          const error = saveAnnotation({ pageId: targetPage, items: merged });
+          if (error) return { error } as const;
+          pendingRef.current.delete(targetPage);
+          syncedRef.current.set(targetPage, merged);
+          return { items: merged, changes: pending.changes } as const;
+        });
+
+        if ('skipped' in outcome) return;
+        if ('error' in outcome) {
+          setSaveFailed(true);
+          setNotice(
+            `${outcome.error} 未保存的批注已保留，可点击「重试保存」。`,
+          );
+          return;
+        }
+        setSaveFailed((failed) => pendingRef.current.size > 0 && failed);
+        // 老页面的保存完成不能修改当前页面，也不能覆盖保存完成后产生的新草稿。
+        const layer = layerRef.current;
+        if (
+          targetPage === pageIdRef.current &&
+          !pendingRef.current.has(targetPage) &&
+          syncedRef.current.get(targetPage) === outcome.items &&
+          layer &&
+          !isEmptyChanges(outcome.changes) &&
+          JSON.stringify(layer.snapshot()) !== JSON.stringify(outcome.items)
+        ) {
+          layer.setItems(outcome.items);
+          historyRef.current.reset(outcome.items);
+          setCanUndo(false);
+          setCanRedo(false);
+        }
+      } catch {
+        setSaveFailed(true);
+        setNotice('批注保存失败，未保存的批注已保留，可点击「重试保存」。');
+      }
+    },
+    [canWrite],
+  );
+
+  /** 页面隐藏时同步兜底；这里仍无法取得异步锁，跨标签页竞争另行处理。 */
   const flushPendingSync = useCallback(() => {
     if (saveTimer.current) {
       clearTimeout(saveTimer.current);
       saveTimer.current = null;
     }
-    const pending = pendingRef.current;
-    if (!pending) return;
-    const latest = loadAnnotation(pending.pageId);
-    if (latest.error) {
-      setSaveFailed(true);
-      return;
+    for (const [targetPage, pending] of pendingRef.current) {
+      const latest = loadAnnotation(targetPage);
+      if (latest.error) {
+        setSaveFailed(true);
+        continue;
+      }
+      const merged = applyChanges(latest.doc.items, pending.changes);
+      const error = saveAnnotation({ pageId: targetPage, items: merged });
+      if (error) {
+        setSaveFailed(true);
+        continue;
+      }
+      pendingRef.current.delete(targetPage);
+      syncedRef.current.set(targetPage, merged);
     }
-    const merged = applyChanges(latest.doc.items, pending.changes);
-    const error = saveAnnotation({ pageId: pending.pageId, items: merged });
-    if (error) {
-      setSaveFailed(true);
-      return;
-    }
-    pendingRef.current = null;
-    lastSyncedRef.current = merged;
   }, []);
 
   const persist = useCallback(
     (items: AnnotationItem[]) => {
       if (blockedRef.current) return;
-      pendingRef.current = {
-        pageId: pageIdRef.current,
-        changes: diffItems(lastSyncedRef.current, items),
-      };
+      const targetPage = pageIdRef.current;
+      pendingRef.current.set(targetPage, {
+        changes: diffItems(syncedRef.current.get(targetPage) ?? [], items),
+        items,
+      });
       if (saveTimer.current) clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(() => void flushPending(), SAVE_DELAY_MS);
+      saveTimer.current = setTimeout(() => {
+        saveTimer.current = null;
+        void flushPending(targetPage);
+      }, SAVE_DELAY_MS);
     },
     [flushPending],
   );
@@ -226,14 +229,17 @@ export function AnnotationOverlay({ pageId, children }: Props) {
   useEffect(() => {
     // 先落盘上一页，再切 pageId；否则防抖中的改动会被写到新页面。
     // 放到微任务里，避免在 effect 同步阶段触发状态更新。
-    queueMicrotask(() => void flushPending());
+    const previousPage = pageIdRef.current;
+    if (previousPage !== pageId) void flushPending(previousPage);
     pageIdRef.current = pageId;
     const layer = layerRef.current;
     if (!layer) return;
 
     const { doc, error } = loadAnnotation(pageId);
-    layer.setItems(doc.items);
-    lastSyncedRef.current = doc.items;
+    const pending = pendingRef.current.get(pageId);
+    if (!pending) syncedRef.current.set(pageId, doc.items);
+    layer.setItems(pending?.items ?? doc.items);
+    if (pending && !error) void flushPending(pageId);
     historyRef.current.reset(layer.snapshot());
     setCanUndo(false);
     setCanRedo(false);
@@ -291,7 +297,7 @@ export function AnnotationOverlay({ pageId, children }: Props) {
     // 数据损坏被暂停保存时，「清空本页」是用户显式的重置操作，允许覆盖
     if (!blockedRef.current && layer.isEmpty()) return;
     layer.setItems([]);
-    lastSyncedRef.current = [];
+    syncedRef.current.set(pageIdRef.current, []);
     historyRef.current.record([]);
     setCanUndo(historyRef.current.canUndo());
     setCanRedo(historyRef.current.canRedo());
@@ -305,7 +311,7 @@ export function AnnotationOverlay({ pageId, children }: Props) {
   }, [cancelPending]);
 
   const clearAll = useCallback(() => {
-    cancelPending();
+    cancelPending(true);
     const error = clearAllAnnotations();
     if (error) {
       setNotice(error);
@@ -313,7 +319,8 @@ export function AnnotationOverlay({ pageId, children }: Props) {
     }
     const layer = layerRef.current;
     layer?.setItems([]);
-    lastSyncedRef.current = [];
+    syncedRef.current.clear();
+    syncedRef.current.set(pageIdRef.current, []);
     historyRef.current.reset([]);
     setCanUndo(false);
     setCanRedo(false);
@@ -447,7 +454,14 @@ export function AnnotationOverlay({ pageId, children }: Props) {
               </Button>
             </Popconfirm>{' '}
             {saveFailed && (
-              <Button block danger onClick={flushPending}>
+              <Button
+                block
+                danger
+                onClick={() => {
+                  for (const targetPage of pendingRef.current.keys())
+                    void flushPending(targetPage);
+                }}
+              >
                 重试保存
               </Button>
             )}
