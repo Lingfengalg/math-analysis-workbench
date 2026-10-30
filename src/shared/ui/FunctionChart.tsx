@@ -102,6 +102,7 @@ export function FunctionChart({
     <div
       ref={element}
       className="function-chart"
+      data-annotation-anchor="plotting:chart"
       role="img"
       aria-label={`函数 ${expression} 的采样图像`}
     />
