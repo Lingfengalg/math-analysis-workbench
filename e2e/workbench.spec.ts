@@ -51,7 +51,7 @@ test('函数名不能当作数值表达式', async ({ page }) => {
   await expect(page.getByRole('status')).toContainText('f(x) = sin(x)');
 });
 
-test('绘图结果提供数据摘要与间断标记，键盘可操作', async ({ page }) => {
+test('绘图结果提供数据摘要与疑似间断标记，键盘可操作', async ({ page }) => {
   await page.goto('/#/plotting');
   await expect(page.getByRole('status')).toContainText('f(x)', {
     timeout: 20000,
@@ -68,7 +68,12 @@ test('绘图结果提供数据摘要与间断标记，键盘可操作', async ({
   ).toBeVisible();
   await expect(page.getByText(/有效数据点：/)).toBeVisible();
   await expect(page.getByText(/有限值范围：/)).toBeVisible();
-  await expect(page.getByText(/检测到.*处缺口位置：.*x = 0/)).toBeVisible();
+  await expect(page.getByText(/检测到.*处采样缺口位置：.*x = 0/)).toBeVisible();
+  // 文案不把采样缺口表述成数学间断
+  await expect(page.getByText(/虚线标记的是疑似间断位置/)).toBeVisible();
+  await expect(
+    page.getByText(/这些采样缺口不代表一定是数学间断/),
+  ).toBeVisible();
   // Verify the actual canvas marker, not just the surrounding text.
   await expect
     .poll(async () =>
@@ -102,6 +107,9 @@ test('绘图结果提供数据摘要与间断标记，键盘可操作', async ({
       ),
     )
     .toBe(true);
+  // 连续函数的摘要不含缺口表述
+  await page.getByRole('button', { name: 'x^2', exact: true }).click();
+  await expect(page.getByText('未检测到采样缺口。')).toBeVisible();
 });
 
 test('默认绘图设置可在刷新后保留', async ({ page }) => {

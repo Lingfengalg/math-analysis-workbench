@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { compileExpression, sampleFunction } from './sample';
+import { summarizePlot } from './plot-summary';
 import type { PlotResult } from '@/shared/contracts';
 
 const gapXs = (points: PlotResult['points']) =>
@@ -178,5 +179,43 @@ describe('间断点启发式', () => {
     expect(points.length).toBe(1201);
     expect(gaps).toBe(0);
     expect(performance.now() - start).toBeLessThan(1500);
+  });
+});
+
+// 摘要只描述采样观察（缺口），不推断数学间断；三种留空成因都按
+// 采样缺口报告，由 UI 文案进一步说明「不一定是数学间断」。
+describe('采样缺口表述（#28）', () => {
+  it('连续但超出显示上限：留空合并为区间，与数学间断无关', () => {
+    // exp(x) 在 [0,20] 连续，但 x 较大时超过 10⁶ 显示上限而留空
+    const summary = summarizePlot(
+      sampleFunction({ expression: 'exp(x)', xMin: 0, xMax: 20 }).points,
+    );
+    const last = summary.gapRanges.at(-1);
+    expect(last?.to).toBe(20);
+    expect(last?.from).toBeGreaterThan(10);
+    expect(summary.finiteCount).toBeGreaterThan(0);
+  });
+  it('定义域限制：sqrt(x) 负半轴留空合并为一个缺口区间', () => {
+    const summary = summarizePlot(
+      sampleFunction({ expression: 'sqrt(x)', xMin: -5, xMax: 5 }).points,
+    );
+    expect(summary.gapRanges.length).toBe(1);
+    expect(summary.gapRanges[0].from).toBe(-5);
+    expect(summary.gapRanges[0].to).toBeLessThan(0);
+  });
+  it('启发式断线：跳跃间断 abs(x)/x 报告为近单点缺口', () => {
+    const summary = summarizePlot(
+      sampleFunction({ expression: 'abs(x)/x', xMin: -1, xMax: 1 }).points,
+    );
+    const nearZero = summary.gapRanges.filter(
+      (range) => Math.abs(range.from) < 0.1 && range.to - range.from < 0.05,
+    );
+    expect(nearZero.length).toBeGreaterThanOrEqual(1);
+  });
+  it('全部有效：不报告任何缺口', () => {
+    const summary = summarizePlot(
+      sampleFunction({ expression: 'x^2', xMin: -2, xMax: 2 }).points,
+    );
+    expect(summary.gapRanges).toEqual([]);
   });
 });

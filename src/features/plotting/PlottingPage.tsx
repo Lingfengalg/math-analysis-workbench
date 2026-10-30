@@ -48,8 +48,8 @@ function PlotSummaryPanel({
       : `有限值范围：f(x) ≈ ${formatNumber(minY)} 至 ${formatNumber(maxY)}`;
   const gapsText =
     gapRanges.length === 0
-      ? '未检测到间断或缺口。'
-      : `检测到 ${gapRanges.length} 处缺口位置：${gapRanges
+      ? '未检测到采样缺口。'
+      : `检测到 ${gapRanges.length} 处采样缺口位置：${gapRanges
           .slice(0, 6)
           .map(formatGapRange)
           .join(
@@ -70,8 +70,8 @@ function PlotSummaryPanel({
       </ul>
       <p className="chart-summary">
         显示限制：超出定义域、非有限值或 |f(x)| 大于 10⁶
-        的点留空；虚线为启发式检测的间断位置，可能漏检或误判。
-        可用键盘在左/右端点调整观察范围，代替鼠标缩放。
+        的点留空。这些采样缺口不代表一定是数学间断；虚线标记的是疑似间断位置
+        （启发式检测，可能漏检或误判）。可用键盘在左/右端点调整观察范围，代替鼠标缩放。
       </p>
     </section>
   );
@@ -119,8 +119,8 @@ function PlottingWorkspace({
     () => (result ? summarizePlot(result.points) : null),
     [result],
   );
-  // Only isolated gap points (poles, jumps) get a dashed marker; merged
-  // domain-hole ranges stay unmarked. Cap keeps dense cases readable.
+  // Only isolated single-point gaps (suspected poles or jumps) get a dashed
+  // marker; merged gap ranges stay unmarked. Cap keeps dense cases readable.
   const gapMarkers = useMemo(
     () =>
       (summary?.gapRanges ?? [])
@@ -379,7 +379,7 @@ function PlottingWorkspace({
         type="warning"
         showIcon
         title="观察图像，不等于证明结论"
-        description="这里只做有限采样。超出实数定义域、非有限值和绝对值大于 10⁶ 的结果会留空；自适应探测与二分定位仅能启发式识别部分间断，可能漏检或误判，不保证识别全部间断点或高频变化。"
+        description="这里只做有限采样。超出实数定义域、非有限值和绝对值大于 10⁶ 的结果会留空，留空只是采样缺口，不一定是数学间断；自适应探测与二分定位仅能启发式识别部分疑似间断，可能漏检或误判，不保证识别全部间断点或高频变化。"
       />
     </>
   );
