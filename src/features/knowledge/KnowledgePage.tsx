@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router';
 import { Alert, Card, Input, Segmented, Tag } from 'antd';
 import { ArrowRightOutlined, SearchOutlined } from '@ant-design/icons';
 import { knowledgeCards } from '@/content/knowledge';
+import { matchesKnowledgeQuery } from './search';
 import { createPlotLink } from '@/shared/navigation/plot-link';
 import { Formula } from '@/shared/ui/Formula';
 import { PageHeader } from '@/shared/ui/PageHeader';
@@ -19,7 +20,7 @@ export default function KnowledgePage() {
   const cards = knowledgeCards.filter(
     (card) =>
       (topic === 'all' || card.topic === topic) &&
-      `${card.title} ${card.definition}`.includes(search.trim()),
+      matchesKnowledgeQuery(card, search),
   );
   return (
     <>
@@ -51,7 +52,7 @@ export default function KnowledgePage() {
         />
         <Input
           aria-label="搜索知识卡片"
-          placeholder="搜索概念或关键词"
+          placeholder="搜索概念、条件、例题或误区"
           prefix={<SearchOutlined />}
           value={search}
           onChange={(event) => setSearch(event.target.value)}

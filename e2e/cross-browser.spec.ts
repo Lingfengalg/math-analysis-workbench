@@ -22,7 +22,9 @@ test('导航与路由在三个引擎下都可用', async ({ page }) => {
     .getByRole('navigation', { name: '主导航' })
     .getByRole('link', { name: /知识导航/ })
     .click();
-  await expect(page.getByPlaceholder('搜索概念或关键词')).toBeVisible();
+  await expect(
+    page.getByPlaceholder('搜索概念、条件、例题或误区'),
+  ).toBeVisible();
 
   await page.goto('/#/does-not-exist');
   await expect(page.getByText('没有找到这个页面')).toBeVisible();
