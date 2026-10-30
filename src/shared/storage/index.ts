@@ -39,6 +39,17 @@ export function createStorage<T>(key: string, schema: z.ZodType<T>) {
         return { ok: false, error: '保存失败：浏览器存储不可用或空间不足。' };
       }
     },
+    // Export the raw stored string exactly as-is: corrupted JSON and unknown
+    // versions stay untouched, so users can back them up before clearing.
+    // Never parses or validates, and never sends data anywhere.
+    readRaw():
+      { ok: true; data: string | null } | { ok: false; error: string } {
+      try {
+        return { ok: true, data: window.localStorage.getItem(name) };
+      } catch {
+        return { ok: false, error: '无法读取本地数据：浏览器存储不可用。' };
+      }
+    },
     clear(): StorageResult<null> {
       try {
         window.localStorage.removeItem(name);

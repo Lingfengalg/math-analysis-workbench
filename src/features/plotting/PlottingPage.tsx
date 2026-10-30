@@ -209,6 +209,40 @@ function PlottingWorkspace({
       setSaveStatus({ ok: false, text: result.error });
     }
   };
+  // Export the raw stored string untouched (corrupted JSON and unknown
+  // versions included) as a local download; nothing is sent anywhere.
+  const backupPreferences = async () => {
+    const stored = preferences.readRaw();
+    if (!stored.ok) {
+      setSaveStatus({ ok: false, text: `无法备份：${stored.error}` });
+      return;
+    }
+    if (stored.data === null) {
+      setSaveStatus({
+        ok: false,
+        text: '当前没有已保存的绘图默认设置，无需备份。',
+      });
+      return;
+    }
+    try {
+      const blob = new Blob([stored.data], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = 'math-workbench-preferences-backup.json';
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setSaveStatus({
+        ok: true,
+        text: '已导出原始数据备份，浏览器存储未被修改。',
+      });
+    } catch {
+      setSaveStatus({
+        ok: false,
+        text: '备份下载失败：浏览器阻止了下载，请改用开发者工具复制原始内容。',
+      });
+    }
+  };
 
   return (
     <>
@@ -226,19 +260,24 @@ function PlottingWorkspace({
           showIcon
           className="section-gap-bottom"
           title="本地默认设置无法读取"
-          description={`${storageError} 原始数据未被覆盖。请先备份；确认不再需要后可清除。`}
+          description={`${storageError} 原始数据未被覆盖。可先导出原始内容备份；确认不再需要后可清除。`}
           action={
-            <Popconfirm
-              title="清除无法读取的默认设置？"
-              description="清除后无法恢复，请先备份。"
-              okText="确认清除"
-              cancelText="取消"
-              onConfirm={clearPreferences}
-            >
-              <Button danger size="small">
-                清除旧设置
+            <Space>
+              <Button size="small" onClick={() => void backupPreferences()}>
+                备份原始数据
               </Button>
-            </Popconfirm>
+              <Popconfirm
+                title="清除无法读取的默认设置？"
+                description="清除后无法恢复，请先备份。"
+                okText="确认清除"
+                cancelText="取消"
+                onConfirm={clearPreferences}
+              >
+                <Button danger size="small">
+                  清除旧设置
+                </Button>
+              </Popconfirm>
+            </Space>
           }
         />
       )}

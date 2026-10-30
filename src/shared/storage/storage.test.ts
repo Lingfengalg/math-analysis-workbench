@@ -48,3 +48,26 @@ describe('版本化本地存储', () => {
     expect(store.write({ title: 'x' }).ok).toBe(false);
   });
 });
+
+describe('原始数据备份（readRaw）', () => {
+  it('无数据时返回 null', () => {
+    expect(store.readRaw()).toEqual({ ok: true, data: null });
+  });
+  it('损坏字符串与未知版本原样保留，不解析不校验', () => {
+    for (const raw of [
+      'not json',
+      '{"schemaVersion":2,"data":{"title":"x"}}',
+      '{"schemaVersion":1,"data":{"title":3}}',
+    ]) {
+      localStorage.setItem('math-workbench:test', raw);
+      expect(store.readRaw()).toEqual({ ok: true, data: raw });
+      expect(localStorage.getItem('math-workbench:test')).toBe(raw);
+    }
+  });
+  it('存储不可用时给出错误结果', () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('denied');
+    });
+    expect(store.readRaw().ok).toBe(false);
+  });
+});
