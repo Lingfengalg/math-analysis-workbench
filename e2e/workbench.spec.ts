@@ -188,5 +188,29 @@ test('移动端导航与内容不横向溢出', async ({ page }) => {
     .getByRole('navigation', { name: '主导航' })
     .getByRole('link', { name: /知识导航/ })
     .click();
-  await expect(page.getByPlaceholder('搜索概念或关键词')).toBeVisible();
+  await expect(
+    page.getByPlaceholder('搜索概念、条件、例题或误区'),
+  ).toBeVisible();
+});
+
+test('知识搜索覆盖条件、例题与误区', async ({ page }) => {
+  await page.goto('/#/knowledge');
+  const search = page.getByPlaceholder('搜索概念、条件、例题或误区');
+  await expect(page.getByText('函数极限：靠近，而非到达')).toBeVisible();
+
+  // 只在误区里出现
+  await search.fill('倒过来');
+  await expect(page.getByText('可导与连续：逆命题不成立')).toBeVisible();
+  await expect(page.getByText('函数极限：靠近，而非到达')).toBeHidden();
+
+  // 只在例题里出现
+  await search.fill('左导数');
+  await expect(page.getByText('可导与连续：逆命题不成立')).toBeVisible();
+
+  // 只在适用条件里出现
+  await search.fill('区间端点');
+  await expect(page.getByText('连续性：先检查定义域')).toBeVisible();
+
+  await search.fill('不存在的关键词');
+  await expect(page.getByText(/没有找到匹配的知识点/)).toBeVisible();
 });
