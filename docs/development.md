@@ -29,6 +29,16 @@ npm run test:e2e          # 构建并自动启动生产预览服务器
 npm run preview          # 先 build，再本地预览生产包
 ```
 
+性能基线（体积预算是 CI 的常规检查，采样预算随单测执行）：
+
+```bash
+npm run build
+npm run perf:budget                              # 对照 perf/budgets.json 检查 chunk 体积
+npm run test:run -- src/shared/math/sample.perf   # 采样耗时与语义断言
+```
+
+方法与实测值见 [性能基线](performance.md)；调整预算前先更新该页记录。
+
 跨浏览器基线（可选，不改变 Chromium 验收基线）：
 
 ```bash
