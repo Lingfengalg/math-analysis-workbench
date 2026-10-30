@@ -30,8 +30,26 @@ describe('受限表达式计算', () => {
     '1e100',
     'x > 1',
     'x;2',
+    'sin',
+    'x+sin',
+    'sin+1',
+    'cos',
+    'tan - exp',
+    'abs',
   ])('拒绝 %s', (expression) => {
     expect(() => compileExpression(expression)).toThrow();
+  });
+  it('单独的函数名给出明确的写法提示', () => {
+    expect(() => compileExpression('sin')).toThrow(
+      /函数名 sin 不能作为数值使用，请写成 sin\(x\) 的形式。/,
+    );
+    expect(() => compileExpression('x+sin')).toThrow(/函数名 sin/);
+  });
+  it('函数名作为调用目标仍然合法', () => {
+    expect(compileExpression('sin(x)')(Math.PI / 2)).toBeCloseTo(1);
+    expect(compileExpression('abs(x)')(-3)).toBe(3);
+    expect(() => compileExpression('sin(pi)')).not.toThrow();
+    expect(compileExpression('tan(x)^2')(0)).toBeCloseTo(0);
   });
   it('拒绝空输入和过长输入', () => {
     expect(() => compileExpression('')).toThrow();

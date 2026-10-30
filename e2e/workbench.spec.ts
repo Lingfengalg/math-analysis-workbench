@@ -34,6 +34,23 @@ test('表达式与区间错误有明确反馈', async ({ page }) => {
   ).toBeVisible();
 });
 
+test('函数名不能当作数值表达式', async ({ page }) => {
+  await page.goto('/#/plotting');
+  await expect(page.getByRole('status')).toContainText('f(x)', {
+    timeout: 20000,
+  });
+  for (const expression of ['sin', 'x+sin']) {
+    await page.getByLabel('函数表达式 f(x)').fill(expression);
+    await page.getByRole('button', { name: /绘制函数/ }).click();
+    await expect(page.getByText('无法绘制', { exact: true })).toBeVisible();
+    await expect(page.getByText(/函数名 sin 不能作为数值使用/)).toBeVisible();
+  }
+  // 合法调用形式不受影响
+  await page.getByLabel('函数表达式 f(x)').fill('sin(x)');
+  await page.getByRole('button', { name: /绘制函数/ }).click();
+  await expect(page.getByRole('status')).toContainText('f(x) = sin(x)');
+});
+
 test('绘图结果提供数据摘要与间断标记，键盘可操作', async ({ page }) => {
   await page.goto('/#/plotting');
   await expect(page.getByRole('status')).toContainText('f(x)', {
