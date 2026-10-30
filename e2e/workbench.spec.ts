@@ -18,6 +18,30 @@ test('知识导航可以将示例传给绘图模块', async ({ page }) => {
   ).toBeVisible();
 });
 
+test('知识来源提示在编辑或切换示例后清除', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('link', { name: /探索这个问题/ }).click();
+  await page.getByRole('link', { name: /去绘图中观察/ }).click();
+  await expect(page.getByText('已接收知识导航中的示例')).toBeVisible();
+  await expect(page.getByText(/来源卡片：/)).toBeVisible();
+  await expect(page.getByLabel('函数表达式 f(x)')).toHaveValue('abs(x)');
+  // 等待链接示例的首次自动绘制完成，避免绘制按钮仍在 loading 时点击被忽略
+  await expect(page.getByRole('status')).toContainText('f(x) = abs(x)', {
+    timeout: 20000,
+  });
+  // 修改表达式后重新绘制：来源提示清除
+  await page.getByLabel('函数表达式 f(x)').fill('abs(x)+1');
+  await page.getByRole('button', { name: /绘制函数/ }).click();
+  await expect(page.getByRole('status')).toContainText('f(x) = abs(x)+1');
+  await expect(page.getByText('已接收知识导航中的示例')).toHaveCount(0);
+  // 选择预设：来源提示保持清除
+  await page.getByRole('button', { name: '1/x', exact: true }).click();
+  await expect(page.getByText('已接收知识导航中的示例')).toHaveCount(0);
+  // 刷新后重新从链接进入：提示恢复
+  await page.reload();
+  await expect(page.getByText('已接收知识导航中的示例')).toBeVisible();
+});
+
 test('表达式与区间错误有明确反馈', async ({ page }) => {
   await page.goto('/#/plotting');
   await expect(page.getByRole('status')).toContainText('f(x)', {

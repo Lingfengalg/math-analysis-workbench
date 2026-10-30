@@ -6,3 +6,4 @@
 5,2026-10-30,Claude Code,完成 issue #26 拒绝函数名作为数值表达式并提交 PR,解决绘图相关 issue #26 并上传,源代码与e2e/workbench.spec.ts,无（首次检查即通过）,npm run check 与 npm run test:e2e,mathjs traverse 回调携带 parent 参数，据此区分函数名是否为调用目标,待组员复核；实际运行结果见PR描述
 6,2026-10-30,Claude Code,完成 issue #28 区分采样缺口与数学间断的表述并提交 PR,解决绘图相关 issue #28 并上传,源代码与e2e/workbench.spec.ts,e2e 中把 x^2 切换插在画布像素检查之前导致像素轮询时已无虚线标记而超时,npm run test:e2e 报 1 项失败,把像素检查移回 1/x 断言之后并复跑全部 e2e,待组员复核；实际运行结果见PR描述
 7,2026-10-30,Claude Code,完成 issue #24 绘图默认设置原始备份导出并提交 PR,解决绘图相关 issue #24 并上传,源代码与e2e/workbench.spec.ts,无（首次检查即通过）,npm run check 与 npm run test:e2e,,待组员复核；实际运行结果见PR描述
+8,2026-10-30,Claude Code,完成 issue #27 知识来源提示的编辑后清除逻辑并提交 PR,帮我解决 issue #27：编辑表达式或切换示例后知识来源提示应清除,源代码与docs/validation.md,新 e2e 测试未等待链接示例的首次自动绘制完成就点击绘制，点击被按钮 loading 禁用吞掉导致断言超时,npm run test:e2e 失败且状态行未更新,测试先等待首次绘制结果出现（status 含初始表达式）再编辑重绘，本地复核通过,待组员复核；实际运行结果见docs/validation.md
