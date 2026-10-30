@@ -93,6 +93,8 @@ function PlottingWorkspace({
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [storageError, setStorageError] = useState(initialStorageError);
+  // 知识来源提示只在当前绘图仍与链接示例一致时显示
+  const [sourceId, setSourceId] = useState(initial.sourceKnowledgeId);
   const saveController = useRef<AbortController | null>(null);
   const [saveStatus, setSaveStatus] = useState<{
     ok: boolean;
@@ -137,10 +139,21 @@ function PlottingWorkspace({
       setError(valid.error.issues[0].message);
       return;
     }
+    // 知识来源只在该次提交与链接示例完全一致时保留；编辑表达式、
+    // 调整区间或选择预设导致不一致时清除，避免新图像被误认为来自原卡片。
+    const unchangedFromLink =
+      initial.sourceKnowledgeId !== undefined &&
+      value.expression === initial.expression &&
+      value.xMin === initial.xMin &&
+      value.xMax === initial.xMax;
+    const sourceKnowledgeId = unchangedFromLink
+      ? initial.sourceKnowledgeId
+      : undefined;
+    setSourceId(sourceKnowledgeId);
     setLoading(true);
     setError('');
     setResult(null);
-    setRequest({ ...valid.data, sourceKnowledgeId: initial.sourceKnowledgeId });
+    setRequest({ ...valid.data, sourceKnowledgeId });
   };
   const preset = (expression: string) => {
     const next = { expression, xMin: -5, xMax: 5 };
@@ -281,12 +294,12 @@ function PlottingWorkspace({
           }
         />
       )}
-      {initial.sourceKnowledgeId && (
+      {sourceId && (
         <Alert
           type="info"
           showIcon
           title="已接收知识导航中的示例"
-          description={`来源卡片：${initial.sourceKnowledgeId}`}
+          description={`来源卡片：${sourceId}`}
           className="section-gap-bottom"
         />
       )}
