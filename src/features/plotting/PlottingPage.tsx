@@ -12,7 +12,11 @@ import {
   Spin,
   Tag,
 } from 'antd';
-import { LineChartOutlined, SaveOutlined } from '@ant-design/icons';
+import {
+  DownloadOutlined,
+  LineChartOutlined,
+  SaveOutlined,
+} from '@ant-design/icons';
 import {
   plotRequestSchema,
   preferencesSchema,
@@ -28,8 +32,16 @@ import {
   summarizePlot,
   type PlotSummary,
 } from '@/shared/math/plot-summary';
-import { FunctionChart } from '@/shared/ui/FunctionChart';
+import {
+  FunctionChart,
+  type FunctionChartHandle,
+} from '@/shared/ui/FunctionChart';
 import { PageHeader } from '@/shared/ui/PageHeader';
+import {
+  buildPlotExportName,
+  downloadBlob,
+  pngDataUrlToBlob,
+} from '@/shared/ui/plot-export';
 
 const DEFAULT: PlotRequest = { expression: 'x^2', xMin: -5, xMax: 5 };
 const preferences = createStorage('preferences', preferencesSchema);
@@ -96,6 +108,11 @@ function PlottingWorkspace({
   // 知识来源提示只在当前绘图仍与链接示例一致时显示
   const [sourceId, setSourceId] = useState(initial.sourceKnowledgeId);
   const saveController = useRef<AbortController | null>(null);
+  const chartRef = useRef<FunctionChartHandle>(null);
+  const [exportStatus, setExportStatus] = useState<{
+    ok: boolean;
+    text: string;
+  } | null>(null);
   const [saveStatus, setSaveStatus] = useState<{
     ok: boolean;
     text: string;
@@ -154,6 +171,42 @@ function PlottingWorkspace({
     setError('');
     setResult(null);
     setRequest({ ...valid.data, sourceKnowledgeId });
+  };
+  // 导出当前画布为 PNG（ECharts getDataURL），不重新采样、不上传。
+  const exportImage = () => {
+    try {
+      const dataUrl = chartRef.current?.exportPng() ?? '';
+      if (!dataUrl) {
+        setExportStatus({
+          ok: false,
+          text: '导出失败：图像尚未绘制完成，请先绘制函数。',
+        });
+        return;
+      }
+      const blob = pngDataUrlToBlob(dataUrl);
+      if (!blob) {
+        setExportStatus({ ok: false, text: '导出失败：画布数据无法解析。' });
+        return;
+      }
+      const filename = buildPlotExportName(
+        request.expression,
+        request.xMin,
+        request.xMax,
+      );
+      if (!downloadBlob(blob, filename)) {
+        setExportStatus({ ok: false, text: '导出失败：浏览器下载不可用。' });
+        return;
+      }
+      setExportStatus({
+        ok: true,
+        text: '已导出 PNG 图像，请查看浏览器下载。',
+      });
+    } catch {
+      setExportStatus({
+        ok: false,
+        text: '导出失败：画布当前不可用，请重新绘制后重试。',
+      });
+    }
   };
   const preset = (expression: string) => {
     const next = { expression, xMin: -5, xMax: 5 };
@@ -390,7 +443,22 @@ function PlottingWorkspace({
             />
           )}
         </Card>
-        <Card title="函数图像" extra={<Tag>数值采样 · 非符号计算</Tag>}>
+        <Card
+          title="函数图像"
+          extra={
+            <Space>
+              <Button
+                size="small"
+                icon={<DownloadOutlined />}
+                disabled={loading || !result}
+                onClick={exportImage}
+              >
+                导出图像
+              </Button>
+              <Tag>数值采样 · 非符号计算</Tag>
+            </Space>
+          }
+        >
           {loading && (
             <div className="chart-loading">
               <Spin />
@@ -403,6 +471,7 @@ function PlottingWorkspace({
           {!loading && result && summary && (
             <>
               <FunctionChart
+                ref={chartRef}
                 points={result.points}
                 expression={request.expression}
                 gapMarkers={gapMarkers}
@@ -412,6 +481,13 @@ function PlottingWorkspace({
                 {request.xMax}] · {result.points.length} 个图像点 ·{' '}
                 {result.gaps} 处采样缺口
               </p>
+              {exportStatus && (
+                <Alert
+                  type={exportStatus.ok ? 'success' : 'error'}
+                  title={exportStatus.text}
+                  showIcon
+                />
+              )}
               {result.points.every((point) => point[1] === null) && (
                 <Alert
                   type="warning"

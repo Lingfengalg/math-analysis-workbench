@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { init, use as registerCharts } from 'echarts/core';
 import { LineChart } from 'echarts/charts';
 import {
@@ -21,16 +21,33 @@ registerCharts([
   CanvasRenderer,
 ]);
 
-export function FunctionChart({
-  points,
-  expression,
-  gapMarkers = [],
-}: {
+// 供父组件按需导出的句柄：直接读取当前画布，不重新采样。
+export interface FunctionChartHandle {
+  exportPng: () => string;
+}
+
+interface FunctionChartProps {
   points: PlotPoint[];
   expression: string;
   gapMarkers?: number[];
-}) {
+}
+
+export const FunctionChart = forwardRef<
+  FunctionChartHandle,
+  FunctionChartProps
+>(function FunctionChart({ points, expression, gapMarkers = [] }, ref) {
   const element = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<ReturnType<typeof init> | null>(null);
+  useImperativeHandle(ref, () => ({
+    exportPng: () =>
+      chartRef.current
+        ? chartRef.current.getDataURL({
+            type: 'png',
+            pixelRatio: 2,
+            backgroundColor: '#ffffff',
+          })
+        : '',
+  }));
   useEffect(() => {
     if (!element.current) return;
     // ECharts discards marker lines whose endpoints fall outside the axis
@@ -46,6 +63,7 @@ export function FunctionChart({
     const span = dataMax - dataMin;
     const pad = span > 0 ? 0 : Math.max(Math.abs(dataMin) * 0.05, 0.5);
     const chart = init(element.current);
+    chartRef.current = chart;
     chart.setOption({
       animation: false,
       aria: {
@@ -81,7 +99,11 @@ export function FunctionChart({
                   silent: true,
                   symbol: 'none',
                   label: { show: false },
-                  lineStyle: { type: 'dashed', color: '#c47f17', width: 1.5 },
+                  lineStyle: {
+                    type: 'dashed',
+                    color: '#c47f17',
+                    width: 1.5,
+                  },
                   data: gapMarkers.map((x) => [
                     { coord: [x, dataMin - pad] },
                     { coord: [x, dataMax + pad] },
@@ -96,6 +118,7 @@ export function FunctionChart({
     return () => {
       observer.disconnect();
       chart.dispose();
+      chartRef.current = null;
     };
   }, [points, expression, gapMarkers]);
   return (
@@ -107,4 +130,4 @@ export function FunctionChart({
       aria-label={`函数 ${expression} 的采样图像`}
     />
   );
-}
+});

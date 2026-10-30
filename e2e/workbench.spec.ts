@@ -42,6 +42,28 @@ test('知识来源提示在编辑或切换示例后清除', async ({ page }) => 
   await expect(page.getByText('已接收知识导航中的示例')).toBeVisible();
 });
 
+test('函数图像可以导出为 PNG 下载', async ({ page }) => {
+  await page.goto('/#/plotting');
+  await expect(page.getByRole('status')).toContainText('f(x)', {
+    timeout: 20000,
+  });
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: /导出图像/ }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe('函数图像_x^2_-5到5.png');
+  const path = await download.path();
+  expect(path).not.toBeNull();
+  const bytes = readFileSync(path!);
+  // PNG 文件头；尺寸明显大于空白画布，证明图像内容已写入文件。
+  expect([...bytes.subarray(0, 8)]).toEqual([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+  ]);
+  expect(bytes.length).toBeGreaterThan(10000);
+  await expect(
+    page.getByText('已导出 PNG 图像，请查看浏览器下载。'),
+  ).toBeVisible();
+});
+
 test('表达式与区间错误有明确反馈', async ({ page }) => {
   await page.goto('/#/plotting');
   await expect(page.getByRole('status')).toContainText('f(x)', {
