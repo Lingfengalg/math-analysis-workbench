@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 
 test('知识导航可以将示例传给绘图模块', async ({ page }) => {
@@ -145,7 +146,7 @@ test('无效表达式或区间不会覆盖已保存的默认设置', async ({ pa
   await expect(page.getByLabel('函数表达式 f(x)')).toHaveValue('sin(x)');
 });
 
-test('不兼容的默认设置不会被覆盖，清除需明确确认', async ({ page }) => {
+test('不兼容的默认设置可导出原始备份，清除需明确确认', async ({ page }) => {
   await page.goto('/#/plotting');
   const raw = JSON.stringify({ schemaVersion: 2, data: { sentinel: 'keep' } });
   await page.evaluate(
@@ -163,6 +164,22 @@ test('不兼容的默认设置不会被覆盖，清除需明确确认', async ({
       localStorage.getItem('math-workbench:preferences'),
     ),
   ).toBe(raw);
+  // 备份导出：下载文件内容与本地原始字符串完全一致，且不修改存储
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: '备份原始数据' }).click(),
+  ]);
+  expect(download.suggestedFilename()).toBe(
+    'math-workbench-preferences-backup.json',
+  );
+  expect(readFileSync((await download.path())!, 'utf8')).toBe(raw);
+  await expect(page.getByText(/已导出原始数据备份/)).toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      localStorage.getItem('math-workbench:preferences'),
+    ),
+  ).toBe(raw);
+  // 备份后取消清除：数据仍在
   await page.getByRole('button', { name: '清除旧设置' }).click();
   await page.getByRole('button', { name: /取\s*消/ }).click();
   expect(
