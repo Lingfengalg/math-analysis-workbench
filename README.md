@@ -90,6 +90,7 @@ npm run preview               # 预览生产包
 - [团队开发约定](docs/development.md)
 - [模块接口契约](docs/contracts.md)
 - [实际验证记录](docs/validation.md)
+- [性能基线](docs/performance.md)
 - [课程交付清单](docs/deliverables.md)
 - [作品说明模板](docs/templates/project-description.md)
 - [AI 使用日志模板](docs/templates/ai-usage.csv)
