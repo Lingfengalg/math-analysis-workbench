@@ -21,7 +21,6 @@ import {
   plotRequestSchema,
   preferencesSchema,
   type PlotRequest,
-  type PlotResult,
 } from '@/shared/contracts';
 import { parsePlotSearch } from '@/shared/navigation/plot-link';
 import { createStorage } from '@/shared/storage';
@@ -42,6 +41,7 @@ import {
   downloadBlob,
   pngDataUrlToBlob,
 } from '@/shared/ui/plot-export';
+import { usePlotCalculation } from './usePlotCalculation';
 
 const DEFAULT: PlotRequest = { expression: 'x^2', xMin: -5, xMax: 5 };
 const preferences = createStorage('preferences', preferencesSchema);
@@ -99,10 +99,7 @@ function PlottingWorkspace({
   initialStorageError?: string;
 }) {
   const [form] = Form.useForm<PlotRequest>();
-  const [request, setRequest] = useState(initial);
-  const [result, setResult] = useState<PlotResult | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const { state: plot, draw: drawPlot } = usePlotCalculation(initial);
   const [saving, setSaving] = useState(false);
   const [storageError, setStorageError] = useState(initialStorageError);
   // 知识来源提示只在当前绘图仍与链接示例一致时显示
@@ -117,23 +114,7 @@ function PlottingWorkspace({
     ok: boolean;
     text: string;
   } | null>(null);
-  useEffect(() => {
-    const controller = new AbortController();
-    calculatePlot(request, controller.signal)
-      .then((data) => {
-        if (!controller.signal.aborted) {
-          setResult(data);
-          setLoading(false);
-        }
-      })
-      .catch((cause: unknown) => {
-        if (!controller.signal.aborted) {
-          setError(cause instanceof Error ? cause.message : '计算失败');
-          setLoading(false);
-        }
-      });
-    return () => controller.abort();
-  }, [request]);
+  const result = plot.status === 'ready' ? plot.result : null;
   const summary = useMemo(
     () => (result ? summarizePlot(result.points) : null),
     [result],
@@ -151,13 +132,6 @@ function PlottingWorkspace({
   useEffect(() => () => saveController.current?.abort(), []);
 
   const draw = (value: PlotRequest) => {
-    const valid = plotRequestSchema.safeParse(value);
-    if (!valid.success) {
-      setError(valid.error.issues[0].message);
-      return;
-    }
-    // 知识来源只在该次提交与链接示例完全一致时保留；编辑表达式、
-    // 调整区间或选择预设导致不一致时清除，避免新图像被误认为来自原卡片。
     const unchangedFromLink =
       initial.sourceKnowledgeId !== undefined &&
       value.expression === initial.expression &&
@@ -166,14 +140,14 @@ function PlottingWorkspace({
     const sourceKnowledgeId = unchangedFromLink
       ? initial.sourceKnowledgeId
       : undefined;
-    setSourceId(sourceKnowledgeId);
-    setLoading(true);
-    setError('');
-    setResult(null);
-    setRequest({ ...valid.data, sourceKnowledgeId });
+    if (plotRequestSchema.safeParse(value).success)
+      setSourceId(sourceKnowledgeId);
+    setExportStatus(null);
+    drawPlot({ ...value, sourceKnowledgeId });
   };
   // 导出当前画布为 PNG（ECharts getDataURL），不重新采样、不上传。
   const exportImage = () => {
+    if (plot.status !== 'ready') return;
     try {
       const dataUrl = chartRef.current?.exportPng() ?? '';
       if (!dataUrl) {
@@ -189,9 +163,9 @@ function PlottingWorkspace({
         return;
       }
       const filename = buildPlotExportName(
-        request.expression,
-        request.xMin,
-        request.xMax,
+        plot.request.expression,
+        plot.request.xMin,
+        plot.request.xMax,
       );
       if (!downloadBlob(blob, filename)) {
         setExportStatus({ ok: false, text: '导出失败：浏览器下载不可用。' });
@@ -404,7 +378,7 @@ function PlottingWorkspace({
               htmlType="submit"
               icon={<LineChartOutlined />}
               block
-              loading={loading}
+              loading={plot.status === 'loading'}
             >
               绘制函数
             </Button>
@@ -450,7 +424,7 @@ function PlottingWorkspace({
               <Button
                 size="small"
                 icon={<DownloadOutlined />}
-                disabled={loading || !result}
+                disabled={plot.status !== 'ready'}
                 onClick={exportImage}
               >
                 导出图像
@@ -459,26 +433,31 @@ function PlottingWorkspace({
             </Space>
           }
         >
-          {loading && (
+          {plot.status === 'loading' && (
             <div className="chart-loading">
               <Spin />
               <p>正在计算采样点…</p>
             </div>
           )}
-          {error && (
-            <Alert type="error" showIcon title="无法绘制" description={error} />
+          {plot.status === 'error' && (
+            <Alert
+              type="error"
+              showIcon
+              title="无法绘制"
+              description={plot.message}
+            />
           )}
-          {!loading && result && summary && (
+          {plot.status === 'ready' && result && summary && (
             <>
               <FunctionChart
                 ref={chartRef}
                 points={result.points}
-                expression={request.expression}
+                expression={plot.request.expression}
                 gapMarkers={gapMarkers}
               />
               <p className="chart-summary" role="status">
-                f(x) = {request.expression} · 区间 [{request.xMin},{' '}
-                {request.xMax}] · {result.points.length} 个图像点 ·{' '}
+                f(x) = {plot.request.expression} · 区间 [{plot.request.xMin},{' '}
+                {plot.request.xMax}] · {result.points.length} 个图像点 ·{' '}
                 {result.gaps} 处采样缺口
               </p>
               {exportStatus && (
