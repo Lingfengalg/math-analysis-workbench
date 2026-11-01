@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 
 test('知识导航可以将示例传给绘图模块', async ({ page }) => {
@@ -14,6 +15,52 @@ test('知识导航可以将示例传给绘图模块', async ({ page }) => {
   });
   await expect(
     page.getByRole('img', { name: '函数 abs(x) 的采样图像' }),
+  ).toBeVisible();
+});
+
+test('知识来源提示在编辑或切换示例后清除', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('link', { name: /探索这个问题/ }).click();
+  await page.getByRole('link', { name: /去绘图中观察/ }).click();
+  await expect(page.getByText('已接收知识导航中的示例')).toBeVisible();
+  await expect(page.getByText(/来源卡片：/)).toBeVisible();
+  await expect(page.getByLabel('函数表达式 f(x)')).toHaveValue('abs(x)');
+  // 等待链接示例的首次自动绘制完成，避免绘制按钮仍在 loading 时点击被忽略
+  await expect(page.getByRole('status')).toContainText('f(x) = abs(x)', {
+    timeout: 20000,
+  });
+  // 修改表达式后重新绘制：来源提示清除
+  await page.getByLabel('函数表达式 f(x)').fill('abs(x)+1');
+  await page.getByRole('button', { name: /绘制函数/ }).click();
+  await expect(page.getByRole('status')).toContainText('f(x) = abs(x)+1');
+  await expect(page.getByText('已接收知识导航中的示例')).toHaveCount(0);
+  // 选择预设：来源提示保持清除
+  await page.getByRole('button', { name: '1/x', exact: true }).click();
+  await expect(page.getByText('已接收知识导航中的示例')).toHaveCount(0);
+  // 刷新后重新从链接进入：提示恢复
+  await page.reload();
+  await expect(page.getByText('已接收知识导航中的示例')).toBeVisible();
+});
+
+test('函数图像可以导出为 PNG 下载', async ({ page }) => {
+  await page.goto('/#/plotting');
+  await expect(page.getByRole('status')).toContainText('f(x)', {
+    timeout: 20000,
+  });
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: /导出图像/ }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe('函数图像_x^2_-5到5.png');
+  const path = await download.path();
+  expect(path).not.toBeNull();
+  const bytes = readFileSync(path!);
+  // PNG 文件头；尺寸明显大于空白画布，证明图像内容已写入文件。
+  expect([...bytes.subarray(0, 8)]).toEqual([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+  ]);
+  expect(bytes.length).toBeGreaterThan(10000);
+  await expect(
+    page.getByText('已导出 PNG 图像，请查看浏览器下载。'),
   ).toBeVisible();
 });
 
@@ -36,7 +83,24 @@ test('表达式与区间错误有明确反馈', async ({ page }) => {
   await expect(page.getByRole('img', { name: /采样图像/ })).toHaveCount(0);
 });
 
-test('绘图结果提供数据摘要与间断标记，键盘可操作', async ({ page }) => {
+test('函数名不能当作数值表达式', async ({ page }) => {
+  await page.goto('/#/plotting');
+  await expect(page.getByRole('status')).toContainText('f(x)', {
+    timeout: 20000,
+  });
+  for (const expression of ['sin', 'x+sin']) {
+    await page.getByLabel('函数表达式 f(x)').fill(expression);
+    await page.getByRole('button', { name: /绘制函数/ }).click();
+    await expect(page.getByText('无法绘制', { exact: true })).toBeVisible();
+    await expect(page.getByText(/函数名 sin 不能作为数值使用/)).toBeVisible();
+  }
+  // 合法调用形式不受影响
+  await page.getByLabel('函数表达式 f(x)').fill('sin(x)');
+  await page.getByRole('button', { name: /绘制函数/ }).click();
+  await expect(page.getByRole('status')).toContainText('f(x) = sin(x)');
+});
+
+test('绘图结果提供数据摘要与疑似间断标记，键盘可操作', async ({ page }) => {
   await page.goto('/#/plotting');
   await expect(page.getByRole('status')).toContainText('f(x)', {
     timeout: 20000,
@@ -53,7 +117,12 @@ test('绘图结果提供数据摘要与间断标记，键盘可操作', async ({
   ).toBeVisible();
   await expect(page.getByText(/有效数据点：/)).toBeVisible();
   await expect(page.getByText(/有限值范围：/)).toBeVisible();
-  await expect(page.getByText(/检测到.*处缺口位置：.*x = 0/)).toBeVisible();
+  await expect(page.getByText(/检测到.*处采样缺口位置：.*x = 0/)).toBeVisible();
+  // 文案不把采样缺口表述成数学间断
+  await expect(page.getByText(/虚线标记的是疑似间断位置/)).toBeVisible();
+  await expect(
+    page.getByText(/这些采样缺口不代表一定是数学间断/),
+  ).toBeVisible();
   // Verify the actual canvas marker, not just the surrounding text.
   await expect
     .poll(async () =>
@@ -87,6 +156,9 @@ test('绘图结果提供数据摘要与间断标记，键盘可操作', async ({
       ),
     )
     .toBe(true);
+  // 连续函数的摘要不含缺口表述
+  await page.getByRole('button', { name: 'x^2', exact: true }).click();
+  await expect(page.getByText('未检测到采样缺口。')).toBeVisible();
 });
 
 test('默认绘图设置可在刷新后保留', async ({ page }) => {
@@ -122,7 +194,7 @@ test('无效表达式或区间不会覆盖已保存的默认设置', async ({ pa
   await expect(page.getByLabel('函数表达式 f(x)')).toHaveValue('sin(x)');
 });
 
-test('不兼容的默认设置不会被覆盖，清除需明确确认', async ({ page }) => {
+test('不兼容的默认设置可导出原始备份，清除需明确确认', async ({ page }) => {
   await page.goto('/#/plotting');
   const raw = JSON.stringify({ schemaVersion: 2, data: { sentinel: 'keep' } });
   await page.evaluate(
@@ -140,6 +212,22 @@ test('不兼容的默认设置不会被覆盖，清除需明确确认', async ({
       localStorage.getItem('math-workbench:preferences'),
     ),
   ).toBe(raw);
+  // 备份导出：下载文件内容与本地原始字符串完全一致，且不修改存储
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: '备份原始数据' }).click(),
+  ]);
+  expect(download.suggestedFilename()).toBe(
+    'math-workbench-preferences-backup.json',
+  );
+  expect(readFileSync((await download.path())!, 'utf8')).toBe(raw);
+  await expect(page.getByText(/已导出原始数据备份/)).toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      localStorage.getItem('math-workbench:preferences'),
+    ),
+  ).toBe(raw);
+  // 备份后取消清除：数据仍在
   await page.getByRole('button', { name: '清除旧设置' }).click();
   await page.getByRole('button', { name: /取\s*消/ }).click();
   expect(
@@ -190,5 +278,29 @@ test('移动端导航与内容不横向溢出', async ({ page }) => {
     .getByRole('navigation', { name: '主导航' })
     .getByRole('link', { name: /知识导航/ })
     .click();
-  await expect(page.getByPlaceholder('搜索概念或关键词')).toBeVisible();
+  await expect(
+    page.getByPlaceholder('搜索概念、条件、例题或误区'),
+  ).toBeVisible();
+});
+
+test('知识搜索覆盖条件、例题与误区', async ({ page }) => {
+  await page.goto('/#/knowledge');
+  const search = page.getByPlaceholder('搜索概念、条件、例题或误区');
+  await expect(page.getByText('函数极限：靠近，而非到达')).toBeVisible();
+
+  // 只在误区里出现
+  await search.fill('倒过来');
+  await expect(page.getByText('可导与连续：逆命题不成立')).toBeVisible();
+  await expect(page.getByText('函数极限：靠近，而非到达')).toBeHidden();
+
+  // 只在例题里出现
+  await search.fill('左导数');
+  await expect(page.getByText('可导与连续：逆命题不成立')).toBeVisible();
+
+  // 只在适用条件里出现
+  await search.fill('区间端点');
+  await expect(page.getByText('连续性：先检查定义域')).toBeVisible();
+
+  await search.fill('不存在的关键词');
+  await expect(page.getByText(/没有找到匹配的知识点/)).toBeVisible();
 });

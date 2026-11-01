@@ -12,7 +12,11 @@ import {
   Spin,
   Tag,
 } from 'antd';
-import { LineChartOutlined, SaveOutlined } from '@ant-design/icons';
+import {
+  DownloadOutlined,
+  LineChartOutlined,
+  SaveOutlined,
+} from '@ant-design/icons';
 import {
   plotRequestSchema,
   preferencesSchema,
@@ -27,8 +31,16 @@ import {
   summarizePlot,
   type PlotSummary,
 } from '@/shared/math/plot-summary';
-import { FunctionChart } from '@/shared/ui/FunctionChart';
+import {
+  FunctionChart,
+  type FunctionChartHandle,
+} from '@/shared/ui/FunctionChart';
 import { PageHeader } from '@/shared/ui/PageHeader';
+import {
+  buildPlotExportName,
+  downloadBlob,
+  pngDataUrlToBlob,
+} from '@/shared/ui/plot-export';
 import { usePlotCalculation } from './usePlotCalculation';
 
 const DEFAULT: PlotRequest = { expression: 'x^2', xMin: -5, xMax: 5 };
@@ -48,8 +60,8 @@ function PlotSummaryPanel({
       : `有限值范围：f(x) ≈ ${formatNumber(minY)} 至 ${formatNumber(maxY)}`;
   const gapsText =
     gapRanges.length === 0
-      ? '未检测到间断或缺口。'
-      : `检测到 ${gapRanges.length} 处缺口位置：${gapRanges
+      ? '未检测到采样缺口。'
+      : `检测到 ${gapRanges.length} 处采样缺口位置：${gapRanges
           .slice(0, 6)
           .map(formatGapRange)
           .join(
@@ -70,8 +82,8 @@ function PlotSummaryPanel({
       </ul>
       <p className="chart-summary">
         显示限制：超出定义域、非有限值或 |f(x)| 大于 10⁶
-        的点留空；虚线为启发式检测的间断位置，可能漏检或误判。
-        可用键盘在左/右端点调整观察范围，代替鼠标缩放。
+        的点留空。这些采样缺口不代表一定是数学间断；虚线标记的是疑似间断位置
+        （启发式检测，可能漏检或误判）。可用键盘在左/右端点调整观察范围，代替鼠标缩放。
       </p>
     </section>
   );
@@ -90,7 +102,14 @@ function PlottingWorkspace({
   const { state: plot, draw: drawPlot } = usePlotCalculation(initial);
   const [saving, setSaving] = useState(false);
   const [storageError, setStorageError] = useState(initialStorageError);
+  // 知识来源提示只在当前绘图仍与链接示例一致时显示
+  const [sourceId, setSourceId] = useState(initial.sourceKnowledgeId);
   const saveController = useRef<AbortController | null>(null);
+  const chartRef = useRef<FunctionChartHandle>(null);
+  const [exportStatus, setExportStatus] = useState<{
+    ok: boolean;
+    text: string;
+  } | null>(null);
   const [saveStatus, setSaveStatus] = useState<{
     ok: boolean;
     text: string;
@@ -100,8 +119,8 @@ function PlottingWorkspace({
     () => (result ? summarizePlot(result.points) : null),
     [result],
   );
-  // Only isolated gap points (poles, jumps) get a dashed marker; merged
-  // domain-hole ranges stay unmarked. Cap keeps dense cases readable.
+  // Only isolated single-point gaps (suspected poles or jumps) get a dashed
+  // marker; merged gap ranges stay unmarked. Cap keeps dense cases readable.
   const gapMarkers = useMemo(
     () =>
       (summary?.gapRanges ?? [])
@@ -113,7 +132,55 @@ function PlottingWorkspace({
   useEffect(() => () => saveController.current?.abort(), []);
 
   const draw = (value: PlotRequest) => {
-    drawPlot({ ...value, sourceKnowledgeId: initial.sourceKnowledgeId });
+    const unchangedFromLink =
+      initial.sourceKnowledgeId !== undefined &&
+      value.expression === initial.expression &&
+      value.xMin === initial.xMin &&
+      value.xMax === initial.xMax;
+    const sourceKnowledgeId = unchangedFromLink
+      ? initial.sourceKnowledgeId
+      : undefined;
+    if (plotRequestSchema.safeParse(value).success)
+      setSourceId(sourceKnowledgeId);
+    setExportStatus(null);
+    drawPlot({ ...value, sourceKnowledgeId });
+  };
+  // 导出当前画布为 PNG（ECharts getDataURL），不重新采样、不上传。
+  const exportImage = () => {
+    if (plot.status !== 'ready') return;
+    try {
+      const dataUrl = chartRef.current?.exportPng() ?? '';
+      if (!dataUrl) {
+        setExportStatus({
+          ok: false,
+          text: '导出失败：图像尚未绘制完成，请先绘制函数。',
+        });
+        return;
+      }
+      const blob = pngDataUrlToBlob(dataUrl);
+      if (!blob) {
+        setExportStatus({ ok: false, text: '导出失败：画布数据无法解析。' });
+        return;
+      }
+      const filename = buildPlotExportName(
+        plot.request.expression,
+        plot.request.xMin,
+        plot.request.xMax,
+      );
+      if (!downloadBlob(blob, filename)) {
+        setExportStatus({ ok: false, text: '导出失败：浏览器下载不可用。' });
+        return;
+      }
+      setExportStatus({
+        ok: true,
+        text: '已导出 PNG 图像，请查看浏览器下载。',
+      });
+    } catch {
+      setExportStatus({
+        ok: false,
+        text: '导出失败：画布当前不可用，请重新绘制后重试。',
+      });
+    }
   };
   const preset = (expression: string) => {
     const next = { expression, xMin: -5, xMax: 5 };
@@ -182,6 +249,40 @@ function PlottingWorkspace({
       setSaveStatus({ ok: false, text: result.error });
     }
   };
+  // Export the raw stored string untouched (corrupted JSON and unknown
+  // versions included) as a local download; nothing is sent anywhere.
+  const backupPreferences = async () => {
+    const stored = preferences.readRaw();
+    if (!stored.ok) {
+      setSaveStatus({ ok: false, text: `无法备份：${stored.error}` });
+      return;
+    }
+    if (stored.data === null) {
+      setSaveStatus({
+        ok: false,
+        text: '当前没有已保存的绘图默认设置，无需备份。',
+      });
+      return;
+    }
+    try {
+      const blob = new Blob([stored.data], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = 'math-workbench-preferences-backup.json';
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setSaveStatus({
+        ok: true,
+        text: '已导出原始数据备份，浏览器存储未被修改。',
+      });
+    } catch {
+      setSaveStatus({
+        ok: false,
+        text: '备份下载失败：浏览器阻止了下载，请改用开发者工具复制原始内容。',
+      });
+    }
+  };
 
   return (
     <>
@@ -199,28 +300,33 @@ function PlottingWorkspace({
           showIcon
           className="section-gap-bottom"
           title="本地默认设置无法读取"
-          description={`${storageError} 原始数据未被覆盖。请先备份；确认不再需要后可清除。`}
+          description={`${storageError} 原始数据未被覆盖。可先导出原始内容备份；确认不再需要后可清除。`}
           action={
-            <Popconfirm
-              title="清除无法读取的默认设置？"
-              description="清除后无法恢复，请先备份。"
-              okText="确认清除"
-              cancelText="取消"
-              onConfirm={clearPreferences}
-            >
-              <Button danger size="small">
-                清除旧设置
+            <Space>
+              <Button size="small" onClick={() => void backupPreferences()}>
+                备份原始数据
               </Button>
-            </Popconfirm>
+              <Popconfirm
+                title="清除无法读取的默认设置？"
+                description="清除后无法恢复，请先备份。"
+                okText="确认清除"
+                cancelText="取消"
+                onConfirm={clearPreferences}
+              >
+                <Button danger size="small">
+                  清除旧设置
+                </Button>
+              </Popconfirm>
+            </Space>
           }
         />
       )}
-      {initial.sourceKnowledgeId && (
+      {sourceId && (
         <Alert
           type="info"
           showIcon
           title="已接收知识导航中的示例"
-          description={`来源卡片：${initial.sourceKnowledgeId}`}
+          description={`来源卡片：${sourceId}`}
           className="section-gap-bottom"
         />
       )}
@@ -311,7 +417,22 @@ function PlottingWorkspace({
             />
           )}
         </Card>
-        <Card title="函数图像" extra={<Tag>数值采样 · 非符号计算</Tag>}>
+        <Card
+          title="函数图像"
+          extra={
+            <Space>
+              <Button
+                size="small"
+                icon={<DownloadOutlined />}
+                disabled={plot.status !== 'ready'}
+                onClick={exportImage}
+              >
+                导出图像
+              </Button>
+              <Tag>数值采样 · 非符号计算</Tag>
+            </Space>
+          }
+        >
           {plot.status === 'loading' && (
             <div className="chart-loading">
               <Spin />
@@ -329,6 +450,7 @@ function PlottingWorkspace({
           {plot.status === 'ready' && result && summary && (
             <>
               <FunctionChart
+                ref={chartRef}
                 points={result.points}
                 expression={plot.request.expression}
                 gapMarkers={gapMarkers}
@@ -338,6 +460,13 @@ function PlottingWorkspace({
                 {plot.request.xMax}] · {result.points.length} 个图像点 ·{' '}
                 {result.gaps} 处采样缺口
               </p>
+              {exportStatus && (
+                <Alert
+                  type={exportStatus.ok ? 'success' : 'error'}
+                  title={exportStatus.text}
+                  showIcon
+                />
+              )}
               {result.points.every((point) => point[1] === null) && (
                 <Alert
                   type="warning"
@@ -357,7 +486,7 @@ function PlottingWorkspace({
         type="warning"
         showIcon
         title="观察图像，不等于证明结论"
-        description="这里只做有限采样。超出实数定义域、非有限值和绝对值大于 10⁶ 的结果会留空；自适应探测与二分定位仅能启发式识别部分间断，可能漏检或误判，不保证识别全部间断点或高频变化。"
+        description="这里只做有限采样。超出实数定义域、非有限值和绝对值大于 10⁶ 的结果会留空，留空只是采样缺口，不一定是数学间断；自适应探测与二分定位仅能启发式识别部分疑似间断，可能漏检或误判，不保证识别全部间断点或高频变化。"
       />
     </>
   );

@@ -24,6 +24,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
+      - run: npm run perf:budget
   e2e:
     name: Browser tests
     runs-on: ubuntu-latest

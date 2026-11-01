@@ -1,13 +1,27 @@
 import { useMemo, useState } from 'react';
-import { Alert, Button, Card, Input, Popconfirm, Segmented, Tag } from 'antd';
 import {
+  Alert,
+  Button,
+  Card,
+  Input,
+  Popconfirm,
+  Segmented,
+  Space,
+  Tag,
+} from 'antd';
+import {
+  CheckCircleOutlined,
   DeleteOutlined,
+  DownloadOutlined,
   EditOutlined,
   PlusOutlined,
   SearchOutlined,
+  UndoOutlined,
+  UploadOutlined,
 } from '@ant-design/icons';
 import { PageHeader } from '@/shared/ui/PageHeader';
 import { MistakeFormModal } from './MistakeFormModal';
+import { MistakeImportModal } from './MistakeImportModal';
 import { useMistakes } from './useMistakes';
 import {
   formatMistakeTime,
@@ -17,30 +31,57 @@ import {
   type MistakeDraft,
   type MistakeTopic,
 } from './model';
+import {
+  createExportFile,
+  exportFileName,
+  serializeExport,
+  type ImportMode,
+} from './transfer';
 import styles from './MistakesPage.module.css';
 
 type TopicFilter = 'all' | MistakeTopic;
+type ReviewFilter = 'all' | 'reviewed' | 'due';
 
 export default function MistakesPage() {
-  const { items, loadError, saveError, add, edit, remove, reset } =
-    useMistakes();
+  const {
+    items,
+    loadError,
+    saveError,
+    canWrite,
+    add,
+    edit,
+    remove,
+    setReviewed,
+    importMistakes,
+    reset,
+  } = useMistakes();
   const [query, setQuery] = useState('');
   const [topic, setTopic] = useState<TopicFilter>('all');
+  const [review, setReview] = useState<ReviewFilter>('all');
   const [formOpen, setFormOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<Mistake | null>(null);
+  // 打开删除确认时记录快照：期间若被其他标签页修改，确认时要能发现
+  const [pendingDelete, setPendingDelete] = useState<Mistake | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const visible = useMemo(() => {
     const keyword = query.trim();
-    return items.filter(
-      (item) =>
-        (topic === 'all' || item.topic === topic) &&
-        (keyword === '' ||
-          `${item.title} ${item.problem} ${item.mistakeReason} ${item.correction}`.includes(
-            keyword,
-          )),
-    );
-  }, [items, query, topic]);
+    return items.filter((item) => {
+      const matchesTopic = topic === 'all' || item.topic === topic;
+      const matchesReview =
+        review === 'all' ||
+        (review === 'reviewed'
+          ? item.reviewedAt !== null
+          : item.reviewedAt === null);
+      const matchesKeyword =
+        keyword === '' ||
+        `${item.title} ${item.problem} ${item.mistakeReason} ${item.correction}`.includes(
+          keyword,
+        );
+      return matchesTopic && matchesReview && matchesKeyword;
+    });
+  }, [items, query, topic, review]);
 
   const openCreate = () => {
     setEditing(null);
@@ -64,12 +105,45 @@ export default function MistakesPage() {
     closeForm();
   };
 
-  const confirmRemove = async (id: string) => {
-    if (await remove(id)) setNotice('已删除这条错题。');
+  const confirmRemove = async (item: Mistake) => {
+    if (await remove(item)) setNotice('已删除这条错题。');
+  };
+
+  const toggleReviewed = async (item: Mistake) => {
+    const next = item.reviewedAt === null;
+    if (await setReviewed(item.id, next)) {
+      setNotice(next ? '已标记为已复习。' : '已取消复习标记。');
+    }
   };
 
   const clearAll = async () => {
     if (await reset()) setNotice('已清除本地错题数据。');
+  };
+
+  const exportAll = () => {
+    if (items.length === 0) return;
+    const blob = new Blob([serializeExport(createExportFile(items))], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = exportFileName();
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setNotice(`已导出 ${items.length} 条错题。`);
+  };
+
+  const handleImport = async (incoming: Mistake[], mode: ImportMode) => {
+    if (!(await importMistakes(incoming, mode))) return;
+    setNotice(
+      mode === 'replace'
+        ? `已用文件内容替换为 ${incoming.length} 条错题。`
+        : `已合并导入 ${incoming.length} 条错题。`,
+    );
+    setImportOpen(false);
   };
 
   return (
@@ -77,18 +151,43 @@ export default function MistakesPage() {
       <PageHeader
         eyebrow="MISTAKE NOTEBOOK"
         title="把一次错误，变成下一次理解的起点。"
-        description="记录题目、错误原因与订正，标注知识主题，随时回看。数据只保存在当前浏览器。"
+        description="记录题目、错误原因与订正，标注知识主题与复习状态。数据只保存在当前浏览器，可导出备份。"
         extra={
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={openCreate}
-            disabled={Boolean(loadError)}
-          >
-            记录错题
-          </Button>
+          <div className={styles.toolbar}>
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={exportAll}
+              disabled={items.length === 0}
+            >
+              导出 JSON
+            </Button>
+            <Button
+              icon={<UploadOutlined />}
+              onClick={() => setImportOpen(true)}
+              disabled={Boolean(loadError) || !canWrite}
+            >
+              导入
+            </Button>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={openCreate}
+              disabled={Boolean(loadError) || !canWrite}
+            >
+              记录错题
+            </Button>
+          </div>
         }
       />
+      {!canWrite && (
+        <Alert
+          className="section-gap-bottom"
+          type="warning"
+          showIcon
+          title="当前环境不支持跨标签页写入锁，错题本为只读模式"
+          description="为避免多个标签页同时写入造成数据丢失，写操作已禁用。已有数据仍可查看和导出备份。如需编辑，请使用支持 Web Locks 的浏览器（Chrome/Edge 79+、Firefox 96+、Safari 15.4+），并通过 https 或 localhost 访问。"
+        />
+      )}
       {loadError && (
         <Alert
           className="section-gap-bottom"
@@ -105,7 +204,7 @@ export default function MistakesPage() {
               okButtonProps={{ danger: true }}
               onConfirm={() => void clearAll()}
             >
-              <Button danger size="small">
+              <Button danger size="small" disabled={!canWrite}>
                 清空并重新开始
               </Button>
             </Popconfirm>
@@ -131,18 +230,30 @@ export default function MistakesPage() {
       )}
       {items.length > 0 && (
         <div className="filter-bar">
-          <Segmented
-            aria-label="按知识主题筛选"
-            value={topic}
-            onChange={(value) => setTopic(value as TopicFilter)}
-            options={[
-              { label: '全部', value: 'all' },
-              ...MISTAKE_TOPICS.map((item) => ({
-                label: topicLabels[item],
-                value: item,
-              })),
-            ]}
-          />
+          <div className={styles.filters}>
+            <Segmented
+              aria-label="按知识主题筛选"
+              value={topic}
+              onChange={(value) => setTopic(value as TopicFilter)}
+              options={[
+                { label: '全部', value: 'all' },
+                ...MISTAKE_TOPICS.map((item) => ({
+                  label: topicLabels[item],
+                  value: item,
+                })),
+              ]}
+            />
+            <Segmented
+              aria-label="按复习状态筛选"
+              value={review}
+              onChange={(value) => setReview(value as ReviewFilter)}
+              options={[
+                { label: '全部', value: 'all' },
+                { label: '未复习', value: 'due' },
+                { label: '已复习', value: 'reviewed' },
+              ]}
+            />
+          </div>
           <Input
             aria-label="搜索错题"
             placeholder="搜索题目、错误原因或订正"
@@ -168,12 +279,32 @@ export default function MistakesPage() {
           <Card
             key={item.id}
             title={item.title}
-            extra={<Tag>{topicLabels[item.topic]}</Tag>}
+            extra={
+              <Space size={4}>
+                <Tag>{topicLabels[item.topic]}</Tag>
+                {item.reviewedAt !== null && <Tag color="green">已复习</Tag>}
+              </Space>
+            }
             actions={[
+              <Button
+                key="review"
+                type="link"
+                icon={
+                  item.reviewedAt === null ? (
+                    <CheckCircleOutlined />
+                  ) : (
+                    <UndoOutlined />
+                  )
+                }
+                onClick={() => void toggleReviewed(item)}
+              >
+                {item.reviewedAt === null ? '标记已复习' : '取消复习'}
+              </Button>,
               <Button
                 key="edit"
                 type="link"
                 icon={<EditOutlined />}
+                disabled={!canWrite}
                 onClick={() => openEdit(item)}
               >
                 编辑
@@ -185,9 +316,19 @@ export default function MistakesPage() {
                 okText="确认删除"
                 cancelText="取消"
                 okButtonProps={{ danger: true }}
-                onConfirm={() => void confirmRemove(item.id)}
+                onOpenChange={(open) => setPendingDelete(open ? item : null)}
+                onConfirm={() => {
+                  const target = pendingDelete ?? item;
+                  setPendingDelete(null);
+                  void confirmRemove(target);
+                }}
               >
-                <Button type="link" danger icon={<DeleteOutlined />}>
+                <Button
+                  type="link"
+                  danger
+                  icon={<DeleteOutlined />}
+                  disabled={!canWrite}
+                >
                   删除
                 </Button>
               </Popconfirm>,
@@ -195,6 +336,8 @@ export default function MistakesPage() {
           >
             <p className={styles.meta}>
               最近更新：{formatMistakeTime(item.updatedAt)}
+              {item.reviewedAt !== null &&
+                ` · 最近复习：${formatMistakeTime(item.reviewedAt)}`}
             </p>
             {item.problem && (
               <>
@@ -222,7 +365,7 @@ export default function MistakesPage() {
       </div>
       {items.length > 0 && visible.length === 0 && (
         <div className="empty-state">
-          没有匹配的错题，换个关键词或选择“全部”。
+          没有匹配的错题，换个关键词或调整筛选条件。
         </div>
       )}
       <MistakeFormModal
@@ -232,6 +375,13 @@ export default function MistakesPage() {
         onSubmit={submit}
         error={saveError}
       />
+      {importOpen && (
+        <MistakeImportModal
+          open
+          onCancel={() => setImportOpen(false)}
+          onConfirm={handleImport}
+        />
+      )}
     </>
   );
 }

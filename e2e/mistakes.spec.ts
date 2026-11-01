@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 
 test('错题本可以新增、刷新后保留、编辑并删除', async ({ page }) => {
@@ -175,4 +176,117 @@ test('两个标签页同时新增不会互相覆盖', async ({ page, context }) 
   await expect(page.getByText('并发 A')).toBeVisible();
   await expect(page.getByText('并发 B')).toBeVisible();
   await second.close();
+});
+
+test('删除确认期间被另一页修改时拒绝删除并保留新内容', async ({
+  page,
+  context,
+}) => {
+  await page.goto('/#/mistakes');
+  const second = await context.newPage();
+  await second.goto('/#/mistakes');
+
+  await page.getByRole('button', { name: /记录错题/ }).click();
+  await page.getByLabel('题目', { exact: true }).fill('待删除的错题');
+  await page.getByRole('button', { name: /保\s*存/ }).click();
+  await expect(second.getByText('待删除的错题')).toBeVisible();
+
+  // A 打开删除确认
+  await page
+    .locator('.ant-card', { hasText: '待删除的错题' })
+    .getByRole('button', { name: /删除/ })
+    .click();
+
+  // B 在此期间修改同一条记录
+  await second
+    .locator('.ant-card', { hasText: '待删除的错题' })
+    .getByRole('button', { name: /编辑/ })
+    .click();
+  await second.getByLabel('题目', { exact: true }).fill('B 页改过的版本');
+  await second.getByRole('button', { name: /保\s*存/ }).click();
+  await expect(second.getByText('B 页改过的版本')).toBeVisible();
+
+  // A 再确认删除：应被拒绝
+  await page.getByRole('button', { name: '确认删除' }).click();
+  await expect(page.getByText(/未删除/)).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByText('B 页改过的版本')).toBeVisible();
+  await second.close();
+});
+
+test('另一页写入损坏数据时当前页同步显示读取错误，恢复后消失', async ({
+  page,
+  context,
+}) => {
+  await page.goto('/#/mistakes');
+  const second = await context.newPage();
+  await second.goto('/#/mistakes');
+  await expect(page.getByText(/还没有错题记录/)).toBeVisible();
+
+  await second.evaluate(() => {
+    localStorage.setItem(
+      'math-workbench:mistakes',
+      '{"schemaVersion":1,"data":{"items":"broken"}}',
+    );
+  });
+  await expect(page.getByText('本地错题数据无法读取')).toBeVisible();
+
+  await second.evaluate(() => {
+    localStorage.removeItem('math-workbench:mistakes');
+  });
+  await expect(page.getByText('本地错题数据无法读取')).toBeHidden();
+
+  await second.close();
+});
+
+test('可以导出备份、导入文件并标记复习', async ({ page }) => {
+  await page.goto('/#/mistakes');
+  await page.getByRole('button', { name: /记录错题/ }).click();
+  await page.getByLabel('题目', { exact: true }).fill('导出测试的错题');
+  await page.getByRole('button', { name: /保\s*存/ }).click();
+  await expect(page.getByText('导出测试的错题')).toBeVisible();
+
+  await page.getByRole('button', { name: /标记已复习/ }).click();
+  await expect(page.locator('.ant-tag', { hasText: '已复习' })).toBeVisible();
+  await page.reload();
+  await expect(page.locator('.ant-tag', { hasText: '已复习' })).toBeVisible();
+  await expect(page.getByText(/最近复习/)).toBeVisible();
+
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: /导出 JSON/ }).click(),
+  ]);
+  expect(download.suggestedFilename()).toMatch(
+    /^mistakes-\d{4}-\d{2}-\d{2}\.json$/,
+  );
+  const filePath = await download.path();
+  const payload = JSON.parse(readFileSync(filePath!, 'utf8'));
+  expect(payload.format).toBe('math-analysis-workbench/mistakes');
+  expect(payload.items).toHaveLength(1);
+
+  payload.items.push({
+    ...payload.items[0],
+    id: 'imported-e2e',
+    title: '导入进来的错题',
+    reviewedAt: null,
+  });
+
+  await page.getByRole('button', { name: /导入/ }).click();
+  await page.setInputFiles('input[type="file"]', {
+    name: 'mistakes.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(payload)),
+  });
+  await expect(page.getByText(/已选择：mistakes.json/)).toBeVisible();
+  const importOk = page
+    .getByRole('dialog')
+    .filter({ hasText: '选择 JSON 文件' })
+    .getByRole('button', { name: /导\s*入/ });
+  await expect(importOk).toBeEnabled();
+  await importOk.click();
+
+  await expect(page.getByText('已合并导入 2 条错题。')).toBeVisible();
+  await expect(page.getByText('导入进来的错题')).toBeVisible();
+  await expect(page.getByText('导出测试的错题')).toBeVisible();
 });

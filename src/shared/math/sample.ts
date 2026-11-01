@@ -39,12 +39,27 @@ export function compileExpression(
     throw new Error('表达式无法解析，请检查括号和运算符。');
   }
   let count = 0;
-  root.traverse((node) => {
+  root.traverse((node, _path, parent) => {
     count += 1;
     if (count > 80 || !TYPES.has(node.type))
       throw new Error('仅支持简单的一元实函数，不支持赋值、数组或属性访问。');
-    if (node.type === 'SymbolNode' && !SYMBOLS.has(String(node)))
-      throw new Error(`不支持的变量或函数：${String(node)}。`);
+    if (node.type === 'SymbolNode') {
+      const name = String(node);
+      if (!SYMBOLS.has(name)) throw new Error(`不支持的变量或函数：${name}。`);
+      // Whitelisted function names are values only as the callee of a
+      // function call; a bare `sin` would evaluate to a function, not a
+      // number, and silently leave every sample empty.
+      if (FUNCTIONS.has(name)) {
+        const parentNode = parent as unknown as {
+          type: string;
+          fn: MathNode;
+        } | null;
+        if (parentNode?.type !== 'FunctionNode' || parentNode.fn !== node)
+          throw new Error(
+            `函数名 ${name} 不能作为数值使用，请写成 ${name}(x) 的形式。`,
+          );
+      }
+    }
     if (node.type === 'FunctionNode') {
       const fn = node as unknown as { fn: MathNode; args: MathNode[] };
       if (

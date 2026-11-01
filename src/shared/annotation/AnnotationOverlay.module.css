@@ -1,0 +1,129 @@
+.host {
+  position: relative;
+}
+
+.toolbar {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.panel {
+  width: 248px;
+  box-shadow: 0 18px 48px rgb(15 23 42 / 16%);
+}
+
+.panel :global(.ant-card-body) {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.swatches {
+  display: flex;
+  gap: 10px;
+}
+
+.swatch {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgb(15 23 42 / 12%);
+}
+
+.swatch:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.swatchActive {
+  border-color: #0f172a;
+  box-shadow:
+    inset 0 0 0 2px #fff,
+    0 0 0 1px rgb(15 23 42 / 20%);
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.actions :global(.ant-btn) {
+  width: 100%;
+}
+
+.status {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+@media (max-width: 640px) {
+  .toolbar {
+    right: 12px;
+    bottom: 12px;
+  }
+
+  .panel {
+    width: 216px;
+  }
+}
+
+.a11y {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.list {
+  font-size: 12px;
+  color: #334155;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.list summary {
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.listItems {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.listItems li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.listActions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}

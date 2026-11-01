@@ -1,0 +1,38 @@
+{
+  "updated": "2026-10-30",
+  "note": "预算按 2026-10-30 的实测值留约 10% 余量；调整前先看 docs/performance.md 的测量方法。",
+  "chunks": [
+    {
+      "label": "plotting",
+      "pattern": "^plotting-.*\\.js$",
+      "rawKb": 640,
+      "gzipKb": 215
+    },
+    {
+      "label": "plot.worker",
+      "pattern": "^plot\\.worker-.*\\.js$",
+      "rawKb": 820,
+      "gzipKb": 225
+    },
+    {
+      "label": "knowledge",
+      "pattern": "^knowledge-.*\\.js$",
+      "rawKb": 290,
+      "gzipKb": 88
+    },
+    {
+      "label": "index",
+      "pattern": "^index-.*\\.js$",
+      "rawKb": 180,
+      "gzipKb": 63
+    }
+  ],
+  "totalJs": {
+    "rawKb": 2800,
+    "gzipKb": 880
+  },
+  "samplingMs": {
+    "typical": 150,
+    "boundary": 300
+  }
+}
