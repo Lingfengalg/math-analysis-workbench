@@ -8,11 +8,10 @@ import {
 } from '@ant-design/icons';
 import { Tag } from 'antd';
 import { PageHeader } from '@/shared/ui/PageHeader';
-import { createPlotLink } from '@/shared/navigation/plot-link';
 import { modules } from '@/shared/navigation/modules';
 import styles from './DashboardPage.module.css';
 
-const examplePlot = createPlotLink({ expression: 'abs(x)', xMin: -5, xMax: 5 });
+const examplePlot = '/plotting?expression=abs%28x%29&xMin=-5&xMax=5';
 
 const icons = {
   knowledge: BookOutlined,
