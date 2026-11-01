@@ -8,8 +8,11 @@ import {
 } from '@ant-design/icons';
 import { Tag } from 'antd';
 import { PageHeader } from '@/shared/ui/PageHeader';
+import { createPlotLink } from '@/shared/navigation/plot-link';
 import { modules } from '@/shared/navigation/modules';
 import styles from './DashboardPage.module.css';
+
+const examplePlot = createPlotLink({ expression: 'abs(x)', xMin: -5, xMax: 5 });
 
 const icons = {
   knowledge: BookOutlined,
@@ -28,7 +31,9 @@ export default function DashboardPage() {
       />
       <section className={styles.hero} aria-labelledby="hero-title">
         <div className={styles.heroCopy}>
-          <span className={styles.heroLabel}>从一个好问题开始</span>
+          <span className={styles.heroLabel}>
+            一个值得探索的问题 <span aria-hidden="true">↗</span>
+          </span>
           <h2 id="hero-title">
             连续的函数，
             <br />
@@ -39,12 +44,23 @@ export default function DashboardPage() {
             <br />
             把“看起来如此”变成“为什么如此”。
           </p>
-          <Link className={styles.heroButton} to="/knowledge?topic=derivative">
-            探索这个问题 <ArrowRightOutlined />
-          </Link>
+          <div className={styles.heroActions}>
+            <Link
+              className={styles.heroButton}
+              to="/knowledge?topic=derivative"
+            >
+              探索这个问题 <ArrowRightOutlined />
+            </Link>
+            <Link className={styles.heroSecondary} to={examplePlot}>
+              在绘图中观察 <ArrowRightOutlined />
+            </Link>
+          </div>
         </div>
         <div className={styles.graph} aria-hidden="true">
           <div className={styles.graphGrid} />
+          <span className={styles.graphLabel}>
+            观察图像 <span> / </span> 一个反例
+          </span>
           <svg viewBox="0 0 420 260">
             <path
               d="M25 205 H400 M210 20 V245"
@@ -74,14 +90,43 @@ export default function DashboardPage() {
           <span className={styles.graphNote}>在 0 处连续，但不可导</span>
         </div>
       </section>
-      <div className="section-title">
-        <h2>你的学习工具</h2>
-        <span>独立模块 · 在同一工作台连接</span>
+      <section className={styles.learningPath} aria-label="探索路径">
+        <div className={styles.pathIntro}>
+          <span>一种学习方式</span>
+          <h2>让理解，有迹可循。</h2>
+        </div>
+        <ol>
+          <li>
+            <strong>01</strong>
+            <span>
+              读懂概念<small>从定义与条件出发</small>
+            </span>
+          </li>
+          <li>
+            <strong>02</strong>
+            <span>
+              观察变化<small>用图像检验直觉</small>
+            </span>
+          </li>
+          <li>
+            <strong>03</strong>
+            <span>
+              记录思考<small>回到推理与复习</small>
+            </span>
+          </li>
+        </ol>
+      </section>
+      <div className={styles.sectionHeading}>
+        <div>
+          <span>WORKSPACE</span>
+          <h2>你的学习工具</h2>
+        </div>
+        <p>从想做的事开始，选择一个工具。</p>
       </div>
       <section className={styles.moduleGrid} aria-label="学习工具">
         {modules
           .filter((module) => module.id !== 'dashboard')
-          .map((module, index) => {
+          .map((module) => {
             const Icon = icons[module.id as keyof typeof icons];
             return (
               <Link
@@ -99,7 +144,6 @@ export default function DashboardPage() {
                     {module.status === 'available' ? '示例可用' : '待开发'}
                   </Tag>
                 </div>
-                <span className={styles.moduleNumber}>MODULE 0{index + 1}</span>
                 <h3>{module.title}</h3>
                 <p>{module.caption}</p>
                 <span className={styles.cardLink}>
