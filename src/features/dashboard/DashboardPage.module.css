@@ -3,13 +3,13 @@
 }
 .pageHeading p {
   margin: 0 0 12px;
-  color: #4c7363;
+  color: #5c6b8f;
   font-size: 13px;
   font-weight: 600;
 }
 .pageHeading h1 {
   margin: 0;
-  color: #253b36;
+  color: #202b41;
   font-size: clamp(25px, 2vw, 30px);
   line-height: 1.4;
   font-weight: 650;
@@ -17,12 +17,12 @@
 .pageHeading > span {
   display: block;
   margin-top: 10px;
-  color: #5f7469;
+  color: #64718a;
   font-size: 13px;
   line-height: 1.7;
 }
 .hero {
-  background: #194e42;
+  background: #263a70;
   border-radius: 12px;
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -36,18 +36,18 @@
   justify-content: center;
 }
 .heroLabel {
-  color: #c7dfd1;
+  color: #c9d4f1;
   font-size: 13px;
 }
 .hero h2 {
-  color: #fffdf3;
+  color: #ffffff;
   font-size: clamp(29px, 2.55vw, 39px);
   line-height: 1.38;
   margin: 22px 0 16px;
   font-weight: 650;
 }
 .hero p {
-  color: #dcebe0;
+  color: #e2e8f7;
   line-height: 1.8;
   font-size: 14px;
   margin: 0;
@@ -68,17 +68,17 @@
   font-weight: 600;
 }
 .heroButton {
-  background: #e5f6d2;
-  color: #194e42;
+  background: #e1e7ff;
+  color: #263a70;
   padding: 12px 17px;
   border-radius: 7px;
 }
 .heroButton:hover {
   background: white;
-  color: #194e42;
+  color: #263a70;
 }
 .heroSecondary {
-  color: #e1f0e6;
+  color: #e1e7f7;
   padding: 10px 2px;
 }
 .heroSecondary:hover {
@@ -92,15 +92,15 @@
   justify-content: center;
   margin: 0;
   padding: 28px 32px;
-  background: #f0f5ec;
-  color: #253f35;
+  background: #eef1fa;
+  color: #263451;
 }
 .graphGrid {
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(#1d63420a 1px, transparent 1px),
-    linear-gradient(90deg, #1d63420a 1px, transparent 1px);
+    linear-gradient(#334e9a0a 1px, transparent 1px),
+    linear-gradient(90deg, #334e9a0a 1px, transparent 1px);
   background-size: 28px 28px;
 }
 .graphHeader,
@@ -114,10 +114,10 @@
 }
 .graphHeader {
   font-size: 12px;
-  color: #4f6d5e;
+  color: #62708d;
 }
 .formula {
-  color: #194e42;
+  color: #263a70;
   font:
     italic 21px Georgia,
     serif;
@@ -131,28 +131,28 @@
 .graphCaption {
   padding-top: 8px;
   font-size: 12px;
-  color: #526e61;
+  color: #62708d;
 }
 .graphCaption strong {
-  color: #194e42;
+  color: #263a70;
   font-size: 13px;
 }
 .derivatives {
   justify-content: flex-start;
   flex-wrap: wrap;
   gap: 8px 24px;
-  border-top: 1px solid #c8d9c9;
+  border-top: 1px solid #cad3e7;
   margin-top: 12px;
   padding-top: 12px;
   font-size: 12px;
-  color: #526e61;
+  color: #62708d;
 }
 .derivatives strong {
   margin-left: 5px;
   font:
     600 15px Georgia,
     serif;
-  color: #194e42;
+  color: #263a70;
 }
 .learningPath {
   display: grid;
@@ -163,7 +163,7 @@
   border-bottom: 1px solid var(--border);
 }
 .pathIntro > span {
-  color: #60766b;
+  color: #65718a;
   font-size: 12px;
 }
 .pathIntro h2,
@@ -188,7 +188,7 @@
   font-weight: 600;
 }
 .learningPath li strong {
-  color: #688a79;
+  color: #7788ad;
   font-size: 11px;
   font-weight: 500;
 }
@@ -197,7 +197,7 @@
   margin-top: 5px;
   font-size: 12px;
   font-weight: 400;
-  color: #60766b;
+  color: #65718a;
   line-height: 1.5;
 }
 .sectionHeading {
@@ -208,7 +208,7 @@
   margin: 32px 0 16px;
 }
 .sectionHeading p {
-  color: #60766b;
+  color: #65718a;
   font-size: 12px;
   margin: 0;
 }
@@ -231,8 +231,8 @@
     background-color 0.18s;
 }
 .moduleCard:hover {
-  border-color: #8aae9a;
-  background: #f8fbf6;
+  border-color: #9caace;
+  background: #f8f9fd;
   color: var(--text);
 }
 .cardTop {
@@ -251,8 +251,8 @@
   place-items: center;
   width: 40px;
   height: 40px;
-  background: #eef4ed;
-  color: #176b5b;
+  background: #eef1fa;
+  color: #485bb2;
   border-radius: 8px;
   font-size: 19px;
 }
@@ -261,7 +261,7 @@
   margin: 0 0 7px;
 }
 .moduleCard p {
-  color: #60766b;
+  color: #65718a;
   font-size: 13px;
   line-height: 1.6;
   margin: 0;
@@ -272,7 +272,7 @@
   font-size: 12px;
   padding-top: 22px;
   margin-top: auto;
-  color: #176b5b;
+  color: #485bb2;
 }
 .teamNote {
   display: flex;
@@ -295,7 +295,7 @@
 }
 .teamNote a {
   font-size: 12px;
-  color: #176b5b;
+  color: #485bb2;
   white-space: nowrap;
 }
 @media (max-width: 1100px) {

@@ -61,26 +61,26 @@ export default function DashboardPage() {
           <svg viewBox="0 0 420 240" aria-hidden="true">
             <path
               d="M25 192 H400 M210 12 V220"
-              stroke="#9bafa3"
+              stroke="#a7b4cf"
               strokeWidth="1"
             />
             <path
               d="M50 32 L210 192 L370 32"
               fill="none"
-              stroke="#176b5b"
+              stroke="#485bb2"
               strokeWidth="3"
               strokeLinecap="round"
             />
-            <circle cx="210" cy="192" r="5" fill="#176b5b" />
+            <circle cx="210" cy="192" r="5" fill="#485bb2" />
             <circle
               cx="210"
               cy="192"
               r="10"
               fill="none"
-              stroke="#176b5b"
+              stroke="#485bb2"
               strokeOpacity=".25"
             />
-            <text x="219" y="212" fill="#526e61" fontSize="12">
+            <text x="219" y="212" fill="#62708d" fontSize="12">
               0
             </text>
           </svg>
@@ -144,7 +144,9 @@ export default function DashboardPage() {
                     <Icon />
                   </span>
                   <Tag
-                    color={module.status === 'available' ? 'green' : 'default'}
+                    color={
+                      module.status === 'available' ? 'geekblue' : 'default'
+                    }
                   >
                     {module.status === 'available' ? '示例可用' : '待开发'}
                   </Tag>

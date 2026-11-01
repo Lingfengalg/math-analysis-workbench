@@ -75,12 +75,12 @@ export const FunctionChart = forwardRef<
       xAxis: {
         type: 'value',
         name: 'x',
-        splitLine: { lineStyle: { color: '#edf0ed' } },
+        splitLine: { lineStyle: { color: '#e8ebf2' } },
       },
       yAxis: {
         type: 'value',
         name: 'f(x)',
-        splitLine: { lineStyle: { color: '#edf0ed' } },
+        splitLine: { lineStyle: { color: '#e8ebf2' } },
       },
       dataZoom: [
         { type: 'inside', filterMode: 'none' },
@@ -92,7 +92,7 @@ export const FunctionChart = forwardRef<
           data: points,
           showSymbol: false,
           connectNulls: false,
-          lineStyle: { color: '#176b5b', width: 2.5 },
+          lineStyle: { color: '#485bb2', width: 2.5 },
           markLine:
             gapMarkers.length > 0
               ? {
