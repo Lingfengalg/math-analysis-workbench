@@ -21,6 +21,9 @@ test('知识导航可以将示例传给绘图模块', async ({ page }) => {
 test('首页示例可直接带入绝对值函数绘图', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('region', { name: '探索路径' })).toBeVisible();
+  await expect(page.getByText('连续，但不可导', { exact: true })).toBeVisible();
+  await expect(page.getByText('−1', { exact: true })).toBeVisible();
+  await expect(page.getByText('+1', { exact: true })).toBeVisible();
   await page.getByRole('link', { name: /在绘图中观察/ }).click();
   await expect(page.getByLabel('函数表达式 f(x)')).toHaveValue('abs(x)');
   await expect(page.getByLabel('左端点')).toHaveValue('-5');

@@ -1,35 +1,53 @@
+.pageHeading {
+  margin-bottom: 30px;
+}
+.pageHeading p {
+  margin: 0 0 12px;
+  color: #4c7363;
+  font-size: 13px;
+  font-weight: 600;
+}
+.pageHeading h1 {
+  margin: 0;
+  color: #253b36;
+  font-size: clamp(25px, 2vw, 30px);
+  line-height: 1.4;
+  font-weight: 650;
+}
+.pageHeading > span {
+  display: block;
+  margin-top: 10px;
+  color: #5f7469;
+  font-size: 13px;
+  line-height: 1.7;
+}
 .hero {
   background: #194e42;
-  border-radius: 16px;
+  border-radius: 12px;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  min-height: 330px;
+  min-height: 355px;
   overflow: hidden;
 }
 .heroCopy {
-  padding: 42px 44px;
-  position: relative;
-  z-index: 1;
+  padding: 44px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 .heroLabel {
-  color: #c8dfcf;
-  font-size: 12px;
-  letter-spacing: 0.12em;
-}
-.heroLabel span {
-  margin-left: 7px;
-  color: #ddf3c9;
+  color: #c7dfd1;
+  font-size: 13px;
 }
 .hero h2 {
   color: #fffdf3;
-  font-size: clamp(28px, 2.55vw, 37px);
+  font-size: clamp(29px, 2.55vw, 39px);
   line-height: 1.38;
-  margin: 20px 0 16px;
+  margin: 22px 0 16px;
   font-weight: 650;
-  letter-spacing: 0.02em;
 }
 .hero p {
-  color: #d5e5da;
+  color: #dcebe0;
   line-height: 1.8;
   font-size: 14px;
   margin: 0;
@@ -39,13 +57,13 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 12px 22px;
-  margin-top: 25px;
+  margin-top: 28px;
 }
 .heroButton,
 .heroSecondary {
   display: inline-flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   font-size: 13px;
   font-weight: 600;
 }
@@ -72,40 +90,69 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 38px 28px 22px;
-  border-left: 1px solid #ffffff1a;
-}
-.graph svg {
-  position: relative;
-  display: block;
-  width: 100%;
-  max-height: 255px;
+  margin: 0;
+  padding: 28px 32px;
+  background: #f0f5ec;
+  color: #253f35;
 }
 .graphGrid {
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(#ffffff09 1px, transparent 1px),
-    linear-gradient(90deg, #ffffff09 1px, transparent 1px);
+    linear-gradient(#1d63420a 1px, transparent 1px),
+    linear-gradient(90deg, #1d63420a 1px, transparent 1px);
   background-size: 28px 28px;
 }
-.graphLabel {
+.graphHeader,
+.graphCaption,
+.derivatives {
   position: relative;
-  color: #c6dbce;
-  font-size: 11px;
-  letter-spacing: 0.09em;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
-.graphLabel span {
-  padding: 0 6px;
-  opacity: 0.65;
+.graphHeader {
+  font-size: 12px;
+  color: #4f6d5e;
 }
-.graphNote {
+.formula {
+  color: #194e42;
+  font:
+    italic 21px Georgia,
+    serif;
+}
+.graph svg {
+  position: relative;
   display: block;
-  text-align: right;
-  color: #d2e4d7;
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  padding-right: 12px;
+  width: 100%;
+  max-height: 215px;
+}
+.graphCaption {
+  padding-top: 8px;
+  font-size: 12px;
+  color: #526e61;
+}
+.graphCaption strong {
+  color: #194e42;
+  font-size: 13px;
+}
+.derivatives {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  border-top: 1px solid #c8d9c9;
+  margin-top: 12px;
+  padding-top: 12px;
+  font-size: 12px;
+  color: #526e61;
+}
+.derivatives strong {
+  margin-left: 5px;
+  font:
+    600 15px Georgia,
+    serif;
+  color: #194e42;
 }
 .learningPath {
   display: grid;
@@ -115,18 +162,15 @@
   padding: 30px 0;
   border-bottom: 1px solid var(--border);
 }
-.pathIntro > span,
-.sectionHeading span {
-  color: #567b6b;
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  font-weight: 600;
+.pathIntro > span {
+  color: #60766b;
+  font-size: 12px;
 }
 .pathIntro h2,
 .sectionHeading h2 {
-  margin: 7px 0 0;
+  margin: 0 0 6px;
   color: var(--text);
-  font-size: 20px;
+  font-size: 19px;
 }
 .learningPath ol {
   margin: 0;
@@ -144,7 +188,7 @@
   font-weight: 600;
 }
 .learningPath li strong {
-  color: #84a391;
+  color: #688a79;
   font-size: 11px;
   font-weight: 500;
 }
@@ -159,7 +203,7 @@
 .sectionHeading {
   display: flex;
   justify-content: space-between;
-  align-items: end;
+  align-items: baseline;
   gap: 16px;
   margin: 32px 0 16px;
 }
@@ -179,18 +223,16 @@
   min-width: 0;
   padding: 20px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 9px;
   color: var(--text);
   background: white;
   transition:
-    transform 0.18s,
     border-color 0.18s,
-    box-shadow 0.18s;
+    background-color 0.18s;
 }
 .moduleCard:hover {
-  transform: translateY(-3px);
-  border-color: #96b9a9;
-  box-shadow: 0 9px 22px #1d4e3d0d;
+  border-color: #8aae9a;
+  background: #f8fbf6;
   color: var(--text);
 }
 .cardTop {
@@ -211,7 +253,7 @@
   height: 40px;
   background: #eef4ed;
   color: #176b5b;
-  border-radius: 10px;
+  border-radius: 8px;
   font-size: 19px;
 }
 .moduleCard h3 {
@@ -273,13 +315,10 @@
     grid-template-columns: 1fr;
   }
   .heroCopy {
-    padding: 28px 24px;
+    padding: 30px 24px;
   }
   .graph {
-    min-height: 190px;
-    padding: 18px 24px;
-    border-left: 0;
-    border-top: 1px solid #ffffff1a;
+    padding: 24px;
   }
   .graph svg {
     max-height: 190px;
@@ -307,8 +346,5 @@
 @media (prefers-reduced-motion: reduce) {
   .moduleCard {
     transition: none;
-  }
-  .moduleCard:hover {
-    transform: none;
   }
 }
