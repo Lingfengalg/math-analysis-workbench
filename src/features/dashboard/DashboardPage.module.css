@@ -1,136 +1,278 @@
+.pageHeading {
+  margin-bottom: 30px;
+}
+.pageHeading p {
+  margin: 0 0 12px;
+  color: #5c6b8f;
+  font-size: 13px;
+  font-weight: 600;
+}
+.pageHeading h1 {
+  margin: 0;
+  color: #202b41;
+  font-size: clamp(25px, 2vw, 30px);
+  line-height: 1.4;
+  font-weight: 650;
+}
+.pageHeading > span {
+  display: block;
+  margin-top: 10px;
+  color: #64718a;
+  font-size: 13px;
+  line-height: 1.7;
+}
 .hero {
-  background: #194e42;
-  border-radius: 16px;
+  background: #263a70;
+  border-radius: 12px;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  min-height: 310px;
+  min-height: 355px;
   overflow: hidden;
 }
 .heroCopy {
-  padding: 34px 40px;
-  position: relative;
-  z-index: 1;
+  padding: 44px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 .heroLabel {
-  font-size: 12px;
-  color: #b9d2c4;
-  letter-spacing: 2px;
-}
-.hero h2 {
-  color: #fffdf3;
-  font-size: 34px;
-  line-height: 1.45;
-  margin: 14px 0;
-  font-weight: 600;
-  letter-spacing: 1px;
-}
-.hero p {
-  color: #d0e0d7;
-  line-height: 1.8;
+  color: #c9d4f1;
   font-size: 13px;
 }
-.heroButton {
+.hero h2 {
+  color: #ffffff;
+  font-size: clamp(29px, 2.55vw, 39px);
+  line-height: 1.38;
+  margin: 22px 0 16px;
+  font-weight: 650;
+}
+.hero p {
+  color: #e2e8f7;
+  line-height: 1.8;
+  font-size: 14px;
+  margin: 0;
+}
+.heroActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 22px;
+  margin-top: 28px;
+}
+.heroButton,
+.heroSecondary {
   display: inline-flex;
   align-items: center;
-  gap: 22px;
-  background: #e5f6d2;
-  color: #194e42;
-  padding: 11px 18px;
-  border-radius: 7px;
+  gap: 12px;
+  font-size: 13px;
   font-weight: 600;
-  margin-top: 12px;
+}
+.heroButton {
+  background: #e1e7ff;
+  color: #263a70;
+  padding: 12px 17px;
+  border-radius: 7px;
 }
 .heroButton:hover {
   background: white;
-  color: #194e42;
+  color: #263a70;
+}
+.heroSecondary {
+  color: #e1e7f7;
+  padding: 10px 2px;
+}
+.heroSecondary:hover {
+  color: white;
 }
 .graph {
-  align-self: center;
+  align-self: stretch;
   position: relative;
-  margin-right: 28px;
-}
-.graph svg {
-  position: relative;
-  display: block;
-  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  margin: 0;
+  padding: 28px 32px;
+  background: #eef1fa;
+  color: #263451;
 }
 .graphGrid {
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(#ffffff09 1px, transparent 1px),
-    linear-gradient(90deg, #ffffff09 1px, transparent 1px);
+    linear-gradient(#334e9a0a 1px, transparent 1px),
+    linear-gradient(90deg, #334e9a0a 1px, transparent 1px);
   background-size: 28px 28px;
 }
-.graphNote {
+.graphHeader,
+.graphCaption,
+.derivatives {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.graphHeader {
+  font-size: 12px;
+  color: #62708d;
+}
+.formula {
+  color: #263a70;
+  font:
+    italic 21px Georgia,
+    serif;
+}
+.graph svg {
+  position: relative;
   display: block;
-  text-align: right;
-  color: #b9d2c4;
+  width: 100%;
+  max-height: 215px;
+}
+.graphCaption {
+  padding-top: 8px;
+  font-size: 12px;
+  color: #62708d;
+}
+.graphCaption strong {
+  color: #263a70;
+  font-size: 13px;
+}
+.derivatives {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  border-top: 1px solid #cad3e7;
+  margin-top: 12px;
+  padding-top: 12px;
+  font-size: 12px;
+  color: #62708d;
+}
+.derivatives strong {
+  margin-left: 5px;
+  font:
+    600 15px Georgia,
+    serif;
+  color: #263a70;
+}
+.learningPath {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.7fr) 2fr;
+  gap: 28px;
+  align-items: center;
+  padding: 30px 0;
+  border-bottom: 1px solid var(--border);
+}
+.pathIntro > span {
+  color: #65718a;
+  font-size: 12px;
+}
+.pathIntro h2,
+.sectionHeading h2 {
+  margin: 0 0 6px;
+  color: var(--text);
+  font-size: 19px;
+}
+.learningPath ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+.learningPath li {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  font-size: 14px;
+  font-weight: 600;
+}
+.learningPath li strong {
+  color: #7788ad;
   font-size: 11px;
-  letter-spacing: 1px;
-  padding-right: 22px;
+  font-weight: 500;
+}
+.learningPath small {
+  display: block;
+  margin-top: 5px;
+  font-size: 12px;
+  font-weight: 400;
+  color: #65718a;
+  line-height: 1.5;
+}
+.sectionHeading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  margin: 32px 0 16px;
+}
+.sectionHeading p {
+  color: #65718a;
+  font-size: 12px;
+  margin: 0;
 }
 .moduleGrid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
+  gap: 14px;
 }
 .moduleCard {
-  display: block;
-  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 20px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 9px;
   color: var(--text);
   background: white;
   transition:
-    transform 0.18s,
-    border-color 0.18s;
+    border-color 0.18s,
+    background-color 0.18s;
 }
 .moduleCard:hover {
-  transform: translateY(-3px);
-  border-color: #96b9a9;
+  border-color: #9caace;
+  background: #f8f9fd;
   color: var(--text);
 }
 .cardTop {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 23px;
+  margin-bottom: 20px;
   gap: 8px;
 }
 .cardTop :global(.ant-tag) {
   margin: 0;
-  font-size: 10px;
+  font-size: 11px;
 }
 .moduleIcon {
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
-  background: #eef4ed;
-  color: #176b5b;
-  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+  background: #eef1fa;
+  color: #485bb2;
+  border-radius: 8px;
   font-size: 19px;
 }
-.moduleNumber {
-  font-size: 10px;
-  letter-spacing: 1.4px;
-  color: #829088;
-}
 .moduleCard h3 {
-  font-size: 18px;
-  margin: 9px 0;
+  font-size: 17px;
+  margin: 0 0 7px;
 }
 .moduleCard p {
-  color: var(--muted);
-  font-size: 12px;
+  color: #65718a;
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0;
 }
 .cardLink {
   display: flex;
   justify-content: space-between;
   font-size: 12px;
-  padding-top: 20px;
-  color: #176b5b;
+  padding-top: 22px;
+  margin-top: auto;
+  color: #485bb2;
 }
 .teamNote {
   display: flex;
@@ -153,7 +295,7 @@
 }
 .teamNote a {
   font-size: 12px;
-  color: #176b5b;
+  color: #485bb2;
   white-space: nowrap;
 }
 @media (max-width: 1100px) {
@@ -161,18 +303,34 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .heroCopy {
-    padding: 28px;
+    padding: 32px;
   }
-  .hero h2 {
-    font-size: 29px;
+  .learningPath {
+    grid-template-columns: 1fr;
+    gap: 18px;
   }
 }
 @media (max-width: 640px) {
   .hero {
     grid-template-columns: 1fr;
   }
+  .heroCopy {
+    padding: 30px 24px;
+  }
   .graph {
-    display: none;
+    padding: 24px;
+  }
+  .graph svg {
+    max-height: 190px;
+  }
+  .learningPath ol {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .sectionHeading {
+    align-items: start;
+    flex-direction: column;
+    gap: 8px;
   }
   .moduleGrid {
     grid-template-columns: 1fr;
@@ -183,5 +341,10 @@
   .teamNote a {
     display: inline-block;
     margin-top: 10px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .moduleCard {
+    transition: none;
   }
 }

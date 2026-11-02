@@ -18,7 +18,7 @@ input {
   font: inherit;
 }
 :focus-visible {
-  outline: 3px solid #71a991;
+  outline: 3px solid #879be8;
   outline-offset: 4px;
 }
 .app-shell {
@@ -28,7 +28,7 @@ input {
   width: 238px;
   position: fixed;
   inset: 0 auto 0 0;
-  background: #fcfdf9;
+  background: #18233b;
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
@@ -40,19 +40,19 @@ input {
   display: flex;
   align-items: center;
   gap: 13px;
-  color: #194e42;
+  color: #f4f6ff;
   font-size: 25px;
   font-weight: 650;
   padding: 0 10px;
 }
 .brand:hover {
-  color: #194e42;
+  color: #ffffff;
 }
 .brand-symbol {
   display: grid;
   place-items: center;
-  background: #194e42;
-  color: #e5f6d2;
+  background: #e4e9ff;
+  color: #334a9a;
   width: 42px;
   height: 46px;
   border-radius: 12px 4px 12px 4px;
@@ -68,7 +68,7 @@ input {
   margin-top: 5px;
 }
 .nav-label {
-  color: #8b9891;
+  color: #97a4be;
   font-size: 9px;
   letter-spacing: 1px;
   padding: 44px 16px 14px;
@@ -77,7 +77,7 @@ input {
   display: flex;
   align-items: center;
   gap: 12px;
-  color: #607169;
+  color: #c0c9db;
   margin: 5px 0;
   padding: 13px 15px;
   border-radius: 8px;
@@ -89,16 +89,16 @@ input {
 .nav-item small {
   font-size: 9px;
   margin-left: auto;
-  color: #718078;
+  color: #acb7cc;
   white-space: nowrap;
 }
 .nav-item:hover {
-  background: #f0f4ed;
-  color: #176b5b;
+  background: #253554;
+  color: #fff;
 }
 .nav-item.active {
-  background: #e9f0e6;
-  color: #176b5b;
+  background: #33466e;
+  color: #fff;
   font-weight: 600;
 }
 .sidebar-bottom {
@@ -106,14 +106,15 @@ input {
   padding: 24px 12px 0;
 }
 .project-note {
+  color: #d1d9e8;
   font-size: 11px;
-  border: 1px solid var(--border);
+  border: 1px solid #41506b;
   padding: 14px 10px;
   border-radius: 8px;
 }
 .project-note p {
   font-size: 10px;
-  color: var(--muted);
+  color: #aab6cb;
   margin: 9px 0 0;
 }
 .status-dot {
@@ -121,7 +122,7 @@ input {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #3c8866;
+  background: #90a8f0;
   margin-right: 5px;
 }
 .sidebar-bottom > a {
@@ -130,7 +131,7 @@ input {
   align-items: center;
   font-size: 11px;
   margin-top: 23px;
-  color: #6a7972;
+  color: #bac7dd;
 }
 .workspace {
   margin-left: 238px;
@@ -146,15 +147,15 @@ input {
   padding: 0 40px;
   border-bottom: 1px solid var(--border);
   font-size: 11px;
-  color: #64766c;
+  color: #65718a;
   background: #ffffff80;
 }
 .separator {
-  color: #bdc8c1;
+  color: #b8c2d4;
   margin: 0 12px;
 }
 .version-label {
-  color: #7e8e84;
+  color: #78849b;
   font-size: 10px;
 }
 .main-content {
@@ -175,7 +176,7 @@ input {
 .eyebrow {
   font-size: 10px;
   letter-spacing: 1.7px;
-  color: #6b8876;
+  color: #69789b;
   font-weight: 600;
 }
 .page-heading h1 {
@@ -235,11 +236,11 @@ input {
 .body-text {
   font-size: 13px;
   line-height: 1.9;
-  color: #52665c;
+  color: #526079;
 }
 .formula {
   padding: 22px 10px;
-  background: #f4f7f1;
+  background: #f2f4fa;
   border-radius: 8px;
   text-align: center;
   overflow-x: auto;
@@ -257,11 +258,11 @@ input {
   padding-left: 18px;
   font-size: 12px;
   line-height: 1.9;
-  color: #62766b;
+  color: #596780;
 }
 .inline-action {
   font-size: 12px;
-  color: #176b5b;
+  color: #485bb2;
   display: inline-flex;
   gap: 15px;
   align-items: center;
@@ -339,13 +340,13 @@ input {
   padding-left: 18px;
   font-size: 12px;
   line-height: 2;
-  color: #62766b;
+  color: #596780;
   margin: 0;
 }
 .task-index {
   display: inline-block;
   font-size: 11px;
-  color: #176b5b;
+  color: #485bb2;
   margin-right: 20px;
 }
 .extension-tasks {
@@ -372,13 +373,13 @@ input {
   z-index: 100;
   background: white;
   padding: 12px;
-  color: #176b5b;
+  color: #485bb2;
 }
 .skip-link:focus {
   top: 10px;
 }
 code {
-  background: #eff3eb;
+  background: #eef1f8;
   padding: 3px 6px;
   border-radius: 4px;
   overflow-wrap: anywhere;
