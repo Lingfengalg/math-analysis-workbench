@@ -7,9 +7,10 @@ import {
   RobotOutlined,
 } from '@ant-design/icons';
 import { Tag } from 'antd';
-import { PageHeader } from '@/shared/ui/PageHeader';
 import { modules } from '@/shared/navigation/modules';
 import styles from './DashboardPage.module.css';
+
+const examplePlot = '/plotting?expression=abs%28x%29&xMin=-5&xMax=5';
 
 const icons = {
   knowledge: BookOutlined,
@@ -21,14 +22,14 @@ const icons = {
 export default function DashboardPage() {
   return (
     <>
-      <PageHeader
-        eyebrow="YOUR MATHEMATICS, CONNECTED"
-        title="让每一次探索，都有迹可循。"
-        description="从定义出发，用图像观察，再回到严谨的数学推理。"
-      />
+      <header className={styles.pageHeading}>
+        <p>数学分析学习工作台</p>
+        <h1>让每一次探索，都有迹可循。</h1>
+        <span>从定义出发，用图像观察，再回到严谨的数学推理。</span>
+      </header>
       <section className={styles.hero} aria-labelledby="hero-title">
         <div className={styles.heroCopy}>
-          <span className={styles.heroLabel}>从一个好问题开始</span>
+          <span className={styles.heroLabel}>从一个反例开始</span>
           <h2 id="hero-title">
             连续的函数，
             <br />
@@ -39,49 +40,98 @@ export default function DashboardPage() {
             <br />
             把“看起来如此”变成“为什么如此”。
           </p>
-          <Link className={styles.heroButton} to="/knowledge?topic=derivative">
-            探索这个问题 <ArrowRightOutlined />
-          </Link>
+          <div className={styles.heroActions}>
+            <Link
+              className={styles.heroButton}
+              to="/knowledge?topic=derivative"
+            >
+              探索这个问题 <ArrowRightOutlined />
+            </Link>
+            <Link className={styles.heroSecondary} to={examplePlot}>
+              在绘图中观察 <ArrowRightOutlined />
+            </Link>
+          </div>
         </div>
-        <div className={styles.graph} aria-hidden="true">
-          <div className={styles.graphGrid} />
-          <svg viewBox="0 0 420 260">
+        <figure className={styles.graph} aria-labelledby="graph-caption">
+          <div className={styles.graphGrid} aria-hidden="true" />
+          <div className={styles.graphHeader}>
+            <span>绝对值函数</span>
+            <span className={styles.formula}>f(x) = |x|</span>
+          </div>
+          <svg viewBox="0 0 420 240" aria-hidden="true">
             <path
-              d="M25 205 H400 M210 20 V245"
-              stroke="#a6c4b5"
+              d="M25 192 H400 M210 12 V220"
+              stroke="#a7b4cf"
               strokeWidth="1"
             />
             <path
-              d="M48 42 L210 205 L372 42"
+              d="M50 32 L210 192 L370 32"
               fill="none"
-              stroke="#e5f6d2"
+              stroke="#485bb2"
               strokeWidth="3"
+              strokeLinecap="round"
             />
-            <circle cx="210" cy="205" r="5" fill="#e5f6d2" />
-            <text
-              x="252"
-              y="94"
-              fill="#e5f6d2"
-              fontSize="25"
-              fontFamily="Georgia,serif"
-            >
-              f(x) = |x|
-            </text>
-            <text x="218" y="228" fill="#b9d2c4" fontSize="12">
+            <circle cx="210" cy="192" r="5" fill="#485bb2" />
+            <circle
+              cx="210"
+              cy="192"
+              r="10"
+              fill="none"
+              stroke="#485bb2"
+              strokeOpacity=".25"
+            />
+            <text x="219" y="212" fill="#62708d" fontSize="12">
               0
             </text>
           </svg>
-          <span className={styles.graphNote}>在 0 处连续，但不可导</span>
-        </div>
+          <figcaption id="graph-caption" className={styles.graphCaption}>
+            <span>在 x = 0 处</span>
+            <strong>连续，但不可导</strong>
+          </figcaption>
+          <div className={styles.derivatives} aria-label="原点处的单侧导数">
+            <span>
+              左导数 <strong>−1</strong>
+            </span>
+            <span>
+              右导数 <strong>+1</strong>
+            </span>
+          </div>
+        </figure>
       </section>
-      <div className="section-title">
+      <section className={styles.learningPath} aria-label="探索路径">
+        <div className={styles.pathIntro}>
+          <h2>理解一个问题</h2>
+          <span>从观察，到思考。</span>
+        </div>
+        <ol>
+          <li>
+            <strong>01</strong>
+            <span>
+              读懂概念<small>从定义与条件出发</small>
+            </span>
+          </li>
+          <li>
+            <strong>02</strong>
+            <span>
+              观察变化<small>用图像检验直觉</small>
+            </span>
+          </li>
+          <li>
+            <strong>03</strong>
+            <span>
+              记录思考<small>回到推理与复习</small>
+            </span>
+          </li>
+        </ol>
+      </section>
+      <div className={styles.sectionHeading}>
         <h2>你的学习工具</h2>
-        <span>独立模块 · 在同一工作台连接</span>
+        <p>从想做的事开始，选择一个工具。</p>
       </div>
       <section className={styles.moduleGrid} aria-label="学习工具">
         {modules
           .filter((module) => module.id !== 'dashboard')
-          .map((module, index) => {
+          .map((module) => {
             const Icon = icons[module.id as keyof typeof icons];
             return (
               <Link
@@ -94,12 +144,13 @@ export default function DashboardPage() {
                     <Icon />
                   </span>
                   <Tag
-                    color={module.status === 'available' ? 'green' : 'default'}
+                    color={
+                      module.status === 'available' ? 'geekblue' : 'default'
+                    }
                   >
                     {module.status === 'available' ? '示例可用' : '待开发'}
                   </Tag>
                 </div>
-                <span className={styles.moduleNumber}>MODULE 0{index + 1}</span>
                 <h3>{module.title}</h3>
                 <p>{module.caption}</p>
                 <span className={styles.cardLink}>
@@ -111,7 +162,6 @@ export default function DashboardPage() {
       </section>
       <section className={styles.teamNote}>
         <div>
-          <span className="eyebrow">BUILT TOGETHER</span>
           <h2>一个工作台，多个人一起完善。</h2>
           <p>
             目前提供基础工程与示例内容，不代表课程作品已完成。团队可在独立模块中开发，通过

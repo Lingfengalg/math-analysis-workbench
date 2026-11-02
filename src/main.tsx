@@ -13,11 +13,11 @@ createRoot(document.getElementById('root')!).render(
       locale={zhCN}
       theme={{
         token: {
-          colorPrimary: '#176b5b',
+          colorPrimary: '#485bb2',
           borderRadius: 10,
           fontFamily: 'Inter, "PingFang SC", "Microsoft YaHei", sans-serif',
-          colorText: '#253b36',
-          colorBorderSecondary: '#e7ece7',
+          colorText: '#202b41',
+          colorBorderSecondary: '#e2e6ef',
         },
       }}
     >

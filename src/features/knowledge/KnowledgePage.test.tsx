@@ -24,6 +24,27 @@ describe('知识导航', () => {
     await user.type(search, '不存在的知识点');
     expect(screen.getByText(/没有找到匹配的知识点/)).toBeInTheDocument();
   });
+  it('按主题展示知识点数量并保留批注锚点', () => {
+    render(
+      <MemoryRouter initialEntries={['/knowledge?topic=derivative']}>
+        <KnowledgePage />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('1 个知识点')).toBeInTheDocument();
+    const article = screen.getByRole('article');
+    expect(article).toHaveAttribute(
+      'data-annotation-anchor',
+      'knowledge:derivative-absolute',
+    );
+    expect(
+      within(article).getByRole('heading', {
+        name: '可导与连续：逆命题不成立',
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(article).getByRole('link', { name: /去绘图中观察/ }),
+    ).toBeInTheDocument();
+  });
   it('支持按路由参数筛选', () => {
     render(
       <MemoryRouter initialEntries={['/knowledge?topic=derivative']}>
