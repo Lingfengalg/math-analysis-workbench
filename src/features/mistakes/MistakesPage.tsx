@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router';
 import {
   Alert,
   Button,
@@ -20,6 +21,7 @@ import {
   UploadOutlined,
 } from '@ant-design/icons';
 import { PageHeader } from '@/shared/ui/PageHeader';
+import { createKnowledgeTopicLink } from '@/shared/navigation/knowledge-link';
 import { MistakeFormModal } from './MistakeFormModal';
 import { MistakeImportModal } from './MistakeImportModal';
 import { useMistakes } from './useMistakes';
@@ -359,6 +361,14 @@ export default function MistakesPage() {
             )}
             {!item.problem && !item.mistakeReason && !item.correction && (
               <p className={styles.text}>这条记录还没有补充详细内容。</p>
+            )}
+            {createKnowledgeTopicLink(item.topic) && (
+              <Link
+                className={styles.knowledgeLink}
+                to={createKnowledgeTopicLink(item.topic)!}
+              >
+                查看「{topicLabels[item.topic]}」相关知识
+              </Link>
             )}
           </Card>
         ))}

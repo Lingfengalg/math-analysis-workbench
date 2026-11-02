@@ -22,6 +22,10 @@
 - `examples[].plot`：可选的 PlotRequest；示例文字并不自动解析为函数。
 - 内置三张卡片为工程示例，仍需课程团队人工审查并补充精确引用。
 
+### 知识主题导航
+
+`createKnowledgeTopicLink(topic)` 对知识卡片 schema 支持的主题返回 `/knowledge?topic=...`，无效主题（包括错题本的 `other`）返回 `null`。错题本可使用该链接打开对应主题的知识导航；链接只传主题，不传题目、错因或订正内容。链接指向主题筛选，不代表自动匹配到某一具体知识卡片。
+
 ## 计算协议
 
 - 请求：`PlotRequest`。

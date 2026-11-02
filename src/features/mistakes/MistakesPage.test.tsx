@@ -1,13 +1,17 @@
 import {
   fireEvent,
-  render,
+  render as rtlRender,
   screen,
   waitFor,
   within,
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router';
+import type { ReactElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import MistakesPage from './MistakesPage';
+
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: MemoryRouter });
 
 const STORAGE_KEY = 'math-workbench:mistakes';
 
@@ -51,6 +55,47 @@ describe('错题本', () => {
     expect(parsed.data.items).toHaveLength(1);
     expect(parsed.data.items[0].title).toBe('判断 1/x 在 0 处是否连续');
     expect(screen.getByText('已记录一条错题。')).toBeInTheDocument();
+  });
+
+  it('已知主题提供知识导航链接，其他主题不生成链接', async () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        schemaVersion: 1,
+        data: {
+          items: [
+            {
+              id: 'a',
+              title: '导数题',
+              topic: 'derivative',
+              problem: '',
+              mistakeReason: '',
+              correction: '',
+              createdAt: 1,
+              updatedAt: 1,
+              reviewedAt: null,
+            },
+            {
+              id: 'b',
+              title: '其他题',
+              topic: 'other',
+              problem: '',
+              mistakeReason: '',
+              correction: '',
+              createdAt: 2,
+              updatedAt: 2,
+              reviewedAt: null,
+            },
+          ],
+        },
+      }),
+    );
+    render(<MistakesPage />);
+    const link = screen.getByRole('link', { name: '查看「导数」相关知识' });
+    expect(link).toHaveAttribute('href', '/knowledge?topic=derivative');
+    expect(
+      screen.queryByRole('link', { name: /查看「其他」/ }),
+    ).not.toBeInTheDocument();
   });
 
   it('刷新后仍能读回已保存的错题', async () => {

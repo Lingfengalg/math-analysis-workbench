@@ -55,6 +55,57 @@ test('错题本可以按主题筛选并搜索', async ({ page }) => {
   await expect(page.getByText(/没有匹配的错题/)).toBeVisible();
 });
 
+test('错题可以按主题回到知识导航，其他主题不显示无效入口', async ({ page }) => {
+  await page.goto('/#/mistakes');
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'math-workbench:mistakes',
+      JSON.stringify({
+        schemaVersion: 1,
+        data: {
+          items: [
+            {
+              id: 'derivative-1',
+              title: '导数错题',
+              topic: 'derivative',
+              problem: '私有题目',
+              mistakeReason: '',
+              correction: '',
+              createdAt: 1,
+              updatedAt: 1,
+              reviewedAt: null,
+            },
+            {
+              id: 'other-1',
+              title: '其他错题',
+              topic: 'other',
+              problem: '',
+              mistakeReason: '',
+              correction: '',
+              createdAt: 2,
+              updatedAt: 2,
+              reviewedAt: null,
+            },
+          ],
+        },
+      }),
+    );
+  });
+  await page.reload();
+  await expect(page.getByText('导数错题')).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: /查看「其他」相关知识/ }),
+  ).toHaveCount(0);
+  await page.getByRole('link', { name: '查看「导数」相关知识' }).click();
+  await expect(page).toHaveURL(/#\/knowledge\?topic=derivative$/);
+  await expect(page.getByText('可导与连续：逆命题不成立')).toBeVisible();
+  await expect(page.getByText('函数极限：靠近，而非到达')).toHaveCount(0);
+  expect(page.url()).not.toContain('私有题目');
+  await page.goBack();
+  await expect(page.getByText('导数错题')).toBeVisible();
+  await expect(page.getByText('私有题目')).toBeVisible();
+});
+
 test('两个标签页交替新增与删除不会互相覆盖', async ({ page, context }) => {
   await page.goto('/#/mistakes');
   const second = await context.newPage();
