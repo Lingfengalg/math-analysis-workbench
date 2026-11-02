@@ -5,6 +5,7 @@ import { ArrowRightOutlined, SearchOutlined } from '@ant-design/icons';
 import { knowledgeCards } from '@/content/knowledge';
 import { matchesKnowledgeQuery } from './search';
 import { createPlotLink } from '@/shared/navigation/plot-link';
+import { createMistakeTopicLink } from '@/shared/navigation/knowledge-link';
 import { Formula } from '@/shared/ui/Formula';
 import styles from './KnowledgePage.module.css';
 
@@ -119,6 +120,15 @@ export default function KnowledgePage() {
                   </div>
                 ))}
               </section>
+              <div className="section-gap">
+                <Link
+                  className={styles.plotLink}
+                  to={createMistakeTopicLink(card.topic)}
+                >
+                  查看「{labels[card.topic]}」错题{' '}
+                  <ArrowRightOutlined aria-hidden="true" />
+                </Link>
+              </div>
               <section className={styles.pitfalls}>
                 <h3>容易忽略</h3>
                 <ul>

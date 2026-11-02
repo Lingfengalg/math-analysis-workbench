@@ -53,6 +53,9 @@ describe('知识导航', () => {
     );
     expect(screen.getByText('可导与连续：逆命题不成立')).toBeInTheDocument();
     expect(
+      screen.getByRole('link', { name: '查看「导数」错题' }),
+    ).toHaveAttribute('href', '/mistakes?topic=derivative');
+    expect(
       screen.queryByText('函数极限：靠近，而非到达'),
     ).not.toBeInTheDocument();
   });

@@ -65,3 +65,17 @@
   gap: 12px;
   align-items: center;
 }
+
+.knowledgeLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  margin-top: 16px;
+  color: var(--accent, #176b5b);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.knowledgeLink:hover {
+  text-decoration: underline;
+}

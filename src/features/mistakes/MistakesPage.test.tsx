@@ -1,13 +1,17 @@
 import {
   fireEvent,
-  render,
+  render as rtlRender,
   screen,
   waitFor,
   within,
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router';
+import type { ReactElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import MistakesPage from './MistakesPage';
+
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: MemoryRouter });
 
 const STORAGE_KEY = 'math-workbench:mistakes';
 
@@ -53,6 +57,47 @@ describe('错题本', () => {
     expect(screen.getByText('已记录一条错题。')).toBeInTheDocument();
   });
 
+  it('已知主题提供知识导航链接，其他主题不生成链接', async () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        schemaVersion: 1,
+        data: {
+          items: [
+            {
+              id: 'a',
+              title: '导数题',
+              topic: 'derivative',
+              problem: '',
+              mistakeReason: '',
+              correction: '',
+              createdAt: 1,
+              updatedAt: 1,
+              reviewedAt: null,
+            },
+            {
+              id: 'b',
+              title: '其他题',
+              topic: 'other',
+              problem: '',
+              mistakeReason: '',
+              correction: '',
+              createdAt: 2,
+              updatedAt: 2,
+              reviewedAt: null,
+            },
+          ],
+        },
+      }),
+    );
+    render(<MistakesPage />);
+    const link = screen.getByRole('link', { name: '查看「导数」相关知识' });
+    expect(link).toHaveAttribute('href', '/knowledge?topic=derivative');
+    expect(
+      screen.queryByRole('link', { name: /查看「其他」/ }),
+    ).not.toBeInTheDocument();
+  });
+
   it('刷新后仍能读回已保存的错题', async () => {
     const first = render(<MistakesPage />);
     await addMistake('刷新后还在的错题');
@@ -95,6 +140,37 @@ describe('错题本', () => {
     await user.type(screen.getByLabelText('搜索错题'), '不存在的关键词');
     expect(screen.getByText(/没有匹配的错题/)).toBeInTheDocument();
     expect(screen.queryByText('极限的四则运算')).not.toBeInTheDocument();
+  });
+
+  it('主题链接不会自动创建错题，新增时默认选中该主题', async () => {
+    rtlRender(
+      <MemoryRouter initialEntries={['/mistakes?topic=derivative']}>
+        <MistakesPage />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /记录错题/ }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('导数')).toBeInTheDocument();
+    await user.type(within(dialog).getByLabelText('题目'), '导数的反例');
+    await user.click(within(dialog).getByRole('button', { name: /保\s*存/ }));
+    await waitFor(() =>
+      expect(screen.getByText('导数的反例')).toBeInTheDocument(),
+    );
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    expect(stored.data.items[0].topic).toBe('derivative');
+  });
+
+  it('非法主题参数回退到全部，不创建或改写数据', () => {
+    rtlRender(
+      <MemoryRouter initialEntries={['/mistakes?topic=invalid']}>
+        <MistakesPage />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText(/还没有错题记录/)).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
   });
 
   it('损坏数据只提示，不覆盖原始内容', () => {
