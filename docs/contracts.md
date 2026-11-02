@@ -24,7 +24,7 @@
 
 ### 知识主题导航
 
-`createKnowledgeTopicLink(topic)` 对知识卡片 schema 支持的主题返回 `/knowledge?topic=...`，无效主题（包括错题本的 `other`）返回 `null`。错题本可使用该链接打开对应主题的知识导航；链接只传主题，不传题目、错因或订正内容。链接指向主题筛选，不代表自动匹配到某一具体知识卡片。
+`createKnowledgeTopicLink(topic)` 对知识卡片 schema 支持的主题返回 `/knowledge?topic=...`，无效主题（包括错题本的 `other`）返回 `null`。错题本可使用该链接打开对应主题的知识导航；链接只传主题，不传题目、错因或订正内容。链接指向主题筛选，不代表自动匹配到某一具体知识卡片。 反向 `createMistakeTopicLink(topic)` 打开 `/mistakes?topic=...`；错题页校验参数后按主题筛选，新增错题时默认该主题，用户仍可更改。未知主题回退到“全部”；筛选更新 URL 并支持浏览器前进、后退。
 
 ## 计算协议
 

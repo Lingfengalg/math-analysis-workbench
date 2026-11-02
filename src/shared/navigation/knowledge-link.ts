@@ -1,4 +1,4 @@
-import { knowledgeCardSchema } from '@/shared/contracts';
+import { knowledgeCardSchema, type KnowledgeCard } from '@/shared/contracts';
 
 /** 只传递已知主题，不能把错题正文等本地数据放入 URL。 */
 export function createKnowledgeTopicLink(topic: unknown): string | null {
@@ -6,4 +6,10 @@ export function createKnowledgeTopicLink(topic: unknown): string | null {
   if (!parsed.success) return null;
   const search = new URLSearchParams({ topic: parsed.data });
   return `/knowledge?${search.toString()}`;
+}
+
+/** 仅携带知识主题，不在 URL 中携带用户错题或笔记。 */
+export function createMistakeTopicLink(topic: KnowledgeCard['topic']): string {
+  const search = new URLSearchParams({ topic });
+  return `/mistakes?${search.toString()}`;
 }

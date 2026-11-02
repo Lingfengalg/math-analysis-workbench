@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import {
   Alert,
   Button,
@@ -28,6 +28,7 @@ import { useMistakes } from './useMistakes';
 import {
   formatMistakeTime,
   MISTAKE_TOPICS,
+  mistakeSchema,
   topicLabels,
   type Mistake,
   type MistakeDraft,
@@ -58,7 +59,14 @@ export default function MistakesPage() {
     reset,
   } = useMistakes();
   const [query, setQuery] = useState('');
-  const [topic, setTopic] = useState<TopicFilter>('all');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTopic = mistakeSchema.shape.topic.safeParse(
+    searchParams.get('topic'),
+  );
+  const topic: TopicFilter = requestedTopic.success
+    ? requestedTopic.data
+    : 'all';
+  const [draftTopic, setDraftTopic] = useState<MistakeTopic>('limit');
   const [review, setReview] = useState<ReviewFilter>('all');
   const [formOpen, setFormOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -86,6 +94,7 @@ export default function MistakesPage() {
   }, [items, query, topic, review]);
 
   const openCreate = () => {
+    setDraftTopic(topic === 'all' ? 'limit' : topic);
     setEditing(null);
     setFormOpen(true);
   };
@@ -236,7 +245,12 @@ export default function MistakesPage() {
             <Segmented
               aria-label="按知识主题筛选"
               value={topic}
-              onChange={(value) => setTopic(value as TopicFilter)}
+              onChange={(value) => {
+                const next = new URLSearchParams(searchParams);
+                if (value === 'all') next.delete('topic');
+                else next.set('topic', value);
+                setSearchParams(next);
+              }}
               options={[
                 { label: '全部', value: 'all' },
                 ...MISTAKE_TOPICS.map((item) => ({
@@ -381,6 +395,7 @@ export default function MistakesPage() {
       <MistakeFormModal
         open={formOpen}
         initial={editing}
+        defaultTopic={draftTopic}
         onCancel={closeForm}
         onSubmit={submit}
         error={saveError}

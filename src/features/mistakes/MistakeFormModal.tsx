@@ -6,6 +6,7 @@ import {
   topicLabels,
   type Mistake,
   type MistakeDraft,
+  type MistakeTopic,
 } from './model';
 
 const EMPTY_DRAFT: MistakeDraft = {
@@ -19,6 +20,7 @@ const EMPTY_DRAFT: MistakeDraft = {
 interface Props {
   open: boolean;
   initial: Mistake | null;
+  defaultTopic: MistakeTopic;
   onCancel: () => void;
   onSubmit: (draft: MistakeDraft) => Promise<void>;
   error: string | null;
@@ -27,6 +29,7 @@ interface Props {
 export function MistakeFormModal({
   open,
   initial,
+  defaultTopic,
   onCancel,
   onSubmit,
   error,
@@ -46,8 +49,10 @@ export function MistakeFormModal({
         mistakeReason: initial.mistakeReason,
         correction: initial.correction,
       });
+    } else {
+      form.setFieldsValue({ topic: defaultTopic });
     }
-  }, [open, initial, form]);
+  }, [open, initial, defaultTopic, form]);
 
   const submit = async () => {
     if (pending.current) return;

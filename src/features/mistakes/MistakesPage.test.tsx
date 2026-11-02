@@ -142,6 +142,37 @@ describe('错题本', () => {
     expect(screen.queryByText('极限的四则运算')).not.toBeInTheDocument();
   });
 
+  it('主题链接不会自动创建错题，新增时默认选中该主题', async () => {
+    rtlRender(
+      <MemoryRouter initialEntries={['/mistakes?topic=derivative']}>
+        <MistakesPage />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /记录错题/ }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('导数')).toBeInTheDocument();
+    await user.type(within(dialog).getByLabelText('题目'), '导数的反例');
+    await user.click(within(dialog).getByRole('button', { name: /保\s*存/ }));
+    await waitFor(() =>
+      expect(screen.getByText('导数的反例')).toBeInTheDocument(),
+    );
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    expect(stored.data.items[0].topic).toBe('derivative');
+  });
+
+  it('非法主题参数回退到全部，不创建或改写数据', () => {
+    rtlRender(
+      <MemoryRouter initialEntries={['/mistakes?topic=invalid']}>
+        <MistakesPage />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText(/还没有错题记录/)).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
+
   it('损坏数据只提示，不覆盖原始内容', () => {
     const corrupt = '{"schemaVersion":1,"data":{"items":"oops"}}';
     localStorage.setItem(STORAGE_KEY, corrupt);
