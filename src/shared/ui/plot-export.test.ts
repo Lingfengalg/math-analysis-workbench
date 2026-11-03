@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildPlotExportName,
+  buildSequenceExportName,
   downloadBlob,
   pngDataUrlToBlob,
 } from './plot-export';
@@ -39,6 +40,12 @@ describe('导出文件名安全化（#54）', () => {
       `函数图像_${'x'.repeat(40)}_-5到5.png`,
     );
     expect(buildPlotExportName('///', -5, 5)).toBe('函数图像_函数_-5到5.png');
+  });
+  it('数列导出文件名含项数，安全化规则与函数一致（#59）', () => {
+    expect(buildSequenceExportName('sin(n)/n', 30)).toBe(
+      '数列图像_sin(n)n_前30项.png',
+    );
+    expect(buildSequenceExportName('///', 5)).toBe('数列图像_函数_前5项.png');
   });
 });
 

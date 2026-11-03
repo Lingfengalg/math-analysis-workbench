@@ -1,11 +1,15 @@
 /// <reference lib="webworker" />
-import { sampleFunction } from './sample';
-import type { PlotRequest, PlotWorkerResponse } from '@/shared/contracts';
+import { sampleFunction, sampleSequence } from './sample';
+import type { PlotWorkerMessage, PlotWorkerResponse } from '@/shared/contracts';
 
-self.onmessage = (event: MessageEvent<PlotRequest>) => {
+self.onmessage = (event: MessageEvent<PlotWorkerMessage>) => {
   let response: PlotWorkerResponse;
   try {
-    response = { ok: true, data: sampleFunction(event.data) };
+    const data =
+      event.data.kind === 'function'
+        ? sampleFunction(event.data.request)
+        : sampleSequence(event.data.request);
+    response = { ok: true, data };
   } catch (error) {
     response = {
       ok: false,

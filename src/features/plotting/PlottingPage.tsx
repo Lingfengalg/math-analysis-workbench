@@ -8,6 +8,7 @@ import {
   Input,
   InputNumber,
   Popconfirm,
+  Segmented,
   Space,
   Spin,
   Tag,
@@ -21,6 +22,7 @@ import {
   plotRequestSchema,
   preferencesSchema,
   type PlotRequest,
+  type PlotResult,
 } from '@/shared/contracts';
 import { parsePlotSearch } from '@/shared/navigation/plot-link';
 import { createStorage } from '@/shared/storage';
@@ -38,10 +40,24 @@ import {
 import { PageHeader } from '@/shared/ui/PageHeader';
 import {
   buildPlotExportName,
+  buildSequenceExportName,
   downloadBlob,
   pngDataUrlToBlob,
 } from '@/shared/ui/plot-export';
-import { usePlotCalculation } from './usePlotCalculation';
+import {
+  usePlotCalculation,
+  useSequenceCalculation,
+} from './usePlotCalculation';
+
+type PlotMode = 'function' | 'sequence';
+
+/** 两种模式共用一个表单：函数模式用 xMin/xMax，数列模式用 terms。 */
+type WorkspaceFormValues = {
+  expression: string;
+  xMin?: number;
+  xMax?: number;
+  terms?: number;
+};
 
 const DEFAULT: PlotRequest = { expression: 'x^2', xMin: -5, xMax: 5 };
 const preferences = createStorage('preferences', preferencesSchema);
@@ -89,6 +105,51 @@ function PlotSummaryPanel({
   );
 }
 
+function SequenceSummaryPanel({
+  result,
+  terms,
+}: {
+  result: PlotResult;
+  terms: number;
+}) {
+  const finiteYs = result.points
+    .map((point) => point[1])
+    .filter((y): y is number => y !== null);
+  const minY = finiteYs.length > 0 ? Math.min(...finiteYs) : null;
+  const maxY = finiteYs.length > 0 ? Math.max(...finiteYs) : null;
+  const rangeText =
+    minY === null || maxY === null
+      ? '前若干项中没有可显示的有限实数值。'
+      : `前 ${terms} 项中的有限值范围：a_n ≈ ${formatNumber(minY)} 至 ${formatNumber(maxY)}`;
+  return (
+    <section
+      className="plot-summary"
+      aria-labelledby="sequence-summary-heading"
+    >
+      <h3 id="sequence-summary-heading">数列数据摘要</h3>
+      <p className="chart-summary">
+        键盘与屏幕阅读器可用的文本替代；只观察前若干项的数值，不构成收敛性、
+        单调性等数学结论的证明。
+      </p>
+      <ul>
+        <li>
+          有效项：{finiteYs.length} 项（共 {terms} 项）
+        </li>
+        <li>{rangeText}</li>
+        <li>
+          {result.gaps === 0
+            ? '所有项都采样到有限实数值。'
+            : `${result.gaps} 项未采样到有限实数值（如超出定义域），散点图中留空；留空不代表该处是数学间断。`}
+        </li>
+      </ul>
+      <p className="chart-summary">
+        显示限制：非有限值或 |a_n| 大于 10⁶ 的项留空。散点图只呈现前 {terms}{' '}
+        项的数值，观察有限多项不能证明数列收敛、单调或有界。
+      </p>
+    </section>
+  );
+}
+
 function PlottingWorkspace({
   initial,
   warning,
@@ -98,8 +159,10 @@ function PlottingWorkspace({
   warning?: string;
   initialStorageError?: string;
 }) {
-  const [form] = Form.useForm<PlotRequest>();
+  const [form] = Form.useForm<WorkspaceFormValues>();
   const { state: plot, draw: drawPlot } = usePlotCalculation(initial);
+  const { state: sequence, draw: drawSequence } = useSequenceCalculation();
+  const [mode, setMode] = useState<PlotMode>('function');
   const [saving, setSaving] = useState(false);
   const [storageError, setStorageError] = useState(initialStorageError);
   // 知识来源提示只在当前绘图仍与链接示例一致时显示
@@ -145,15 +208,43 @@ function PlottingWorkspace({
     setExportStatus(null);
     drawPlot({ ...value, sourceKnowledgeId });
   };
+  // 模式切换后提交：数列走通项+项数，函数走表达式+区间。
+  const onFinish = (values: WorkspaceFormValues) => {
+    if (mode === 'sequence') {
+      if (typeof values.terms !== 'number') return; // 表单校验已兜底
+      setExportStatus(null);
+      drawSequence({ expression: values.expression, terms: values.terms });
+      return;
+    }
+    const { expression, xMin, xMax } = values;
+    if (typeof xMin !== 'number' || typeof xMax !== 'number') return;
+    draw({ expression, xMin, xMax });
+  };
   // 导出当前画布为 PNG（ECharts getDataURL），不重新采样、不上传。
   const exportImage = () => {
-    if (plot.status !== 'ready') return;
+    let dataUrl: string;
+    let filename: string;
+    if (mode === 'function') {
+      if (plot.status !== 'ready') return;
+      dataUrl = chartRef.current?.exportPng() ?? '';
+      filename = buildPlotExportName(
+        plot.request.expression,
+        plot.request.xMin,
+        plot.request.xMax,
+      );
+    } else {
+      if (sequence.status !== 'ready') return;
+      dataUrl = chartRef.current?.exportPng() ?? '';
+      filename = buildSequenceExportName(
+        sequence.request.expression,
+        sequence.request.terms,
+      );
+    }
     try {
-      const dataUrl = chartRef.current?.exportPng() ?? '';
       if (!dataUrl) {
         setExportStatus({
           ok: false,
-          text: '导出失败：图像尚未绘制完成，请先绘制函数。',
+          text: `导出失败：图像尚未绘制完成，请先绘制${mode === 'function' ? '函数' : '数列'}。`,
         });
         return;
       }
@@ -162,11 +253,6 @@ function PlottingWorkspace({
         setExportStatus({ ok: false, text: '导出失败：画布数据无法解析。' });
         return;
       }
-      const filename = buildPlotExportName(
-        plot.request.expression,
-        plot.request.xMin,
-        plot.request.xMax,
-      );
       if (!downloadBlob(blob, filename)) {
         setExportStatus({ ok: false, text: '导出失败：浏览器下载不可用。' });
         return;
@@ -194,7 +280,7 @@ function PlottingWorkspace({
     setSaving(true);
     setSaveStatus(null);
     try {
-      let values: PlotRequest;
+      let values: WorkspaceFormValues;
       try {
         values = await form.validateFields();
       } catch {
@@ -321,7 +407,7 @@ function PlottingWorkspace({
           }
         />
       )}
-      {sourceId && (
+      {mode === 'function' && sourceId && (
         <Alert
           type="info"
           showIcon
@@ -330,84 +416,129 @@ function PlottingWorkspace({
           className="section-gap-bottom"
         />
       )}
+      <Segmented
+        className="section-gap-bottom"
+        options={[
+          { label: '函数图像', value: 'function' },
+          { label: '数列散点', value: 'sequence' },
+        ]}
+        value={mode}
+        onChange={(value) => {
+          setMode(value as PlotMode);
+          setExportStatus(null);
+        }}
+      />
       <div className="plot-layout">
-        <Card title="设置函数" className="plot-settings">
+        <Card
+          title={mode === 'function' ? '设置函数' : '设置数列'}
+          className="plot-settings"
+        >
           <Form
             form={form}
             layout="vertical"
             initialValues={initial}
-            onFinish={draw}
+            onFinish={onFinish}
             requiredMark={false}
           >
             <Form.Item
               name="expression"
-              label="函数表达式 f(x)"
+              label={mode === 'function' ? '函数表达式 f(x)' : '通项表达式 a_n'}
               rules={[
                 {
                   required: true,
                   whitespace: true,
-                  message: '请输入函数表达式',
+                  message:
+                    mode === 'function'
+                      ? '请输入函数表达式'
+                      : '请输入通项表达式',
                 },
                 { max: 160, message: '最多 160 个字符' },
               ]}
             >
-              <Input placeholder="例如 sin(x) + x^2" autoComplete="off" />
+              <Input
+                placeholder={
+                  mode === 'function' ? '例如 sin(x) + x^2' : '例如 sin(n)/n'
+                }
+                autoComplete="off"
+              />
             </Form.Item>
-            <div className="range-fields">
+            {mode === 'function' && (
+              <div className="range-fields">
+                <Form.Item
+                  name="xMin"
+                  label="左端点"
+                  rules={[
+                    { required: true, type: 'number', message: '请输入左端点' },
+                  ]}
+                >
+                  <InputNumber min={-10000} max={10000} />
+                </Form.Item>
+                <Form.Item
+                  name="xMax"
+                  label="右端点"
+                  rules={[
+                    { required: true, type: 'number', message: '请输入右端点' },
+                  ]}
+                >
+                  <InputNumber min={-10000} max={10000} />
+                </Form.Item>
+              </div>
+            )}
+            {mode === 'sequence' && (
               <Form.Item
-                name="xMin"
-                label="左端点"
+                name="terms"
+                label="绘制项数"
+                initialValue={30}
                 rules={[
-                  { required: true, type: 'number', message: '请输入左端点' },
+                  { required: true, type: 'number', message: '请输入项数' },
                 ]}
               >
-                <InputNumber min={-10000} max={10000} />
+                <InputNumber min={2} max={1000} precision={0} />
               </Form.Item>
-              <Form.Item
-                name="xMax"
-                label="右端点"
-                rules={[
-                  { required: true, type: 'number', message: '请输入右端点' },
-                ]}
-              >
-                <InputNumber min={-10000} max={10000} />
-              </Form.Item>
-            </div>
+            )}
             <Button
               type="primary"
               htmlType="submit"
               icon={<LineChartOutlined />}
               block
-              loading={plot.status === 'loading'}
+              loading={
+                mode === 'function'
+                  ? plot.status === 'loading'
+                  : sequence.status === 'loading'
+              }
             >
-              绘制函数
+              {mode === 'function' ? '绘制函数' : '绘制数列'}
             </Button>
           </Form>
-          <Button
-            className="section-gap"
-            icon={<SaveOutlined />}
-            onClick={() => void save()}
-            loading={saving}
-            block
-          >
-            保存默认设置
-          </Button>
-          <h3 className="detail-heading">快速尝试</h3>
-          <Space wrap>
-            {['x^2', 'abs(x)', '1/x', 'sin(x)'].map((expression) => (
+          {mode === 'function' && (
+            <>
               <Button
-                key={expression}
-                size="small"
-                onClick={() => preset(expression)}
+                className="section-gap"
+                icon={<SaveOutlined />}
+                onClick={() => void save()}
+                loading={saving}
+                block
               >
-                {expression}
+                保存默认设置
               </Button>
-            ))}
-          </Space>
+              <h3 className="detail-heading">快速尝试</h3>
+              <Space wrap>
+                {['x^2', 'abs(x)', '1/x', 'sin(x)'].map((expression) => (
+                  <Button
+                    key={expression}
+                    size="small"
+                    onClick={() => preset(expression)}
+                  >
+                    {expression}
+                  </Button>
+                ))}
+              </Space>
+            </>
+          )}
           <p className="small-note">
-            支持 x、pi、e，以及 sin / cos / tan / asin / acos / atan / abs /
-            sqrt / log / exp。log 为自然对数。幂指数限数字常量，绝对值不超过
-            20。
+            支持 {mode === 'function' ? 'x' : 'n'}、pi、e，以及 sin / cos / tan
+            / asin / acos / atan / abs / sqrt / log / exp。log
+            为自然对数。幂指数限数字常量，绝对值不超过 20。
           </p>
           {saveStatus && (
             <Alert
@@ -418,13 +549,17 @@ function PlottingWorkspace({
           )}
         </Card>
         <Card
-          title="函数图像"
+          title={mode === 'function' ? '函数图像' : '数列散点'}
           extra={
             <Space>
               <Button
                 size="small"
                 icon={<DownloadOutlined />}
-                disabled={plot.status !== 'ready'}
+                disabled={
+                  mode === 'function'
+                    ? plot.status !== 'ready'
+                    : sequence.status !== 'ready'
+                }
                 onClick={exportImage}
               >
                 导出图像
@@ -433,52 +568,108 @@ function PlottingWorkspace({
             </Space>
           }
         >
-          {plot.status === 'loading' && (
-            <div className="chart-loading">
-              <Spin />
-              <p>正在计算采样点…</p>
-            </div>
-          )}
-          {plot.status === 'error' && (
-            <Alert
-              type="error"
-              showIcon
-              title="无法绘制"
-              description={plot.message}
-            />
-          )}
-          {plot.status === 'ready' && result && summary && (
+          {mode === 'function' ? (
             <>
-              <FunctionChart
-                ref={chartRef}
-                points={result.points}
-                expression={plot.request.expression}
-                gapMarkers={gapMarkers}
-              />
-              <p className="chart-summary" role="status">
-                f(x) = {plot.request.expression} · 区间 [{plot.request.xMin},{' '}
-                {plot.request.xMax}] · {result.points.length} 个图像点 ·{' '}
-                {result.gaps} 处采样缺口
-              </p>
-              {exportStatus && (
+              {plot.status === 'loading' && (
+                <div className="chart-loading">
+                  <Spin />
+                  <p>正在计算采样点…</p>
+                </div>
+              )}
+              {plot.status === 'error' && (
                 <Alert
-                  type={exportStatus.ok ? 'success' : 'error'}
-                  title={exportStatus.text}
+                  type="error"
                   showIcon
+                  title="无法绘制"
+                  description={plot.message}
                 />
               )}
-              {result.points.every((point) => point[1] === null) && (
+              {plot.status === 'ready' && result && summary && (
+                <>
+                  <FunctionChart
+                    ref={chartRef}
+                    points={result.points}
+                    expression={plot.request.expression}
+                    gapMarkers={gapMarkers}
+                  />
+                  <p className="chart-summary" role="status">
+                    f(x) = {plot.request.expression} · 区间 [{plot.request.xMin}
+                    , {plot.request.xMax}] · {result.points.length} 个图像点 ·{' '}
+                    {result.gaps} 处采样缺口
+                  </p>
+                  {result.points.every((point) => point[1] === null) && (
+                    <Alert
+                      type="warning"
+                      title="该范围内没有可显示的有限实数值，请调整表达式或范围。"
+                    />
+                  )}
+                  <PlotSummaryPanel
+                    summary={summary}
+                    totalPoints={result.points.length}
+                  />
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              {sequence.status === 'idle' && (
+                <p className="chart-summary">
+                  输入通项表达式与项数，点击“绘制数列”后显示前若干项的散点。
+                </p>
+              )}
+              {sequence.status === 'loading' && (
+                <div className="chart-loading">
+                  <Spin />
+                  <p>正在计算前若干项…</p>
+                </div>
+              )}
+              {sequence.status === 'error' && (
                 <Alert
-                  type="warning"
-                  title="该范围内没有可显示的有限实数值，请调整表达式或范围。"
+                  type="error"
+                  showIcon
+                  title="无法绘制"
+                  description={sequence.message}
                 />
               )}
-              <PlotSummaryPanel
-                summary={summary}
-                totalPoints={result.points.length}
-              />
+              {sequence.status === 'ready' && (
+                <>
+                  <FunctionChart
+                    ref={chartRef}
+                    points={sequence.result.points}
+                    expression={sequence.request.expression}
+                    variant="sequence"
+                  />
+                  <p className="chart-summary" role="status">
+                    a_n = {sequence.request.expression} · 前{' '}
+                    {sequence.request.terms} 项 · {sequence.result.gaps}{' '}
+                    项无定义（留空）
+                  </p>
+                  {sequence.result.points.every(
+                    (point) => point[1] === null,
+                  ) && (
+                    <Alert
+                      type="warning"
+                      title="前若干项中没有可显示的有限实数值，请调整通项表达式。"
+                    />
+                  )}
+                  <SequenceSummaryPanel
+                    result={sequence.result}
+                    terms={sequence.request.terms}
+                  />
+                </>
+              )}
             </>
           )}
+          {(mode === 'function'
+            ? plot.status === 'ready'
+            : sequence.status === 'ready') &&
+            exportStatus && (
+              <Alert
+                type={exportStatus.ok ? 'success' : 'error'}
+                title={exportStatus.text}
+                showIcon
+              />
+            )}
         </Card>
       </div>
       <Alert
@@ -486,7 +677,11 @@ function PlottingWorkspace({
         type="warning"
         showIcon
         title="观察图像，不等于证明结论"
-        description="这里只做有限采样。超出实数定义域、非有限值和绝对值大于 10⁶ 的结果会留空，留空只是采样缺口，不一定是数学间断；自适应探测与二分定位仅能启发式识别部分疑似间断，可能漏检或误判，不保证识别全部间断点或高频变化。"
+        description={
+          mode === 'function'
+            ? '这里只做有限采样。超出实数定义域、非有限值和绝对值大于 10⁶ 的结果会留空，留空只是采样缺口，不一定是数学间断；自适应探测与二分定位仅能启发式识别部分疑似间断，可能漏检或误判，不保证识别全部间断点或高频变化。'
+            : '这里只对前若干项做数值采样。无定义或非有限的项会留空，留空只是采样缺口，不一定是数学间断；观察前若干项的散点不能证明数列收敛、单调或有界，也不能代替极限计算。'
+        }
       />
     </>
   );
