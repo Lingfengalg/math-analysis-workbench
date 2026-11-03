@@ -4,6 +4,7 @@ import {
   type PlotRequest,
   type PlotResult,
 } from '@/shared/contracts';
+import { detectHorizontalAsymptotes } from './asymptote';
 
 const FUNCTIONS = new Set([
   'sin',
@@ -257,5 +258,6 @@ export function sampleFunction(
     points.push([x, y]);
     previous = [x, y];
   }
-  return { points, gaps };
+  const asymptotes = detectHorizontalAsymptotes(evaluate, points, xMin, xMax);
+  return { points, gaps, asymptotes };
 }

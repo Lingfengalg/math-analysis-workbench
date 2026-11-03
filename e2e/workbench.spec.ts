@@ -173,6 +173,52 @@ test('绘图结果提供数据摘要与疑似间断标记，键盘可操作', as
   await expect(page.getByText('未检测到采样缺口。')).toBeVisible();
 });
 
+test('水平渐近趋势提示以虚线绘制并注明是数值观察', async ({ page }) => {
+  await page.goto('/#/plotting');
+  await expect(page.getByRole('status')).toContainText('f(x)', {
+    timeout: 20000,
+  });
+  await page.getByRole('button', { name: '1/x', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('f(x) = 1/x');
+  await expect(page.getByText(/水平渐近趋势提示：左侧疑似趋于/)).toBeVisible();
+  await expect(page.getByText(/右侧疑似趋于/)).toBeVisible();
+  await expect(page.getByText(/数值观察，不构成极限证明/)).toBeVisible();
+  // Verify the actual canvas line, not just the surrounding text:
+  // 渐近趋势虚线为青绿色 #0e7490，与竖直间断标记的橙色 #c47f17 区分。
+  await expect
+    .poll(async () =>
+      page.locator('.function-chart canvas').evaluateAll(
+        (canvases) =>
+          canvases.some((element) => {
+            const canvas = element as HTMLCanvasElement;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return false;
+            const pixels = ctx.getImageData(
+              0,
+              0,
+              canvas.width,
+              canvas.height,
+            ).data;
+            let count = 0;
+            for (let i = 0; i < pixels.length; i += 4) {
+              if (
+                pixels[i] <= 45 &&
+                pixels[i + 1] >= 90 &&
+                pixels[i + 1] <= 140 &&
+                pixels[i + 2] >= 120 &&
+                pixels[i + 2] <= 170 &&
+                pixels[i + 3] > 100
+              )
+                count++;
+            }
+            return count > 10;
+          }),
+        { timeout: 10000 },
+      ),
+    )
+    .toBe(true);
+});
+
 test('默认绘图设置可在刷新后保留', async ({ page }) => {
   await page.goto('/#/plotting');
   await expect(page.getByRole('status')).toContainText('f(x)', {

@@ -18,9 +18,20 @@ export const plotRequestSchema = z
 
 export type PlotRequest = z.infer<typeof plotRequestSchema>;
 export type PlotPoint = [number, number | null];
+/** 水平渐近趋势候选：数值启发式结果，可能漏检或误判，不构成极限证明。 */
+export interface HorizontalAsymptoteCandidate {
+  side: 'left' | 'right';
+  /** 候选水平线 y 值（尾部后半段均值，数值近似，不等于极限值）。 */
+  y: number;
+  /** 虚线绘制范围（该尾部的 x 跨度）。 */
+  xFrom: number;
+  xTo: number;
+}
 export interface PlotResult {
   points: PlotPoint[];
   gaps: number;
+  /** 仅函数模式产生；数列模式不检测渐近趋势。 */
+  asymptotes?: HorizontalAsymptoteCandidate[];
 }
 export type PlotWorkerResponse =
   { ok: true; data: PlotResult } | { ok: false; error: string };
