@@ -343,6 +343,52 @@ input {
   color: #596780;
   margin: 0;
 }
+.chart-legend {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  font-size: 12px;
+  color: #596780;
+}
+.chart-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.legend-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+  flex: none;
+}
+.comparison-note {
+  margin-top: 0;
+}
+.comparison-entry {
+  margin-top: 12px;
+}
+.comparison-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.comparison-input {
+  flex: 1;
+  min-width: 0;
+}
+.comparison-entry .chart-summary {
+  margin: 4px 0 0;
+}
+.comparison-error {
+  color: #b02a37;
+}
+.add-comparison {
+  margin-top: 16px;
+}
 .task-index {
   display: inline-block;
   font-size: 11px;

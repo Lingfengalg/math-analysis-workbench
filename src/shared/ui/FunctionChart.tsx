@@ -10,6 +10,13 @@ import {
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import type { PlotPoint } from '@/shared/contracts';
+import {
+  comparisonCurveColor,
+  curveExpressionsLabel,
+  finiteYRange,
+  GAP_MARKER_COLOR,
+  MAIN_CURVE_COLOR,
+} from './chart-series';
 
 registerCharts([
   LineChart,
@@ -26,16 +33,27 @@ export interface FunctionChartHandle {
   exportPng: () => string;
 }
 
-interface FunctionChartProps {
+/** 对比曲线：与主曲线共享坐标轴与缩放，独立采样、独立颜色。 */
+export interface ComparisonCurve {
   points: PlotPoint[];
   expression: string;
   gapMarkers?: number[];
 }
 
+interface FunctionChartProps {
+  points: PlotPoint[];
+  expression: string;
+  gapMarkers?: number[];
+  comparisons?: ComparisonCurve[];
+}
+
 export const FunctionChart = forwardRef<
   FunctionChartHandle,
   FunctionChartProps
->(function FunctionChart({ points, expression, gapMarkers = [] }, ref) {
+>(function FunctionChart(
+  { points, expression, gapMarkers = [], comparisons = [] },
+  ref,
+) {
   const element = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ReturnType<typeof init> | null>(null);
   useImperativeHandle(ref, () => ({
@@ -50,25 +68,25 @@ export const FunctionChart = forwardRef<
   }));
   useEffect(() => {
     if (!element.current) return;
+    const curves = [
+      { points, expression, gapMarkers },
+      ...comparisons.map((curve) => ({
+        points: curve.points,
+        expression: curve.expression,
+        gapMarkers: curve.gapMarkers ?? [],
+      })),
+    ];
     // ECharts discards marker lines whose endpoints fall outside the axis
-    // extent, so span only the finite data range (which stays inside the
-    // auto-scaled axis thanks to its default margin).
-    const finiteYs = points
-      .map((point) => point[1])
-      .filter((y): y is number => y !== null);
-    const dataMin = finiteYs.length > 0 ? Math.min(...finiteYs) : 0;
-    const dataMax = finiteYs.length > 0 ? Math.max(...finiteYs) : 1;
-    // For flat data the data range degenerates to a point; widen it a bit
-    // so the marker line still has a visible length.
-    const span = dataMax - dataMin;
-    const pad = span > 0 ? 0 : Math.max(Math.abs(dataMin) * 0.05, 0.5);
+    // extent, so span only the finite data range shared by all curves
+    // (which stays inside the auto-scaled axis thanks to its default margin).
+    const { min: dataMin, max: dataMax } = finiteYRange(curves);
     const chart = init(element.current);
     chartRef.current = chart;
     chart.setOption({
       animation: false,
       aria: {
         enabled: true,
-        description: `函数 ${expression} 的采样图像`,
+        description: `函数 ${curveExpressionsLabel(curves)} 的采样图像`,
       },
       grid: { left: 58, right: 28, top: 28, bottom: 65 },
       tooltip: { trigger: 'axis', renderMode: 'richText' },
@@ -86,32 +104,34 @@ export const FunctionChart = forwardRef<
         { type: 'inside', filterMode: 'none' },
         { type: 'slider', height: 18, bottom: 8 },
       ],
-      series: [
-        {
+      series: curves.map((curve, index) => {
+        const color =
+          index === 0 ? MAIN_CURVE_COLOR : comparisonCurveColor(index - 1);
+        return {
           type: 'line',
-          data: points,
+          data: curve.points,
           showSymbol: false,
           connectNulls: false,
-          lineStyle: { color: '#485bb2', width: 2.5 },
+          lineStyle: { color, width: 2.5 },
           markLine:
-            gapMarkers.length > 0
+            curve.gapMarkers.length > 0
               ? {
                   silent: true,
                   symbol: 'none',
                   label: { show: false },
                   lineStyle: {
                     type: 'dashed',
-                    color: '#c47f17',
+                    color: GAP_MARKER_COLOR,
                     width: 1.5,
                   },
-                  data: gapMarkers.map((x) => [
-                    { coord: [x, dataMin - pad] },
-                    { coord: [x, dataMax + pad] },
+                  data: curve.gapMarkers.map((x) => [
+                    { coord: [x, dataMin] },
+                    { coord: [x, dataMax] },
                   ]),
                 }
               : undefined,
-        },
-      ],
+        };
+      }),
     });
     const observer = new ResizeObserver(() => chart.resize());
     observer.observe(element.current);
@@ -120,14 +140,20 @@ export const FunctionChart = forwardRef<
       chart.dispose();
       chartRef.current = null;
     };
-  }, [points, expression, gapMarkers]);
+  }, [points, expression, gapMarkers, comparisons]);
   return (
     <div
       ref={element}
       className="function-chart"
       data-annotation-anchor="plotting:chart"
       role="img"
-      aria-label={`函数 ${expression} 的采样图像`}
+      aria-label={`函数 ${curveExpressionsLabel([
+        { points, expression },
+        ...comparisons.map((curve) => ({
+          points: curve.points,
+          expression: curve.expression,
+        })),
+      ])} 的采样图像`}
     />
   );
 });
