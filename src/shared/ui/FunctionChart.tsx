@@ -16,6 +16,8 @@ import {
   finiteYRange,
   GAP_MARKER_COLOR,
   MAIN_CURVE_COLOR,
+  TAYLOR_COLOR,
+  type TaylorOverlay,
 } from './chart-series';
 
 registerCharts([
@@ -45,13 +47,14 @@ interface FunctionChartProps {
   expression: string;
   gapMarkers?: number[];
   comparisons?: ComparisonCurve[];
+  taylor?: TaylorOverlay | null;
 }
 
 export const FunctionChart = forwardRef<
   FunctionChartHandle,
   FunctionChartProps
 >(function FunctionChart(
-  { points, expression, gapMarkers = [], comparisons = [] },
+  { points, expression, gapMarkers = [], comparisons = [], taylor = null },
   ref,
 ) {
   const element = useRef<HTMLDivElement>(null);
@@ -79,14 +82,18 @@ export const FunctionChart = forwardRef<
     // ECharts discards marker lines whose endpoints fall outside the axis
     // extent, so span only the finite data range shared by all curves
     // (which stays inside the auto-scaled axis thanks to its default margin).
-    const { min: dataMin, max: dataMax } = finiteYRange(curves);
+    const { min: dataMin, max: dataMax } = finiteYRange([
+      ...curves,
+      // 泰勒多项式参与 y 范围，保证叠加曲线在初始视野内可见。
+      ...(taylor ? [{ points: taylor.points, expression: '' }] : []),
+    ]);
     const chart = init(element.current);
     chartRef.current = chart;
     chart.setOption({
       animation: false,
       aria: {
         enabled: true,
-        description: `函数 ${curveExpressionsLabel(curves)} 的采样图像`,
+        description: `函数 ${curveExpressionsLabel(curves)} 的采样图像${taylor ? `，叠加 ${taylor.order} 阶泰勒多项式（展开中心 ${taylor.center}）` : ''}`,
       },
       grid: { left: 58, right: 28, top: 28, bottom: 65 },
       tooltip: { trigger: 'axis', renderMode: 'richText' },
@@ -104,34 +111,49 @@ export const FunctionChart = forwardRef<
         { type: 'inside', filterMode: 'none' },
         { type: 'slider', height: 18, bottom: 8 },
       ],
-      series: curves.map((curve, index) => {
-        const color =
-          index === 0 ? MAIN_CURVE_COLOR : comparisonCurveColor(index - 1);
-        return {
-          type: 'line',
-          data: curve.points,
-          showSymbol: false,
-          connectNulls: false,
-          lineStyle: { color, width: 2.5 },
-          markLine:
-            curve.gapMarkers.length > 0
-              ? {
-                  silent: true,
-                  symbol: 'none',
-                  label: { show: false },
-                  lineStyle: {
-                    type: 'dashed',
-                    color: GAP_MARKER_COLOR,
-                    width: 1.5,
-                  },
-                  data: curve.gapMarkers.map((x) => [
-                    { coord: [x, dataMin] },
-                    { coord: [x, dataMax] },
-                  ]),
-                }
-              : undefined,
-        };
-      }),
+      series: [
+        ...curves.map((curve, index) => {
+          const color =
+            index === 0 ? MAIN_CURVE_COLOR : comparisonCurveColor(index - 1);
+          return {
+            type: 'line',
+            data: curve.points,
+            showSymbol: false,
+            connectNulls: false,
+            lineStyle: { color, width: 2.5 },
+            markLine:
+              curve.gapMarkers.length > 0
+                ? {
+                    silent: true,
+                    symbol: 'none',
+                    label: { show: false },
+                    lineStyle: {
+                      type: 'dashed',
+                      color: GAP_MARKER_COLOR,
+                      width: 1.5,
+                    },
+                    data: curve.gapMarkers.map((x) => [
+                      { coord: [x, dataMin] },
+                      { coord: [x, dataMax] },
+                    ]),
+                  }
+                : undefined,
+          };
+        }),
+        ...(taylor
+          ? [
+              {
+                name: '泰勒多项式',
+                type: 'line',
+                data: taylor.points,
+                showSymbol: false,
+                connectNulls: false,
+                silent: true,
+                lineStyle: { color: TAYLOR_COLOR, width: 2 },
+              },
+            ]
+          : []),
+      ],
     });
     const observer = new ResizeObserver(() => chart.resize());
     observer.observe(element.current);
@@ -140,7 +162,7 @@ export const FunctionChart = forwardRef<
       chart.dispose();
       chartRef.current = null;
     };
-  }, [points, expression, gapMarkers, comparisons]);
+  }, [points, expression, gapMarkers, comparisons, taylor]);
   return (
     <div
       ref={element}
@@ -153,7 +175,7 @@ export const FunctionChart = forwardRef<
           points: curve.points,
           expression: curve.expression,
         })),
-      ])} 的采样图像`}
+      ])} 的采样图像${taylor ? `，叠加 ${taylor.order} 阶泰勒多项式（展开中心 ${taylor.center}）` : ''}`}
     />
   );
 });

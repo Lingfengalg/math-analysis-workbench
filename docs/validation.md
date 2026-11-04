@@ -397,3 +397,87 @@
 - ComparisonEntry 首版在渲染期更新 onUpdateRef、range effect 依赖不完整，被
   eslint（react-hooks/refs 与 exhaustive-deps）拦截；改为在 effect 内更新 ref、
   range 整体进入依赖后通过。
+
+## 2026-11-04 泰勒多项式逼近滑块（#64）
+
+背景与验收：issue #64。绘图页支持叠加泰勒多项式 Tₙ(x)（阶数 1–8、展开中心
+可调），系数由反复符号求导在展开中心处取值并除以阶乘得到；状态行与图例注明
+近似前提，不声称收敛或等价。
+
+| 检查                   | 结果                                                                                                                              |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run format:check` | 通过（切换分支后 14 个文件的 CRLF 幻影差异已用 prettier 归一化）                                                                  |
+| `npm run lint`         | 通过                                                                                                                              |
+| `npm run typecheck`    | 通过                                                                                                                              |
+| `npm run test:run`     | 25 个测试文件，254 项测试通过（新增 taylor 7 项、标签 4 项 + 颜色 1 项、client 生命周期 3 项、泰勒 hook 3 项）                    |
+| `npm run build`        | 通过，产物在 dist/                                                                                                                |
+| `npm run test:e2e`     | 45 项 Chromium 流程通过（含新增泰勒用例）；首轮有 1 项无关 annotation 用例并发下偶发超时，单独重跑与全量重跑均通过（见排错记录） |
+| `npm run perf:budget`  | plotting 609.3/204.3、plot.worker 738.5/201.8、knowledge 260.8/78.4、index 164.9/57.3；全部 JS 2600.7/812.8，预算 2800/880 → 通过 |
+
+环境说明：Windows 11、Node 24.21.0（CI 为 Linux、Node 22.23.4），仅 Chromium。
+
+### 改动要点
+
+- `src/shared/contracts/index.ts`：新增 `TaylorResult { coefficients, points }`；
+  消息联合新增 `{ type: 'taylor', request, center, order }`（独立请求，不并入
+  plot），响应 `{ ok: true, type: 'taylor', data }`。
+- `src/shared/math/sample.ts` 重构：拆分 `validateMathNode`、
+  `parseValidatedExpression`、`compileNode`，`compileExpression` 为其组合；
+  FunctionNode 报错指明不支持的具体函数名（如「（不支持 sec）」）。该重构与
+  #63 同源，本分支因求导结果复用校验而先行落地（见排错记录）。
+- 新增 `src/shared/math/taylor.ts`：`calculateTaylorPolynomial(request, center,
+  order)` 循环做「符号求导 → 白名单校验 → 编译求值」，系数为导数在展开中心处
+  的数值除以阶乘；任一步求导失败、超出白名单或中心处不可求值时报明确错误；
+  `points` 按 801 点采样（非有限值或量级 > 10⁶ 留空）。
+- `src/shared/math/client.ts`：`runWorkerTask` 通用生命周期 + `calculateTaylor`
+  （与 `calculatePlot` 共用取消/超时/清理语义）。
+- `src/shared/ui/chart-series.ts`：`TAYLOR_COLOR #d946ef`（与主曲线蓝、间断橙、
+  对比三色均可区分）、`TaylorOverlay`、`taylorPolynomialLabel`（跳过零系数、
+  系数 1/±1 省略、非零中心用 (x − a) 形式、全零输出 0）。
+- `FunctionChart` 新增 `taylor` 属性：泰勒点参与 y 范围保证初始可见；aria 名称
+  追加「，叠加 n 阶泰勒多项式（展开中心 a）」；series 追加（不跨空连线、不响应
+  悬浮、颜色紫红）。不传时渲染路径与既有单曲线行为一致。
+- 新增 `useTaylorCalculation`：渲染期重置（previous 比较）+ effect 自动计算，
+  与主曲线生命周期解耦；任一输入缺失时回空闲。
+- 绘图页「泰勒多项式」区：勾选 + 展开中心 InputNumber + 阶数 Slider
+  （`ariaLabelForHandle`）+ 状态行（含「仅在收敛区间内近似原函数，图像不等于
+  证明」）+ 图例条目。
+
+### 验证
+
+- 单测 18 项：系数正确性（sin@0 的 T₃ = [0, 1, 0, −1/6]、exp@0 的 T₂ =
+  [1, 1, 1/2]）；更高阶在中心附近更接近原函数（数值断言，不声称收敛）；采样点
+  与系数直接求和一致；tan 求导超白名单（sec）报错；1/x 在 0 处不可求值报错；
+  非法阶数与展开中心报错；标签 4 项（跳零项、(x − a) 形式、全零、系数 −1）；
+  颜色互异 1 项；client 生命周期 3 项（消息形状、类型不符、业务错误与取消共享
+  结算）；hook 3 项（齐备自动计算与缺失中止、阶数变化重算且旧结果不覆盖、错误
+  后重算恢复）。
+- e2e：sin(x) 预设 → 勾选后状态含「x − 0.16667·x^3」与「图像不等于证明」；
+  图例含「T₃(x)（展开中心 0）」；图像 aria 名称含「叠加 3 阶泰勒多项式（展开
+  中心 0）」；画布像素扫描命中紫红 #d946ef（颜色窗口与主曲线蓝、间断橙、对比
+  三色互不重叠）；键盘 ArrowRight ×2 升到 T₅，状态变为「0.0083333·x^5」、
+  aria 名称同步为 5 阶、紫红像素仍在；取消勾选后状态与紫红像素均消失。既有
+  44 项 e2e 全部保持通过。
+
+### 已知限制
+
+- 泰勒多项式仅在收敛区间内近似原函数，图像不等于证明；界面状态行明示。
+- 系数显示为数值舍入（五位有效数字），非精确分数（如 1/6 → 0.16667）。
+- 导函数超出白名单（如 tan → sec）或某阶导在展开中心处不可求值（如 1/x 在 0）
+  时明确报错并停止，不给出部分结果。
+- 阶数上限 8：更高阶反复符号求导收益与显示意义有限，且避免请求耗时膨胀。
+
+### 排错记录
+
+- Slider 的 `aria-label` 透传不生效：rc-slider 滑块把手只读取
+  `ariaLabelForHandle` 数组，e2e 的 `getByRole('slider', { name })` 定位超时
+  暴露；改为 `ariaLabelForHandle={['泰勒多项式阶数']}` 后通过。
+- 分支切换回退了 #63 的 sample.ts 重构，taylor.ts 引用的
+  `parseValidatedExpression` / `validateMathNode` / `compileNode` 不存在，
+  typecheck 报 TS2305；在本分支补做同源重构（与 #63 内容一致，合并时解决冲突）。
+- taylor.test.ts 首版注释把区间中点 x = 0 误写为展开中心（x² 在 1 处展开，
+  区间 [-5, 5] 的中点是 0 而非中心 1）；断言本身正确（T₂(x²) = x² 精确成立），
+  已改正注释。
+- 全量 e2e 首轮 annotation 用例「清空全部批注」并发下偶发超时（5 秒轮询未等到
+  列表），与本次改动无关；单独重跑与全量重跑均通过。未改动该测试，如后续复发
+  再单独处理。

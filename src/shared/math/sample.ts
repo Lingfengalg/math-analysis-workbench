@@ -27,17 +27,8 @@ const TYPES = new Set([
   'FunctionNode',
 ]);
 
-export function compileExpression(
-  expression: string,
-): (x: number) => number | null {
-  if (!expression.trim() || expression.length > 160)
-    throw new Error('表达式长度应为 1–160 个字符。');
-  let root: MathNode;
-  try {
-    root = parse(expression);
-  } catch {
-    throw new Error('表达式无法解析，请检查括号和运算符。');
-  }
+/** 校验解析后的表达式树：白名单函数、变量、运算符与结构规模。 */
+export function validateMathNode(root: MathNode): void {
   let count = 0;
   root.traverse((node, _path, parent) => {
     count += 1;
@@ -67,7 +58,9 @@ export function compileExpression(
         !FUNCTIONS.has(String(fn.fn)) ||
         fn.args.length !== 1
       )
-        throw new Error('仅支持白名单内的单参数函数。');
+        throw new Error(
+          `仅支持白名单内的单参数函数（不支持 ${String(fn.fn)}）。`,
+        );
     }
     if (node.type === 'ConstantNode') {
       const value = (node as unknown as { value: unknown }).value;
@@ -92,6 +85,26 @@ export function compileExpression(
       }
     }
   });
+}
+
+/** 解析表达式并对白名单做完整校验，返回语法树。 */
+export function parseValidatedExpression(expression: string): MathNode {
+  if (!expression.trim() || expression.length > 160)
+    throw new Error('表达式长度应为 1–160 个字符。');
+  let root: MathNode;
+  try {
+    root = parse(expression);
+  } catch {
+    throw new Error('表达式无法解析，请检查括号和运算符。');
+  }
+  validateMathNode(root);
+  return root;
+}
+
+type Evaluator = (x: number) => number | null;
+
+/** 编译校验过的语法树为单变量求值函数。 */
+export function compileNode(root: MathNode): Evaluator {
   const compiled = root.compile();
   return (x) => {
     try {
@@ -107,7 +120,11 @@ export function compileExpression(
   };
 }
 
-type Evaluator = (x: number) => number | null;
+export function compileExpression(
+  expression: string,
+): (x: number) => number | null {
+  return compileNode(parseValidatedExpression(expression));
+}
 
 // Interior probes between two adjacent finite samples.
 const PROBE_COUNT = 4;

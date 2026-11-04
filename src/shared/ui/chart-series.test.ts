@@ -6,12 +6,24 @@ import {
   finiteYRange,
   GAP_MARKER_COLOR,
   MAIN_CURVE_COLOR,
+  TAYLOR_COLOR,
+  taylorPolynomialLabel,
 } from './chart-series';
 
 describe('对比曲线颜色分配', () => {
   it('前三条颜色互不相同，且与主曲线、间断标记颜色可区分', () => {
     expect(COMPARISON_CURVE_COLORS.length).toBeGreaterThanOrEqual(3);
     const used = [
+      MAIN_CURVE_COLOR,
+      GAP_MARKER_COLOR,
+      ...COMPARISON_CURVE_COLORS.slice(0, 3),
+    ];
+    expect(new Set(used).size).toBe(used.length);
+  });
+
+  it('泰勒多项式颜色与主曲线、间断标记、对比三色均可区分', () => {
+    const used = [
+      TAYLOR_COLOR,
       MAIN_CURVE_COLOR,
       GAP_MARKER_COLOR,
       ...COMPARISON_CURVE_COLORS.slice(0, 3),
@@ -70,6 +82,28 @@ describe('多曲线有限值范围', () => {
     expect(range.min).toBeLessThan(5);
     expect(range.max).toBeGreaterThan(5);
     expect(range.max - range.min).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('泰勒多项式可读标签', () => {
+  it('sin 在 0 处的 T₃：x − 0.16667·x^3', () => {
+    expect(taylorPolynomialLabel([0, 1, 0, -1 / 6], 0)).toBe('x − 0.16667·x^3');
+  });
+
+  it('exp 在 0 处的 T₂：1 + x + 0.5·x^2', () => {
+    expect(taylorPolynomialLabel([1, 1, 0.5], 0)).toBe('1 + x + 0.5·x^2');
+  });
+
+  it('展开中心非零时以 (x − a) 形式展开', () => {
+    expect(taylorPolynomialLabel([1, 2, 3], 1)).toBe(
+      '1 + 2·(x − 1) + 3·(x − 1)^2',
+    );
+  });
+
+  it('系数为 0 的项跳过；全零时输出 0；系数 −1 输出 −x', () => {
+    expect(taylorPolynomialLabel([0, 0, 1], 0)).toBe('x^2');
+    expect(taylorPolynomialLabel([0, 0, 0], 0)).toBe('0');
+    expect(taylorPolynomialLabel([0, -1], 0)).toBe('−x');
   });
 });
 

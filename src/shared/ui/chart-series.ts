@@ -1,4 +1,5 @@
 import type { PlotPoint } from '@/shared/contracts';
+import { formatNumber } from '@/shared/math/plot-summary';
 
 /** FunctionChart 的一条曲线（主曲线或对比曲线）。 */
 export interface ChartCurve {
@@ -11,6 +12,8 @@ export const MAIN_CURVE_COLOR = '#485bb2';
 export const GAP_MARKER_COLOR = '#c47f17';
 // 与主曲线蓝、疑似间断橙 #c47f17 保持可区分；渐近提示色（#60）为 #0e7490。
 export const COMPARISON_CURVE_COLORS = ['#b03a5b', '#2f855a', '#7b5ea7'];
+// 泰勒多项式：亮紫红，与上述各色保持可区分。
+export const TAYLOR_COLOR = '#d946ef';
 
 /** 第 index 条对比曲线（0 起）的颜色；超出调色板（或负索引）时循环取用。 */
 export function comparisonCurveColor(index: number): string {
@@ -39,4 +42,48 @@ export function finiteYRange(curves: ChartCurve[]): {
 /** 无障碍名称与 aria 描述用的表达式列表，例如「x^2 与 abs(x)」。 */
 export function curveExpressionsLabel(curves: ChartCurve[]): string {
   return curves.map((curve) => curve.expression).join(' 与 ');
+}
+
+/** 叠加在图上的一条泰勒多项式曲线 T_n(x)。 */
+export interface TaylorOverlay {
+  points: PlotPoint[];
+  center: number;
+  order: number;
+}
+
+/** 系数列表的可读多项式，例如 sin 在 0 处的 T₃：「x − 0.16667·x^3」。 */
+export function taylorPolynomialLabel(
+  coefficients: number[],
+  center: number,
+): string {
+  const terms: Array<{ negative: boolean; body: string }> = [];
+  for (let power = 0; power < coefficients.length; power += 1) {
+    const coefficient = coefficients[power];
+    if (coefficient === 0) continue;
+    const variable =
+      center === 0
+        ? power === 0
+          ? ''
+          : power === 1
+            ? 'x'
+            : `x^${power}`
+        : power === 0
+          ? ''
+          : power === 1
+            ? `(x − ${formatNumber(center)})`
+            : `(x − ${formatNumber(center)})^${power}`;
+    const body =
+      Math.abs(coefficient) === 1 && power > 0
+        ? variable
+        : `${formatNumber(Math.abs(coefficient))}${variable === '' ? '' : '·'}${variable}`;
+    terms.push({ negative: coefficient < 0, body });
+  }
+  if (terms.length === 0) return '0';
+  return terms
+    .map((term, index) =>
+      index === 0
+        ? `${term.negative ? '−' : ''}${term.body}`
+        : `${term.negative ? ' − ' : ' + '}${term.body}`,
+    )
+    .join('');
 }

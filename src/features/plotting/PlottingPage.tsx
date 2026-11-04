@@ -4,10 +4,12 @@ import {
   Alert,
   Button,
   Card,
+  Checkbox,
   Form,
   Input,
   InputNumber,
   Popconfirm,
+  Slider,
   Space,
   Spin,
   Tag,
@@ -37,6 +39,9 @@ import {
 import {
   comparisonCurveColor,
   MAIN_CURVE_COLOR,
+  TAYLOR_COLOR,
+  taylorPolynomialLabel,
+  type TaylorOverlay,
 } from '@/shared/ui/chart-series';
 import {
   FunctionChart,
@@ -52,6 +57,7 @@ import {
 import {
   useComparisonCalculation,
   usePlotCalculation,
+  useTaylorCalculation,
 } from './usePlotCalculation';
 
 const DEFAULT: PlotRequest = { expression: 'x^2', xMin: -5, xMax: 5 };
@@ -102,6 +108,9 @@ function PlotSummaryPanel({
 
 // 对比曲线占位字母，按添加顺序分配；上限 3 条。
 const COMPARISON_LABELS = ['g', 'h', 'p'];
+// 泰勒多项式的阶数下标（阶数 1–8）。
+const ORDER_SUBSCRIPTS = ['₀', '₁', '₂', '₃', '₄', '₅', '₆', '₇', '₈'];
+const TAYLOR_DEFAULT_ORDER = 3;
 
 function ComparisonEntry({
   index,
@@ -233,11 +242,30 @@ function PlottingWorkspace({
     xMin: initial.xMin,
     xMax: initial.xMax,
   });
+  const [taylorEnabled, setTaylorEnabled] = useState(false);
+  const [taylorOrder, setTaylorOrder] = useState(TAYLOR_DEFAULT_ORDER);
+  const [taylorCenter, setTaylorCenter] = useState<number | null>(0);
   const result = plot.status === 'ready' ? plot.result : null;
   const summary = useMemo(
     () => (result ? summarizePlot(result.points) : null),
     [result],
   );
+  const taylorState = useTaylorCalculation(
+    plot.status === 'ready' ? plot.request : null,
+    taylorEnabled ? taylorCenter : null,
+    taylorEnabled ? taylorOrder : null,
+  );
+  const taylorOverlay: TaylorOverlay | null =
+    plot.status === 'ready' &&
+    taylorState.status === 'ready' &&
+    taylorEnabled &&
+    taylorCenter !== null
+      ? {
+          points: taylorState.points,
+          center: taylorCenter,
+          order: taylorOrder,
+        }
+      : null;
   const updateComparison = useCallback(
     (id: number, entry: { expression: string; result: PlotResult } | null) => {
       setComparisonEntries((prev) => {
@@ -608,6 +636,59 @@ function PlottingWorkspace({
           >
             添加对比曲线
           </Button>
+          <h3 className="detail-heading">泰勒多项式</h3>
+          <p className="small-note comparison-note">
+            叠加 Tₙ(x)：系数由反复符号求导在展开中心处取值得到；泰勒多项式仅在
+            收敛区间内近似原函数，图像不等于证明。
+          </p>
+          <div className="taylor-controls">
+            <Checkbox
+              checked={taylorEnabled}
+              onChange={(event) => setTaylorEnabled(event.target.checked)}
+            >
+              显示泰勒多项式
+            </Checkbox>
+            <InputNumber
+              className="tangent-input"
+              disabled={!taylorEnabled}
+              value={taylorCenter}
+              onChange={(value) =>
+                setTaylorCenter(
+                  typeof value === 'number' && Number.isFinite(value)
+                    ? value
+                    : null,
+                )
+              }
+              placeholder="展开中心 a"
+              aria-label="泰勒展开中心 a"
+            />
+          </div>
+          <Slider
+            className="taylor-slider"
+            min={1}
+            max={8}
+            value={taylorOrder}
+            onChange={(value) => setTaylorOrder(value)}
+            disabled={!taylorEnabled}
+            ariaLabelForHandle={['泰勒多项式阶数']}
+          />
+          {taylorState.status === 'error' && (
+            <p className="chart-summary comparison-error">
+              {taylorState.message}
+            </p>
+          )}
+          {taylorState.status === 'ready' &&
+            taylorEnabled &&
+            taylorCenter !== null && (
+              <p className="chart-summary" role="status">
+                泰勒多项式：T
+                {ORDER_SUBSCRIPTS[taylorOrder]}(x)（
+                {plot.status === 'ready' ? plot.request.expression : ''} 在{' '}
+                {formatNumber(taylorCenter)} 处展开）≈{' '}
+                {taylorPolynomialLabel(taylorState.coefficients, taylorCenter)}
+                ；泰勒多项式仅在收敛区间内近似原函数，图像不等于证明。
+              </p>
+            )}
           {saveStatus && (
             <Alert
               type={saveStatus.ok ? 'success' : 'error'}
@@ -648,7 +729,7 @@ function PlottingWorkspace({
           )}
           {plot.status === 'ready' && result && summary && (
             <>
-              {comparisonCurves.length > 0 && (
+              {(comparisonCurves.length > 0 || taylorOverlay !== null) && (
                 <ul
                   className="chart-legend"
                   aria-label="图例：曲线颜色与表达式"
@@ -670,6 +751,16 @@ function PlottingWorkspace({
                       {curve.expression}
                     </li>
                   ))}
+                  {taylorOverlay !== null && (
+                    <li>
+                      <span
+                        className="legend-swatch"
+                        style={{ background: TAYLOR_COLOR }}
+                      />
+                      T{ORDER_SUBSCRIPTS[taylorOverlay.order]}(x)（展开中心{' '}
+                      {formatNumber(taylorOverlay.center)}）
+                    </li>
+                  )}
                 </ul>
               )}
               <FunctionChart
@@ -678,6 +769,7 @@ function PlottingWorkspace({
                 expression={plot.request.expression}
                 gapMarkers={gapMarkers}
                 comparisons={comparisonCurves}
+                taylor={taylorOverlay}
               />
               <p className="chart-summary" role="status">
                 f(x) = {plot.request.expression} · 区间 [{plot.request.xMin},{' '}

@@ -2,9 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   PlotRequest,
   PlotResult,
+  PlotWorkerMessage,
   PlotWorkerResponse,
+  TaylorResult,
 } from '@/shared/contracts';
-import { calculatePlot } from './client';
+import { calculatePlot, calculateTaylor } from './client';
 
 type MessageHandler = (event: { data: PlotWorkerResponse }) => void;
 
@@ -14,19 +16,23 @@ class MockWorker {
   onmessage: MessageHandler | null = null;
   onerror: (() => void) | null = null;
   onmessageerror: (() => void) | null = null;
-  postMessage = vi.fn<(request: PlotRequest) => void>();
+  postMessage = vi.fn<(message: PlotWorkerMessage) => void>();
   terminate = vi.fn();
 }
 
 const request: PlotRequest = { expression: 'x^2', xMin: -5, xMax: 5 };
 const result: PlotResult = { points: [[0, 0]], gaps: 0 };
+const taylorResult: TaylorResult = {
+  coefficients: [0, 1],
+  points: [[0, 0]],
+};
 
 function setup() {
   const worker = new MockWorker();
   const createWorker = vi.fn(() => worker as unknown as Worker);
   const controller = new AbortController();
   const states: string[] = [];
-  const track = (promise: Promise<PlotResult>) => {
+  const track = <T>(promise: Promise<T>) => {
     promise.then(
       () => states.push('resolve'),
       (cause: unknown) =>
@@ -56,8 +62,8 @@ describe('calculatePlot 生命周期与错误语义（#25）', () => {
     const promise = calculatePlot(request, controller.signal, createWorker);
     track(promise);
     expect(createWorker).toHaveBeenCalledTimes(1);
-    expect(worker.postMessage).toHaveBeenCalledWith(request);
-    worker.onmessage?.({ data: { ok: true, data: result } });
+    expect(worker.postMessage).toHaveBeenCalledWith({ type: 'plot', request });
+    worker.onmessage?.({ data: { ok: true, type: 'plot', data: result } });
     await expect(promise).resolves.toEqual(result);
     expect(worker.terminate).toHaveBeenCalledTimes(1);
     // 定时器已清除；abort 监听已移除，之后取消不会产生第二次完成。
@@ -159,7 +165,7 @@ describe('calculatePlot 生命周期与错误语义（#25）', () => {
     const { worker, createWorker, controller, states, track } = setup();
     const promise = calculatePlot(request, controller.signal, createWorker);
     track(promise);
-    worker.onmessage?.({ data: { ok: true, data: result } });
+    worker.onmessage?.({ data: { ok: true, type: 'plot', data: result } });
     await expect(promise).resolves.toEqual(result);
     // 依次触发其余结束路径：全部应被单次完成守卫忽略。
     worker.onmessage?.({ data: { ok: false, error: '迟到' } });
@@ -168,6 +174,70 @@ describe('calculatePlot 生命周期与错误语义（#25）', () => {
     controller.abort();
     await vi.advanceTimersByTimeAsync(8000);
     expect(states).toEqual(['resolve']);
+    expect(worker.terminate).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('calculateTaylor 生命周期与错误语义（#64）', () => {
+  it('发送 taylor 消息并解析系数结果，完成后清理', async () => {
+    const { worker, createWorker, controller } = setup();
+    const promise = calculateTaylor(
+      request,
+      0,
+      3,
+      controller.signal,
+      createWorker,
+    );
+    expect(createWorker).toHaveBeenCalledTimes(1);
+    expect(worker.postMessage).toHaveBeenCalledWith({
+      type: 'taylor',
+      request,
+      center: 0,
+      order: 3,
+    });
+    worker.onmessage?.({
+      data: { ok: true, type: 'taylor', data: taylorResult },
+    });
+    await expect(promise).resolves.toEqual(taylorResult);
+    expect(worker.terminate).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('返回类型不符时给出可读错误', async () => {
+    const { worker, createWorker, controller } = setup();
+    const promise = calculateTaylor(
+      request,
+      0,
+      3,
+      controller.signal,
+      createWorker,
+    );
+    const assertion = expect(promise).rejects.toThrow(
+      '计算模块返回了无法解析的数据，请刷新后重试。',
+    );
+    worker.onmessage?.({ data: { ok: true, type: 'plot', data: result } });
+    await assertion;
+    expect(worker.terminate).toHaveBeenCalledTimes(1);
+  });
+
+  it('业务错误与取消共享同一生命周期', async () => {
+    const { worker, createWorker, controller, states, track } = setup();
+    const promise = calculateTaylor(
+      request,
+      0,
+      3,
+      controller.signal,
+      createWorker,
+    );
+    track(promise);
+    worker.onmessage?.({
+      data: { ok: false, error: '第 1 阶导数超出支持范围' },
+    });
+    await expect(promise).rejects.toThrow('第 1 阶导数超出支持范围');
+    // 业务错误已结算：之后的中止不再改变结果，terminate 只发生一次。
+    controller.abort();
+    await vi.advanceTimersByTimeAsync(8000);
+    expect(states).toEqual(['error:第 1 阶导数超出支持范围']);
     expect(worker.terminate).toHaveBeenCalledTimes(1);
   });
 });

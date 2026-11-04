@@ -1,11 +1,23 @@
 /// <reference lib="webworker" />
 import { sampleFunction } from './sample';
-import type { PlotRequest, PlotWorkerResponse } from '@/shared/contracts';
+import { calculateTaylorPolynomial } from './taylor';
+import type { PlotWorkerMessage, PlotWorkerResponse } from '@/shared/contracts';
 
-self.onmessage = (event: MessageEvent<PlotRequest>) => {
+self.onmessage = (event: MessageEvent<PlotWorkerMessage>) => {
   let response: PlotWorkerResponse;
   try {
-    response = { ok: true, data: sampleFunction(event.data) };
+    response =
+      event.data.type === 'taylor'
+        ? {
+            ok: true,
+            type: 'taylor',
+            data: calculateTaylorPolynomial(
+              event.data.request,
+              event.data.center,
+              event.data.order,
+            ),
+          }
+        : { ok: true, type: 'plot', data: sampleFunction(event.data.request) };
   } catch (error) {
     response = {
       ok: false,

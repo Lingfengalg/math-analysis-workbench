@@ -22,8 +22,18 @@ export interface PlotResult {
   points: PlotPoint[];
   gaps: number;
 }
+/** 泰勒多项式结果：系数为符号求导在展开中心处的数值除以阶乘。 */
+export interface TaylorResult {
+  coefficients: number[];
+  points: PlotPoint[];
+}
+export type PlotWorkerMessage =
+  | { type: 'plot'; request: PlotRequest }
+  | { type: 'taylor'; request: PlotRequest; center: number; order: number };
 export type PlotWorkerResponse =
-  { ok: true; data: PlotResult } | { ok: false; error: string };
+  | { ok: true; type: 'plot'; data: PlotResult }
+  | { ok: true; type: 'taylor'; data: TaylorResult }
+  | { ok: false; error: string };
 
 export const knowledgeCardSchema = z.object({
   id: z.string().regex(/^[a-z][a-z0-9-]*$/),

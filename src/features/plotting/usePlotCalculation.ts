@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   plotRequestSchema,
+  type PlotPoint,
   type PlotRequest,
   type PlotResult,
 } from '@/shared/contracts';
-import { calculatePlot } from '@/shared/math/client';
+import { calculatePlot, calculateTaylor } from '@/shared/math/client';
 
 export type PlotState =
   | { status: 'loading'; request: PlotRequest }
@@ -107,4 +108,57 @@ export function useComparisonCalculation() {
   }, []);
 
   return { state, draw };
+}
+
+export type TaylorState =
+  | { status: 'idle' }
+  | { status: 'ready'; coefficients: number[]; points: PlotPoint[] }
+  | { status: 'error'; message: string };
+
+/** 主曲线已绘制且给出展开中心与阶数时自动计算泰勒多项式；任一缺失则回空闲。 */
+export function useTaylorCalculation(
+  request: PlotRequest | null,
+  center: number | null,
+  order: number | null,
+): TaylorState {
+  const [state, setState] = useState<TaylorState>({ status: 'idle' });
+  const [previous, setPrevious] = useState<{
+    request: PlotRequest | null;
+    center: number | null;
+    order: number | null;
+  } | null>(null);
+  // 请求、展开中心或阶数变化时在渲染期回到空闲（React「存储上次渲染信息」
+  // 模式），不在 effect 中同步 setState，避免级联渲染。
+  if (
+    previous === null ||
+    previous.request !== request ||
+    previous.center !== center ||
+    previous.order !== order
+  ) {
+    setPrevious({ request, center, order });
+    if (state.status !== 'idle') setState({ status: 'idle' });
+  }
+  useEffect(() => {
+    if (!request || center === null || order === null) return;
+    const controller = new AbortController();
+    calculateTaylor(request, center, order, controller.signal).then(
+      (result) => {
+        if (!controller.signal.aborted)
+          setState({
+            status: 'ready',
+            coefficients: result.coefficients,
+            points: result.points,
+          });
+      },
+      (cause: unknown) => {
+        if (!controller.signal.aborted)
+          setState({
+            status: 'error',
+            message: cause instanceof Error ? cause.message : '计算失败',
+          });
+      },
+    );
+    return () => controller.abort();
+  }, [request, center, order]);
+  return state;
 }

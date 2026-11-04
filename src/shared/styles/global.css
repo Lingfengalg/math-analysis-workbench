@@ -389,6 +389,18 @@ input {
 .add-comparison {
   margin-top: 16px;
 }
+.taylor-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 4px;
+}
+.taylor-slider {
+  margin: 12px 8px 4px 0;
+}
+.taylor-slider + .chart-summary {
+  margin: 4px 0 0;
+}
 .task-index {
   display: inline-block;
   font-size: 11px;
