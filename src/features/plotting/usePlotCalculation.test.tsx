@@ -2,7 +2,10 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PlotResult } from '@/shared/contracts';
 import { calculatePlot } from '@/shared/math/client';
-import { usePlotCalculation } from './usePlotCalculation';
+import {
+  useComparisonCalculation,
+  usePlotCalculation,
+} from './usePlotCalculation';
 
 vi.mock('@/shared/math/client', () => ({ calculatePlot: vi.fn() }));
 const calculate = vi.mocked(calculatePlot);
@@ -73,5 +76,46 @@ describe('绘图请求生命周期', () => {
     const signal = calculate.mock.calls[1][1];
     unmount();
     expect(signal.aborted).toBe(true);
+  });
+});
+
+describe('对比曲线绘图请求生命周期', () => {
+  it('初始为空闲不发起计算，提交后计算，卸载时取消', async () => {
+    const pending = deferred();
+    calculate.mockReturnValue(pending.promise);
+    const { result, unmount } = renderHook(() => useComparisonCalculation());
+    expect(result.current.state).toEqual({ status: 'idle' });
+    expect(calculate).not.toHaveBeenCalled();
+    act(() => result.current.draw({ expression: 'abs(x)', xMin: -5, xMax: 5 }));
+    expect(result.current.state.status).toBe('loading');
+    await waitFor(() => expect(calculate).toHaveBeenCalledTimes(1));
+    expect(calculate.mock.calls[0][0]).toEqual({
+      expression: 'abs(x)',
+      xMin: -5,
+      xMax: 5,
+    });
+    const signal = calculate.mock.calls[0][1];
+    unmount();
+    expect(signal.aborted).toBe(true);
+    // 结算挂起的 Promise（已中止的请求不会更新界面）
+    await act(async () => pending.resolve(data));
+    expect(result.current.state.status).toBe('loading');
+  });
+
+  it('无效提交给出错误且不发起计算，之后可重新提交', async () => {
+    const pending = deferred();
+    calculate.mockReturnValue(pending.promise);
+    const { result } = renderHook(() => useComparisonCalculation());
+    act(() => result.current.draw({ expression: '', xMin: -5, xMax: 5 }));
+    expect(result.current.state.status).toBe('error');
+    expect(calculate).not.toHaveBeenCalled();
+    act(() => result.current.draw({ expression: 'x', xMin: -1, xMax: 1 }));
+    await waitFor(() => expect(calculate).toHaveBeenCalledTimes(1));
+    await act(async () => pending.resolve(data));
+    expect(result.current.state).toEqual({
+      status: 'ready',
+      request: { expression: 'x', xMin: -1, xMax: 1 },
+      result: data,
+    });
   });
 });
