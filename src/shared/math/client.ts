@@ -1,7 +1,9 @@
 import type {
   PlotRequest,
   PlotResult,
+  PlotWorkerMessage,
   PlotWorkerResponse,
+  TangentResult,
 } from '@/shared/contracts';
 
 // 测试注入点：默认创建真实绘图 Worker；单测可传入模拟实现。
@@ -13,11 +15,12 @@ function createPlotWorker(): Worker {
   });
 }
 
-export function calculatePlot(
-  request: PlotRequest,
+/** 持有一次 Worker 任务的完整生命周期：清理、结算、中止、超时与各类错误。 */
+function runWorkerTask(
+  message: PlotWorkerMessage,
   signal: AbortSignal,
-  createWorker: PlotWorkerFactory = createPlotWorker,
-): Promise<PlotResult> {
+  createWorker: PlotWorkerFactory,
+): Promise<PlotWorkerResponse> {
   return new Promise((resolve, reject) => {
     if (signal.aborted) {
       reject(new DOMException('已取消', 'AbortError'));
@@ -58,10 +61,7 @@ export function calculatePlot(
     // 关闭「初始检查」与「注册监听」之间的竞态窗口。
     if (signal.aborted) abort();
     worker.onmessage = (event: MessageEvent<PlotWorkerResponse>) => {
-      settle(() => {
-        if (event.data.ok) resolve(event.data.data);
-        else reject(new Error(event.data.error));
-      });
+      settle(() => resolve(event.data));
     };
     worker.onerror = () => {
       settle(() => reject(new Error('计算模块加载失败，请刷新后重试。')));
@@ -72,9 +72,42 @@ export function calculatePlot(
       );
     };
     try {
-      worker.postMessage(request);
+      worker.postMessage(message);
     } catch {
       settle(() => reject(new Error('无法向计算模块发送任务，请刷新后重试。')));
     }
+  });
+}
+
+export function calculatePlot(
+  request: PlotRequest,
+  signal: AbortSignal,
+  createWorker: PlotWorkerFactory = createPlotWorker,
+): Promise<PlotResult> {
+  return runWorkerTask({ type: 'plot', request }, signal, createWorker).then(
+    (response) => {
+      if (!response.ok) throw new Error(response.error);
+      if (response.type !== 'plot')
+        throw new Error('计算模块返回了无法解析的数据，请刷新后重试。');
+      return response.data;
+    },
+  );
+}
+
+export function calculateTangent(
+  request: PlotRequest,
+  x0: number,
+  signal: AbortSignal,
+  createWorker: PlotWorkerFactory = createPlotWorker,
+): Promise<TangentResult> {
+  return runWorkerTask(
+    { type: 'tangent', request, x0 },
+    signal,
+    createWorker,
+  ).then((response) => {
+    if (!response.ok) throw new Error(response.error);
+    if (response.type !== 'tangent')
+      throw new Error('计算模块返回了无法解析的数据，请刷新后重试。');
+    return response.data;
   });
 }

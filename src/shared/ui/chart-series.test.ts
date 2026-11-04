@@ -6,12 +6,24 @@ import {
   finiteYRange,
   GAP_MARKER_COLOR,
   MAIN_CURVE_COLOR,
+  TANGENT_COLOR,
+  tangentPoints,
 } from './chart-series';
 
 describe('对比曲线颜色分配', () => {
   it('前三条颜色互不相同，且与主曲线、间断标记颜色可区分', () => {
     expect(COMPARISON_CURVE_COLORS.length).toBeGreaterThanOrEqual(3);
     const used = [
+      MAIN_CURVE_COLOR,
+      GAP_MARKER_COLOR,
+      ...COMPARISON_CURVE_COLORS.slice(0, 3),
+    ];
+    expect(new Set(used).size).toBe(used.length);
+  });
+
+  it('切线颜色与主曲线、间断标记、对比三色均可区分', () => {
+    const used = [
+      TANGENT_COLOR,
       MAIN_CURVE_COLOR,
       GAP_MARKER_COLOR,
       ...COMPARISON_CURVE_COLORS.slice(0, 3),
@@ -70,6 +82,36 @@ describe('多曲线有限值范围', () => {
     expect(range.min).toBeLessThan(5);
     expect(range.max).toBeGreaterThan(5);
     expect(range.max - range.min).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('切线端点', () => {
+  it('按 y = value + slope·(x − x0) 计算区间两端点', () => {
+    const points = tangentPoints({
+      x0: 1,
+      slope: 2,
+      value: 1,
+      xMin: -5,
+      xMax: 5,
+    });
+    expect(points).toEqual([
+      [-5, -11],
+      [5, 9],
+    ]);
+  });
+
+  it('水平切线两端点与切点同高', () => {
+    const points = tangentPoints({
+      x0: 0,
+      slope: 0,
+      value: 4,
+      xMin: -2,
+      xMax: 2,
+    });
+    expect(points).toEqual([
+      [-2, 4],
+      [2, 4],
+    ]);
   });
 });
 

@@ -1,11 +1,22 @@
 /// <reference lib="webworker" />
 import { sampleFunction } from './sample';
-import type { PlotRequest, PlotWorkerResponse } from '@/shared/contracts';
+import { calculateTangent } from './tangent';
+import type { PlotWorkerMessage, PlotWorkerResponse } from '@/shared/contracts';
 
-self.onmessage = (event: MessageEvent<PlotRequest>) => {
+self.onmessage = (event: MessageEvent<PlotWorkerMessage>) => {
   let response: PlotWorkerResponse;
   try {
-    response = { ok: true, data: sampleFunction(event.data) };
+    response =
+      event.data.type === 'tangent'
+        ? {
+            ok: true,
+            type: 'tangent',
+            data: calculateTangent(
+              event.data.request.expression,
+              event.data.x0,
+            ),
+          }
+        : { ok: true, type: 'plot', data: sampleFunction(event.data.request) };
   } catch (error) {
     response = {
       ok: false,

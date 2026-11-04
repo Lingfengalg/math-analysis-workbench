@@ -22,8 +22,18 @@ export interface PlotResult {
   points: PlotPoint[];
   gaps: number;
 }
+/** 切线结果：斜率是符号导数在 x0 处的数值，不构成极限证明。 */
+export interface TangentResult {
+  slope: number;
+  value: number;
+}
+export type PlotWorkerMessage =
+  | { type: 'plot'; request: PlotRequest }
+  | { type: 'tangent'; request: PlotRequest; x0: number };
 export type PlotWorkerResponse =
-  { ok: true; data: PlotResult } | { ok: false; error: string };
+  | { ok: true; type: 'plot'; data: PlotResult }
+  | { ok: true; type: 'tangent'; data: TangentResult }
+  | { ok: false; error: string };
 
 export const knowledgeCardSchema = z.object({
   id: z.string().regex(/^[a-z][a-z0-9-]*$/),

@@ -11,6 +11,8 @@ export const MAIN_CURVE_COLOR = '#485bb2';
 export const GAP_MARKER_COLOR = '#c47f17';
 // 与主曲线蓝、疑似间断橙 #c47f17 保持可区分；渐近提示色（#60）为 #0e7490。
 export const COMPARISON_CURVE_COLORS = ['#b03a5b', '#2f855a', '#7b5ea7'];
+// 切线：亮青色，与渐近提示的深青 #0e7490 及上述各色保持可区分。
+export const TANGENT_COLOR = '#06b6d4';
 
 /** 第 index 条对比曲线（0 起）的颜色；超出调色板（或负索引）时循环取用。 */
 export function comparisonCurveColor(index: number): string {
@@ -39,4 +41,22 @@ export function finiteYRange(curves: ChartCurve[]): {
 /** 无障碍名称与 aria 描述用的表达式列表，例如「x^2 与 abs(x)」。 */
 export function curveExpressionsLabel(curves: ChartCurve[]): string {
   return curves.map((curve) => curve.expression).join(' 与 ');
+}
+
+/** 叠加在图上的一条切线：y = value + slope·(x − x0)，横跨观察区间。 */
+export interface TangentLine {
+  x0: number;
+  slope: number;
+  value: number;
+  xMin: number;
+  xMax: number;
+}
+
+/** 切线在观察区间两端的采样点；同时用于扩展 y 范围，保证切线可见。 */
+export function tangentPoints(tangent: TangentLine): PlotPoint[] {
+  const y = (x: number) => tangent.value + tangent.slope * (x - tangent.x0);
+  return [
+    [tangent.xMin, y(tangent.xMin)],
+    [tangent.xMax, y(tangent.xMax)],
+  ];
 }

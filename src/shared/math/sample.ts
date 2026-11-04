@@ -27,9 +27,8 @@ const TYPES = new Set([
   'FunctionNode',
 ]);
 
-export function compileExpression(
-  expression: string,
-): (x: number) => number | null {
+/** 解析表达式并对 AST 做白名单校验；报错语义与输入解析失败一致。 */
+export function parseValidatedExpression(expression: string): MathNode {
   if (!expression.trim() || expression.length > 160)
     throw new Error('表达式长度应为 1–160 个字符。');
   let root: MathNode;
@@ -38,6 +37,12 @@ export function compileExpression(
   } catch {
     throw new Error('表达式无法解析，请检查括号和运算符。');
   }
+  validateMathNode(root);
+  return root;
+}
+
+/** 对已解析的 AST 做白名单校验（也用于符号求导得到的导函数节点）。 */
+export function validateMathNode(root: MathNode): void {
   let count = 0;
   root.traverse((node, _path, parent) => {
     count += 1;
@@ -62,12 +67,11 @@ export function compileExpression(
     }
     if (node.type === 'FunctionNode') {
       const fn = node as unknown as { fn: MathNode; args: MathNode[] };
-      if (
-        fn.fn.type !== 'SymbolNode' ||
-        !FUNCTIONS.has(String(fn.fn)) ||
-        fn.args.length !== 1
-      )
-        throw new Error('仅支持白名单内的单参数函数。');
+      if (fn.fn.type !== 'SymbolNode' || !FUNCTIONS.has(String(fn.fn)))
+        throw new Error(
+          `仅支持白名单内的单参数函数（不支持 ${String(fn.fn)}）。`,
+        );
+      if (fn.args.length !== 1) throw new Error('仅支持白名单内的单参数函数。');
     }
     if (node.type === 'ConstantNode') {
       const value = (node as unknown as { value: unknown }).value;
@@ -92,6 +96,12 @@ export function compileExpression(
       }
     }
   });
+}
+
+type Evaluator = (x: number) => number | null;
+
+/** 把已通过校验的节点编译为求值器；非有限或超量程的结果返回 null。 */
+export function compileNode(root: MathNode): Evaluator {
   const compiled = root.compile();
   return (x) => {
     try {
@@ -107,7 +117,11 @@ export function compileExpression(
   };
 }
 
-type Evaluator = (x: number) => number | null;
+export function compileExpression(
+  expression: string,
+): (x: number) => number | null {
+  return compileNode(parseValidatedExpression(expression));
+}
 
 // Interior probes between two adjacent finite samples.
 const PROBE_COUNT = 4;

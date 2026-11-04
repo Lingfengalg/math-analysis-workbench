@@ -4,6 +4,7 @@ import {
   Alert,
   Button,
   Card,
+  Checkbox,
   Form,
   Input,
   InputNumber,
@@ -37,6 +38,8 @@ import {
 import {
   comparisonCurveColor,
   MAIN_CURVE_COLOR,
+  TANGENT_COLOR,
+  type TangentLine,
 } from '@/shared/ui/chart-series';
 import {
   FunctionChart,
@@ -52,6 +55,7 @@ import {
 import {
   useComparisonCalculation,
   usePlotCalculation,
+  useTangentCalculation,
 } from './usePlotCalculation';
 
 const DEFAULT: PlotRequest = { expression: 'x^2', xMin: -5, xMax: 5 };
@@ -233,11 +237,30 @@ function PlottingWorkspace({
     xMin: initial.xMin,
     xMax: initial.xMax,
   });
+  const [tangentEnabled, setTangentEnabled] = useState(false);
+  const [tangentX0, setTangentX0] = useState<number | null>(null);
   const result = plot.status === 'ready' ? plot.result : null;
   const summary = useMemo(
     () => (result ? summarizePlot(result.points) : null),
     [result],
   );
+  const tangentState = useTangentCalculation(
+    plot.status === 'ready' ? plot.request : null,
+    tangentEnabled ? tangentX0 : null,
+  );
+  const tangentLine: TangentLine | null =
+    plot.status === 'ready' &&
+    tangentState.status === 'ready' &&
+    tangentEnabled &&
+    tangentX0 !== null
+      ? {
+          x0: tangentX0,
+          slope: tangentState.slope,
+          value: tangentState.value,
+          xMin: plot.request.xMin,
+          xMax: plot.request.xMax,
+        }
+      : null;
   const updateComparison = useCallback(
     (id: number, entry: { expression: string; result: PlotResult } | null) => {
       setComparisonEntries((prev) => {
@@ -608,6 +631,47 @@ function PlottingWorkspace({
           >
             添加对比曲线
           </Button>
+          <h3 className="detail-heading">切线</h3>
+          <p className="small-note comparison-note">
+            叠加 y = f(x₀) + f′(x₀)(x −
+            x₀)：斜率是符号求导在一点的数值，不构成极限证明；不可导或导数超出支持范围时会明确提示。
+          </p>
+          <div className="tangent-controls">
+            <Checkbox
+              checked={tangentEnabled}
+              onChange={(event) => setTangentEnabled(event.target.checked)}
+            >
+              显示切线
+            </Checkbox>
+            <InputNumber
+              className="tangent-input"
+              disabled={!tangentEnabled}
+              value={tangentX0}
+              onChange={(value) =>
+                setTangentX0(
+                  typeof value === 'number' && Number.isFinite(value)
+                    ? value
+                    : null,
+                )
+              }
+              placeholder="切点 x₀"
+              aria-label="切点横坐标 x₀"
+            />
+          </div>
+          {tangentState.status === 'error' && (
+            <p className="chart-summary comparison-error">
+              {tangentState.message}
+            </p>
+          )}
+          {tangentState.status === 'ready' &&
+            tangentEnabled &&
+            tangentX0 !== null && (
+              <p className="chart-summary" role="status">
+                切线：x₀ = {formatNumber(tangentX0)}，斜率 f′(
+                {formatNumber(tangentX0)}) = {formatNumber(tangentState.slope)}
+                （符号求导在一点的数值，不构成极限证明。）
+              </p>
+            )}
           {saveStatus && (
             <Alert
               type={saveStatus.ok ? 'success' : 'error'}
@@ -648,7 +712,7 @@ function PlottingWorkspace({
           )}
           {plot.status === 'ready' && result && summary && (
             <>
-              {comparisonCurves.length > 0 && (
+              {(comparisonCurves.length > 0 || tangentLine !== null) && (
                 <ul
                   className="chart-legend"
                   aria-label="图例：曲线颜色与表达式"
@@ -670,6 +734,15 @@ function PlottingWorkspace({
                       {curve.expression}
                     </li>
                   ))}
+                  {tangentLine !== null && (
+                    <li>
+                      <span
+                        className="legend-swatch"
+                        style={{ background: TANGENT_COLOR }}
+                      />
+                      切线（x₀ = {formatNumber(tangentLine.x0)}）
+                    </li>
+                  )}
                 </ul>
               )}
               <FunctionChart
@@ -678,6 +751,7 @@ function PlottingWorkspace({
                 expression={plot.request.expression}
                 gapMarkers={gapMarkers}
                 comparisons={comparisonCurves}
+                tangent={tangentLine}
               />
               <p className="chart-summary" role="status">
                 f(x) = {plot.request.expression} · 区间 [{plot.request.xMin},{' '}
