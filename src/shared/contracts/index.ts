@@ -22,8 +22,21 @@ export interface PlotResult {
   points: PlotPoint[];
   gaps: number;
 }
+/** 两条曲线差值的近似零点（数值二分），不构成交点存在的证明。 */
+export interface IntersectionPoint {
+  x: number;
+  y: number;
+}
+export interface IntersectionResult {
+  points: IntersectionPoint[];
+}
+export type PlotWorkerMessage =
+  | { type: 'plot'; request: PlotRequest }
+  | { type: 'intersections'; a: PlotRequest; b: PlotRequest };
 export type PlotWorkerResponse =
-  { ok: true; data: PlotResult } | { ok: false; error: string };
+  | { ok: true; type: 'plot'; data: PlotResult }
+  | { ok: true; type: 'intersections'; data: IntersectionResult }
+  | { ok: false; error: string };
 
 export const knowledgeCardSchema = z.object({
   id: z.string().regex(/^[a-z][a-z0-9-]*$/),

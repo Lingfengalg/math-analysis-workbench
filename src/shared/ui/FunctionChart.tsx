@@ -6,15 +6,17 @@ import {
   DataZoomComponent,
   GridComponent,
   MarkLineComponent,
+  MarkPointComponent,
   TooltipComponent,
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
-import type { PlotPoint } from '@/shared/contracts';
+import type { IntersectionPoint, PlotPoint } from '@/shared/contracts';
 import {
   comparisonCurveColor,
   curveExpressionsLabel,
   finiteYRange,
   GAP_MARKER_COLOR,
+  INTERSECTION_MARKER_COLOR,
   MAIN_CURVE_COLOR,
 } from './chart-series';
 
@@ -25,6 +27,7 @@ registerCharts([
   DataZoomComponent,
   AriaComponent,
   MarkLineComponent,
+  MarkPointComponent,
   CanvasRenderer,
 ]);
 
@@ -38,6 +41,8 @@ export interface ComparisonCurve {
   points: PlotPoint[];
   expression: string;
   gapMarkers?: number[];
+  /** 与主曲线的近似交点（数值二分），在图上以圆点标记。 */
+  intersections?: IntersectionPoint[];
 }
 
 interface FunctionChartProps {
@@ -69,11 +74,12 @@ export const FunctionChart = forwardRef<
   useEffect(() => {
     if (!element.current) return;
     const curves = [
-      { points, expression, gapMarkers },
+      { points, expression, gapMarkers, intersections: [] },
       ...comparisons.map((curve) => ({
         points: curve.points,
         expression: curve.expression,
         gapMarkers: curve.gapMarkers ?? [],
+        intersections: curve.intersections ?? [],
       })),
     ];
     // ECharts discards marker lines whose endpoints fall outside the axis
@@ -128,6 +134,23 @@ export const FunctionChart = forwardRef<
                     { coord: [x, dataMin] },
                     { coord: [x, dataMax] },
                   ]),
+                }
+              : undefined,
+          markPoint:
+            curve.intersections.length > 0
+              ? {
+                  silent: true,
+                  symbol: 'circle',
+                  symbolSize: 7,
+                  itemStyle: {
+                    color: INTERSECTION_MARKER_COLOR,
+                    borderColor: '#ffffff',
+                    borderWidth: 1,
+                  },
+                  label: { show: false },
+                  data: curve.intersections.map((point) => ({
+                    coord: [point.x, point.y],
+                  })),
                 }
               : undefined,
         };

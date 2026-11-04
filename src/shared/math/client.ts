@@ -1,6 +1,8 @@
 import type {
+  IntersectionResult,
   PlotRequest,
   PlotResult,
+  PlotWorkerMessage,
   PlotWorkerResponse,
 } from '@/shared/contracts';
 
@@ -13,11 +15,12 @@ function createPlotWorker(): Worker {
   });
 }
 
-export function calculatePlot(
-  request: PlotRequest,
+/** 单次 Worker 任务的通用生命周期：超时、取消、错误路径统一清理。 */
+function runWorkerTask(
+  message: PlotWorkerMessage,
   signal: AbortSignal,
-  createWorker: PlotWorkerFactory = createPlotWorker,
-): Promise<PlotResult> {
+  createWorker: PlotWorkerFactory,
+): Promise<PlotWorkerResponse> {
   return new Promise((resolve, reject) => {
     if (signal.aborted) {
       reject(new DOMException('已取消', 'AbortError'));
@@ -58,10 +61,7 @@ export function calculatePlot(
     // 关闭「初始检查」与「注册监听」之间的竞态窗口。
     if (signal.aborted) abort();
     worker.onmessage = (event: MessageEvent<PlotWorkerResponse>) => {
-      settle(() => {
-        if (event.data.ok) resolve(event.data.data);
-        else reject(new Error(event.data.error));
-      });
+      settle(() => resolve(event.data));
     };
     worker.onerror = () => {
       settle(() => reject(new Error('计算模块加载失败，请刷新后重试。')));
@@ -72,9 +72,42 @@ export function calculatePlot(
       );
     };
     try {
-      worker.postMessage(request);
+      worker.postMessage(message);
     } catch {
       settle(() => reject(new Error('无法向计算模块发送任务，请刷新后重试。')));
     }
+  });
+}
+
+export function calculatePlot(
+  request: PlotRequest,
+  signal: AbortSignal,
+  createWorker: PlotWorkerFactory = createPlotWorker,
+): Promise<PlotResult> {
+  return runWorkerTask({ type: 'plot', request }, signal, createWorker).then(
+    (response) => {
+      if (!response.ok) throw new Error(response.error);
+      if (response.type !== 'plot')
+        throw new Error('计算模块返回了无法解析的数据，请刷新后重试。');
+      return response.data;
+    },
+  );
+}
+
+export function calculateIntersections(
+  a: PlotRequest,
+  b: PlotRequest,
+  signal: AbortSignal,
+  createWorker: PlotWorkerFactory = createPlotWorker,
+): Promise<IntersectionResult> {
+  return runWorkerTask(
+    { type: 'intersections', a, b },
+    signal,
+    createWorker,
+  ).then((response) => {
+    if (!response.ok) throw new Error(response.error);
+    if (response.type !== 'intersections')
+      throw new Error('计算模块返回了无法解析的数据，请刷新后重试。');
+    return response.data;
   });
 }

@@ -1,11 +1,39 @@
 /// <reference lib="webworker" />
-import { sampleFunction } from './sample';
-import type { PlotRequest, PlotWorkerResponse } from '@/shared/contracts';
+import { compileExpression, sampleFunction } from './sample';
+import { detectIntersections } from './intersections';
+import {
+  plotRequestSchema,
+  type PlotRequest,
+  type PlotWorkerMessage,
+  type PlotWorkerResponse,
+} from '@/shared/contracts';
 
-self.onmessage = (event: MessageEvent<PlotRequest>) => {
+function validated(request: PlotRequest): PlotRequest {
+  const valid = plotRequestSchema.safeParse(request);
+  if (!valid.success) throw new Error(valid.error.issues[0].message);
+  return valid.data;
+}
+
+self.onmessage = (event: MessageEvent<PlotWorkerMessage>) => {
   let response: PlotWorkerResponse;
   try {
-    response = { ok: true, data: sampleFunction(event.data) };
+    if (event.data.type === 'intersections') {
+      const a = validated(event.data.a);
+      const b = validated(event.data.b);
+      const points = detectIntersections(
+        compileExpression(a.expression),
+        compileExpression(b.expression),
+        a.xMin,
+        a.xMax,
+      );
+      response = { ok: true, type: 'intersections', data: { points } };
+    } else {
+      response = {
+        ok: true,
+        type: 'plot',
+        data: sampleFunction(event.data.request),
+      };
+    }
   } catch (error) {
     response = {
       ok: false,
