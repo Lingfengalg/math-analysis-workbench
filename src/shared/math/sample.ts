@@ -1,8 +1,10 @@
 import { parse, type MathNode } from 'mathjs';
 import {
   plotRequestSchema,
+  sequenceRequestSchema,
   type PlotRequest,
   type PlotResult,
+  type SequenceRequest,
 } from '@/shared/contracts';
 import { detectHorizontalAsymptotes } from './asymptote';
 
@@ -18,7 +20,8 @@ const FUNCTIONS = new Set([
   'log',
   'exp',
 ]);
-const SYMBOLS = new Set(['x', 'pi', 'e', ...FUNCTIONS]);
+// 常量与函数名两种模式通用；自变量按模式分别为 x（函数）或 n（数列）。
+const SHARED_SYMBOLS = new Set(['pi', 'e', ...FUNCTIONS]);
 const OPERATORS = new Set(['+', '-', '*', '/', '^']);
 const TYPES = new Set([
   'OperatorNode',
@@ -30,7 +33,8 @@ const TYPES = new Set([
 
 export function compileExpression(
   expression: string,
-): (x: number) => number | null {
+  variable: 'x' | 'n' = 'x',
+): (value: number) => number | null {
   if (!expression.trim() || expression.length > 160)
     throw new Error('表达式长度应为 1–160 个字符。');
   let root: MathNode;
@@ -39,6 +43,7 @@ export function compileExpression(
   } catch {
     throw new Error('表达式无法解析，请检查括号和运算符。');
   }
+  const otherVariable = variable === 'x' ? 'n' : 'x';
   let count = 0;
   root.traverse((node, _path, parent) => {
     count += 1;
@@ -46,7 +51,14 @@ export function compileExpression(
       throw new Error('仅支持简单的一元实函数，不支持赋值、数组或属性访问。');
     if (node.type === 'SymbolNode') {
       const name = String(node);
-      if (!SYMBOLS.has(name)) throw new Error(`不支持的变量或函数：${name}。`);
+      if (name === otherVariable)
+        throw new Error(
+          variable === 'x'
+            ? '不支持的变量：n。函数模式请用 x 表示自变量。'
+            : '不支持的变量：x。数列模式请用 n 表示项序号。',
+        );
+      if (!SHARED_SYMBOLS.has(name) && name !== variable)
+        throw new Error(`不支持的变量或函数：${name}。`);
       // Whitelisted function names are values only as the callee of a
       // function call; a bare `sin` would evaluate to a function, not a
       // number, and silently leave every sample empty.
@@ -57,7 +69,7 @@ export function compileExpression(
         } | null;
         if (parentNode?.type !== 'FunctionNode' || parentNode.fn !== node)
           throw new Error(
-            `函数名 ${name} 不能作为数值使用，请写成 ${name}(x) 的形式。`,
+            `函数名 ${name} 不能作为数值使用，请写成 ${name}(${variable}) 的形式。`,
           );
       }
     }
@@ -94,9 +106,9 @@ export function compileExpression(
     }
   });
   const compiled = root.compile();
-  return (x) => {
+  return (value) => {
     try {
-      const result: unknown = compiled.evaluate({ x });
+      const result: unknown = compiled.evaluate({ [variable]: value });
       return typeof result === 'number' &&
         Number.isFinite(result) &&
         Math.abs(result) <= 1e6
@@ -260,4 +272,23 @@ export function sampleFunction(
   }
   const asymptotes = detectHorizontalAsymptotes(evaluate, points, xMin, xMax);
   return { points, gaps, asymptotes };
+}
+
+/**
+ * 数列采样：只计算第 1..terms 项的值，不比较相邻项做间断启发式——
+ * 项与项之间不是函数图像，留空项只表示该项无定义或超出显示量级。
+ */
+export function sampleSequence(request: SequenceRequest): PlotResult {
+  const valid = sequenceRequestSchema.safeParse(request);
+  if (!valid.success) throw new Error(valid.error.issues[0].message);
+  const { expression, terms } = valid.data;
+  const evaluate = compileExpression(expression, 'n');
+  const points: PlotResult['points'] = [];
+  let gaps = 0;
+  for (let n = 1; n <= terms; n += 1) {
+    const y = evaluate(n);
+    if (y === null) gaps += 1;
+    points.push([n, y]);
+  }
+  return { points, gaps };
 }

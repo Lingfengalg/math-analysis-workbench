@@ -54,6 +54,22 @@ test('知识来源提示在编辑或切换示例后清除', async ({ page }) => 
   await expect(page.getByText('已接收知识导航中的示例')).toBeVisible();
 });
 
+test('经典函数库可以一键载入并绘制', async ({ page }) => {
+  await page.goto('/#/plotting');
+  await expect(page.getByRole('status')).toContainText('f(x)', {
+    timeout: 20000,
+  });
+  await page.getByRole('button', { name: /经典函数示例/ }).click();
+  await page.getByRole('button', { name: /可去间断/ }).click();
+  await expect(page.getByLabel('函数表达式 f(x)')).toHaveValue('(x^2-1)/(x-1)');
+  await expect(page.getByRole('status')).toContainText('f(x) = (x^2-1)/(x-1)', {
+    timeout: 20000,
+  });
+  await expect(
+    page.getByRole('img', { name: '函数 (x^2-1)/(x-1) 的采样图像' }),
+  ).toBeVisible();
+});
+
 test('函数图像可以导出为 PNG 下载', async ({ page }) => {
   await page.goto('/#/plotting');
   await expect(page.getByRole('status')).toContainText('f(x)', {
@@ -171,6 +187,43 @@ test('绘图结果提供数据摘要与疑似间断标记，键盘可操作', as
   // 连续函数的摘要不含缺口表述
   await page.getByRole('button', { name: 'x^2', exact: true }).click();
   await expect(page.getByText('未检测到采样缺口。')).toBeVisible();
+});
+
+test('数列模式可以绘制散点并显示项数', async ({ page }) => {
+  await page.goto('/#/plotting');
+  await expect(page.getByRole('status')).toContainText('f(x)', {
+    timeout: 20000,
+  });
+  // antd Segmented 的 radio 被视觉隐藏，点击可见的选项文本
+  await page.getByText('数列散点', { exact: true }).click();
+  await expect(page.getByLabel('通项表达式 a_n')).toBeVisible();
+  // 函数模式专属控件在数列模式下隐藏
+  await expect(page.getByLabel('左端点')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /经典函数示例/ })).toHaveCount(
+    0,
+  );
+  await expect(page.getByRole('button', { name: '保存默认设置' })).toHaveCount(
+    0,
+  );
+  await page.getByLabel('通项表达式 a_n').fill('sin(n)/n');
+  await expect(page.getByLabel('绘制项数')).toHaveValue('30');
+  await page.getByRole('button', { name: /绘制数列/ }).click();
+  await expect(page.getByRole('status')).toContainText('a_n = sin(n)/n');
+  await expect(page.getByRole('status')).toContainText('前 30 项');
+  await expect(
+    page.getByRole('img', { name: '数列 sin(n)/n 的前若干项散点图' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: '数列数据摘要' }),
+  ).toBeVisible();
+  await expect(page.getByText(/有效项：30 项（共 30 项）/)).toBeVisible();
+  // sin(n)/n 的前 30 项都在定义域内
+  await expect(page.getByText(/所有项都采样到有限实数值/)).toBeVisible();
+  // 换一个带无定义项的数列：log(n-1) 在 n=1 无定义，留空但不称为间断
+  await page.getByLabel('通项表达式 a_n').fill('log(n-1)');
+  await page.getByRole('button', { name: /绘制数列/ }).click();
+  await expect(page.getByRole('status')).toContainText('1 项无定义（留空）');
+  await expect(page.getByText(/留空不代表该处是数学间断/)).toBeVisible();
 });
 
 test('水平渐近趋势提示以虚线绘制并注明是数值观察', async ({ page }) => {

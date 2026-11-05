@@ -33,6 +33,28 @@ export interface PlotResult {
   /** 仅函数模式产生；数列模式不检测渐近趋势。 */
   asymptotes?: HorizontalAsymptoteCandidate[];
 }
+
+/** 数列绘图请求：通项表达式写作 a_n（变量用 n 表示项序号），计算前 terms 项。 */
+export const sequenceRequestSchema = z.object({
+  expression: z
+    .string()
+    .trim()
+    .min(1, '请输入通项表达式')
+    .max(160, '表达式最多 160 个字符'),
+  terms: z
+    .number()
+    .int('项数须为整数')
+    .min(2, '项数至少为 2')
+    .max(1000, '项数最多为 1000'),
+});
+
+export type SequenceRequest = z.infer<typeof sequenceRequestSchema>;
+
+/** Worker 协议：按 kind 区分函数采样与数列采样，响应格式相同。 */
+export type PlotWorkerMessage =
+  | { kind: 'function'; request: PlotRequest }
+  | { kind: 'sequence'; request: SequenceRequest };
+
 export type PlotWorkerResponse =
   { ok: true; data: PlotResult } | { ok: false; error: string };
 
