@@ -30,12 +30,17 @@ interface FunctionChartProps {
   points: PlotPoint[];
   expression: string;
   gapMarkers?: number[];
+  /** 数列模式：散点显示、横轴为项序号 n，不做间断虚线标记。 */
+  variant?: 'function' | 'sequence';
 }
 
 export const FunctionChart = forwardRef<
   FunctionChartHandle,
   FunctionChartProps
->(function FunctionChart({ points, expression, gapMarkers = [] }, ref) {
+>(function FunctionChart(
+  { points, expression, gapMarkers = [], variant = 'function' },
+  ref,
+) {
   const element = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ReturnType<typeof init> | null>(null);
   useImperativeHandle(ref, () => ({
@@ -62,24 +67,27 @@ export const FunctionChart = forwardRef<
     // so the marker line still has a visible length.
     const span = dataMax - dataMin;
     const pad = span > 0 ? 0 : Math.max(Math.abs(dataMin) * 0.05, 0.5);
+    const isSequence = variant === 'sequence';
     const chart = init(element.current);
     chartRef.current = chart;
     chart.setOption({
       animation: false,
       aria: {
         enabled: true,
-        description: `函数 ${expression} 的采样图像`,
+        description: isSequence
+          ? `数列 ${expression} 的前若干项散点图`
+          : `函数 ${expression} 的采样图像`,
       },
       grid: { left: 58, right: 28, top: 28, bottom: 65 },
       tooltip: { trigger: 'axis', renderMode: 'richText' },
       xAxis: {
         type: 'value',
-        name: 'x',
+        name: isSequence ? 'n' : 'x',
         splitLine: { lineStyle: { color: '#e8ebf2' } },
       },
       yAxis: {
         type: 'value',
-        name: 'f(x)',
+        name: isSequence ? 'a_n' : 'f(x)',
         splitLine: { lineStyle: { color: '#e8ebf2' } },
       },
       dataZoom: [
@@ -90,11 +98,13 @@ export const FunctionChart = forwardRef<
         {
           type: 'line',
           data: points,
-          showSymbol: false,
+          // 数列模式显示散点并连线观察趋势；函数模式只连曲线。
+          showSymbol: isSequence,
+          symbolSize: isSequence ? 5 : undefined,
           connectNulls: false,
-          lineStyle: { color: '#485bb2', width: 2.5 },
+          lineStyle: { color: '#485bb2', width: isSequence ? 1.5 : 2.5 },
           markLine:
-            gapMarkers.length > 0
+            !isSequence && gapMarkers.length > 0
               ? {
                   silent: true,
                   symbol: 'none',
@@ -120,14 +130,18 @@ export const FunctionChart = forwardRef<
       chart.dispose();
       chartRef.current = null;
     };
-  }, [points, expression, gapMarkers]);
+  }, [points, expression, gapMarkers, variant]);
   return (
     <div
       ref={element}
       className="function-chart"
       data-annotation-anchor="plotting:chart"
       role="img"
-      aria-label={`函数 ${expression} 的采样图像`}
+      aria-label={
+        variant === 'sequence'
+          ? `数列 ${expression} 的前若干项散点图`
+          : `函数 ${expression} 的采样图像`
+      }
     />
   );
 });

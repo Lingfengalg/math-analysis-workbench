@@ -1,15 +1,26 @@
 // 导出文件名的表达式安全化：去掉文件系统非法字符，避免路径分隔符与通配符。
+function sanitizeExpressionForFilename(expression: string): string {
+  return (
+    expression
+      .replace(/[\\/:*?"<>|]/g, '')
+      .replace(/\s+/g, '_')
+      .slice(0, 40) || '函数'
+  );
+}
+
 export function buildPlotExportName(
   expression: string,
   xMin: number,
   xMax: number,
 ): string {
-  const safe =
-    expression
-      .replace(/[\\/:*?"<>|]/g, '')
-      .replace(/\s+/g, '_')
-      .slice(0, 40) || '函数';
-  return `函数图像_${safe}_${xMin}到${xMax}.png`;
+  return `函数图像_${sanitizeExpressionForFilename(expression)}_${xMin}到${xMax}.png`;
+}
+
+export function buildSequenceExportName(
+  expression: string,
+  terms: number,
+): string {
+  return `数列图像_${sanitizeExpressionForFilename(expression)}_前${terms}项.png`;
 }
 
 // data:image/png;base64,… → Blob；仅接受 PNG data URL，其余返回 null。
