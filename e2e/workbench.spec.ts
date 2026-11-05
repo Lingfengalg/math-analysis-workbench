@@ -521,3 +521,61 @@ test('对比曲线图例与输入行的标签保持一致', async ({ page }) => 
   await expect(page.getByLabel('对比表达式 g(x)')).toHaveValue('abs(x)');
   await expect(legend).toContainText('g(x) = abs(x)');
 });
+
+test('对比曲线出现近似交点标记与坐标文本', async ({ page }) => {
+  await page.goto('/#/plotting');
+  await expect(page.getByRole('status')).toContainText('f(x)', {
+    timeout: 20000,
+  });
+  // 无对比曲线时不出现交点相关内容
+  await expect(page.getByText(/近似交点/)).toHaveCount(0);
+  await page.getByRole('button', { name: '添加对比曲线' }).click();
+  await page.getByLabel('对比表达式 g(x)').fill('2');
+  await page.getByRole('button', { name: '绘制对比曲线 g(x)' }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'g(x) = 2' }),
+  ).toBeVisible({ timeout: 20000 });
+  // 交点坐标文本：x^2 与 2 交于 ±√2，且写明数值近似、非符号求解
+  const intersectionLine = page
+    .getByRole('status')
+    .filter({ hasText: 'g(x) 与 f(x) 的近似交点' });
+  await expect(intersectionLine).toBeVisible({ timeout: 20000 });
+  await expect(intersectionLine).toContainText('x ≈ 1.4142');
+  await expect(intersectionLine).toContainText('x ≈ -1.4142');
+  await expect(intersectionLine).toContainText('y ≈ 2');
+  await expect(intersectionLine).toContainText('数值近似，非符号求解');
+  // 画布出现交点标记色 #854d0e（与曲线、虚线标记颜色都可区分）
+  await expect
+    .poll(
+      async () =>
+        page.locator('.function-chart canvas').evaluateAll((canvases) => {
+          let markers = 0;
+          for (const element of canvases) {
+            const canvas = element as HTMLCanvasElement;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) continue;
+            const pixels = ctx.getImageData(
+              0,
+              0,
+              canvas.width,
+              canvas.height,
+            ).data;
+            for (let i = 0; i < pixels.length; i += 4) {
+              if (pixels[i + 3] <= 100) continue;
+              const [r, g, b] = [pixels[i], pixels[i + 1], pixels[i + 2]];
+              if (r >= 115 && r <= 155 && g >= 60 && g <= 100 && b <= 45)
+                markers++;
+            }
+          }
+          return markers > 4;
+        }),
+      { timeout: 10000 },
+    )
+    .toBe(true);
+  // 无交点时给出「未检测到」而非空白
+  await page.getByLabel('对比表达式 g(x)').fill('x^2 + 5');
+  await page.getByRole('button', { name: '绘制对比曲线 g(x)' }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'g(x) 与 f(x) 的近似交点' }),
+  ).toContainText('近似交点：未检测到');
+});

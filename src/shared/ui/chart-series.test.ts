@@ -5,15 +5,17 @@ import {
   curveExpressionsLabel,
   finiteYRange,
   GAP_MARKER_COLOR,
+  INTERSECTION_MARKER_COLOR,
   MAIN_CURVE_COLOR,
 } from './chart-series';
 
 describe('对比曲线颜色分配', () => {
-  it('前三条颜色互不相同，且与主曲线、间断标记颜色可区分', () => {
+  it('前三条颜色互不相同，且与主曲线、间断与交点标记颜色可区分', () => {
     expect(COMPARISON_CURVE_COLORS.length).toBeGreaterThanOrEqual(3);
     const used = [
       MAIN_CURVE_COLOR,
       GAP_MARKER_COLOR,
+      INTERSECTION_MARKER_COLOR,
       ...COMPARISON_CURVE_COLORS.slice(0, 3),
     ];
     expect(new Set(used).size).toBe(used.length);

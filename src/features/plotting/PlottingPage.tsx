@@ -25,6 +25,7 @@ import {
   plotRequestSchema,
   preferencesSchema,
   type HorizontalAsymptoteCandidate,
+  type IntersectionPoint,
   type PlotRequest,
   type PlotResult,
 } from '@/shared/contracts';
@@ -55,6 +56,7 @@ import {
 } from '@/shared/ui/plot-export';
 import {
   useComparisonCalculation,
+  useIntersectionCalculation,
   usePlotCalculation,
   useSequenceCalculation,
 } from './usePlotCalculation';
@@ -182,12 +184,20 @@ const COMPARISON_LABELS = ['g', 'h', 'p'];
 function ComparisonEntry({
   index,
   range,
+  mainRequest,
   onUpdate,
   onRemove,
 }: {
   index: number;
   range: { xMin: number; xMax: number };
-  onUpdate: (entry: { expression: string; result: PlotResult } | null) => void;
+  mainRequest: PlotRequest | null;
+  onUpdate: (
+    entry: {
+      expression: string;
+      result: PlotResult;
+      intersections: IntersectionPoint[] | null;
+    } | null,
+  ) => void;
   onRemove: () => void;
 }) {
   const label = COMPARISON_LABELS[index] ?? `g${index + 1}`;
@@ -199,16 +209,26 @@ function ComparisonEntry({
   useEffect(() => {
     onUpdateRef.current = onUpdate;
   });
+  // 近似交点只在主曲线与对比曲线都绘制完成后计算（数值近似，非符号求解）。
+  const ownRequest = state.status === 'ready' ? state.request : null;
+  const intersectionState = useIntersectionCalculation(mainRequest, ownRequest);
 
-  // 把已绘制的对比曲线上报给父组件；空闲、计算中或卸载时上报 null。
+  // 把已绘制的对比曲线与交点结果上报给父组件；空闲、计算中或卸载时上报 null。
   useEffect(() => {
     const entry =
       state.status === 'ready'
-        ? { expression: state.request.expression, result: state.result }
+        ? {
+            expression: state.request.expression,
+            result: state.result,
+            intersections:
+              intersectionState.status === 'ready'
+                ? intersectionState.points
+                : null,
+          }
         : null;
     onUpdateRef.current(entry);
     return () => onUpdateRef.current(null);
-  }, [state]);
+  }, [state, intersectionState]);
 
   // 与主曲线共享观察区间：主曲线换区间重绘后，对比曲线用同一区间自动重绘。
   useEffect(() => {
@@ -304,7 +324,14 @@ function PlottingWorkspace({
   const [comparisonIds, setComparisonIds] = useState<number[]>([]);
   const nextComparisonId = useRef(1);
   const [comparisonEntries, setComparisonEntries] = useState<
-    Map<number, { expression: string; result: PlotResult }>
+    Map<
+      number,
+      {
+        expression: string;
+        result: PlotResult;
+        intersections: IntersectionPoint[] | null;
+      }
+    >
   >(new Map());
   // 对比曲线与主曲线共享观察区间：记录主曲线最近一次有效绘制的区间。
   const [range, setRange] = useState({
@@ -312,12 +339,21 @@ function PlottingWorkspace({
     xMax: initial.xMax,
   });
   const result = plot.status === 'ready' ? plot.result : null;
+  // 主曲线绘制完成后才有交点可算；重绘期间置空。
+  const mainRequest = plot.status === 'ready' ? plot.request : null;
   const summary = useMemo(
     () => (result ? summarizePlot(result.points) : null),
     [result],
   );
   const updateComparison = useCallback(
-    (id: number, entry: { expression: string; result: PlotResult } | null) => {
+    (
+      id: number,
+      entry: {
+        expression: string;
+        result: PlotResult;
+        intersections: IntersectionPoint[] | null;
+      } | null,
+    ) => {
       setComparisonEntries((prev) => {
         const existing = prev.get(id);
         if (entry === null) {
@@ -329,7 +365,8 @@ function PlottingWorkspace({
         if (
           existing &&
           existing.result === entry.result &&
-          existing.expression === entry.expression
+          existing.expression === entry.expression &&
+          existing.intersections === entry.intersections
         )
           return prev;
         const next = new Map(prev);
@@ -369,6 +406,7 @@ function PlottingWorkspace({
           .filter((gapRange) => gapRange.from === gapRange.to)
           .map((gapRange) => gapRange.from)
           .slice(0, 8),
+        intersections: entry.intersections ?? undefined,
       });
     }
     return curves;
@@ -748,6 +786,7 @@ function PlottingWorkspace({
                 key={id}
                 index={index}
                 range={range}
+                mainRequest={mainRequest}
                 onUpdate={(entry) => updateComparison(id, entry)}
                 onRemove={() => removeComparison(id)}
               />
@@ -889,6 +928,26 @@ function PlottingWorkspace({
                     , {plot.request.xMax}] · {result.points.length} 个图像点 ·{' '}
                     {result.gaps} 处采样缺口
                   </p>
+                  {comparisonIds.map((id, index) => {
+                    const entry = comparisonEntries.get(id);
+                    if (!entry || entry.intersections === null) return null;
+                    const label = COMPARISON_LABELS[index] ?? `g${index + 1}`;
+                    const pointsText =
+                      entry.intersections.length === 0
+                        ? '近似交点：未检测到。'
+                        : `近似交点：${entry.intersections
+                            .map(
+                              (point) =>
+                                `x ≈ ${formatNumber(point.x)}，y ≈ ${formatNumber(point.y)}`,
+                            )
+                            .join('；')}。`;
+                    return (
+                      <p key={id} className="chart-summary" role="status">
+                        {label}(x) 与 f(x) 的{pointsText}
+                        （数值近似，非符号求解；切触或采样漏过的交点可能漏检。）
+                      </p>
+                    );
+                  })}
                   {result.points.every((point) => point[1] === null) && (
                     <Alert
                       type="warning"

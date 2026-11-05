@@ -6,7 +6,11 @@ import type {
   PlotWorkerResponse,
   SequenceRequest,
 } from '@/shared/contracts';
-import { calculatePlot, calculateSequence } from './client';
+import {
+  calculateIntersections,
+  calculatePlot,
+  calculateSequence,
+} from './client';
 
 type MessageHandler = (event: { data: PlotWorkerResponse }) => void;
 
@@ -59,10 +63,10 @@ describe('calculatePlot 生命周期与错误语义（#25）', () => {
     track(promise);
     expect(createWorker).toHaveBeenCalledTimes(1);
     expect(worker.postMessage).toHaveBeenCalledWith({
-      kind: 'function',
+      type: 'plot',
       request,
     });
-    worker.onmessage?.({ data: { ok: true, data: result } });
+    worker.onmessage?.({ data: { ok: true, type: 'plot', data: result } });
     await expect(promise).resolves.toEqual(result);
     expect(worker.terminate).toHaveBeenCalledTimes(1);
     // 定时器已清除；abort 监听已移除，之后取消不会产生第二次完成。
@@ -164,7 +168,7 @@ describe('calculatePlot 生命周期与错误语义（#25）', () => {
     const { worker, createWorker, controller, states, track } = setup();
     const promise = calculatePlot(request, controller.signal, createWorker);
     track(promise);
-    worker.onmessage?.({ data: { ok: true, data: result } });
+    worker.onmessage?.({ data: { ok: true, type: 'plot', data: result } });
     await expect(promise).resolves.toEqual(result);
     // 依次触发其余结束路径：全部应被单次完成守卫忽略。
     worker.onmessage?.({ data: { ok: false, error: '迟到' } });
@@ -189,10 +193,10 @@ describe('calculateSequence 与函数模式共用生命周期（#59）', () => {
     );
     track(promise);
     expect(worker.postMessage).toHaveBeenCalledWith({
-      kind: 'sequence',
+      type: 'sequence',
       request: sequence,
     });
-    worker.onmessage?.({ data: { ok: true, data: result } });
+    worker.onmessage?.({ data: { ok: true, type: 'sequence', data: result } });
     await expect(promise).resolves.toEqual(result);
     expect(worker.terminate).toHaveBeenCalledTimes(1);
     expect(vi.getTimerCount()).toBe(0);
@@ -214,5 +218,72 @@ describe('calculateSequence 与函数模式共用生命周期（#59）', () => {
     controller.abort();
     await assertion;
     expect(worker.terminate).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('calculateIntersections 生命周期与错误语义（#62）', () => {
+  it('发送两条请求，解析交点结果并清理', async () => {
+    const { worker, createWorker, controller } = setup();
+    const b: PlotRequest = { expression: '2', xMin: -5, xMax: 5 };
+    const points = [{ x: 1.4142, y: 2 }];
+    const promise = calculateIntersections(
+      request,
+      b,
+      controller.signal,
+      createWorker,
+    );
+    expect(worker.postMessage).toHaveBeenCalledWith({
+      type: 'intersections',
+      a: request,
+      b,
+    });
+    worker.onmessage?.({
+      data: { ok: true, type: 'intersections', data: { points } },
+    });
+    await expect(promise).resolves.toEqual({ points });
+    expect(worker.terminate).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('返回类型不符时拒绝并清理', async () => {
+    const { worker, createWorker, controller } = setup();
+    const promise = calculateIntersections(
+      request,
+      { expression: '2', xMin: -5, xMax: 5 },
+      controller.signal,
+      createWorker,
+    );
+    const assertion = expect(promise).rejects.toThrow(
+      '计算模块返回了无法解析的数据，请刷新后重试。',
+    );
+    worker.onmessage?.({ data: { ok: true, type: 'plot', data: result } });
+    await assertion;
+    expect(worker.terminate).toHaveBeenCalledTimes(1);
+  });
+
+  it('业务错误与取消沿用同一生命周期', async () => {
+    const { worker, createWorker, controller } = setup();
+    const b: PlotRequest = { expression: '2', xMin: -5, xMax: 5 };
+    const failed = calculateIntersections(
+      request,
+      b,
+      controller.signal,
+      createWorker,
+    );
+    const failedAssertion = expect(failed).rejects.toThrow('不支持的表达式');
+    worker.onmessage?.({ data: { ok: false, error: '不支持的表达式' } });
+    await failedAssertion;
+    const cancelled = calculateIntersections(
+      request,
+      b,
+      controller.signal,
+      createWorker,
+    );
+    const cancelledAssertion = expect(cancelled).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+    controller.abort();
+    await cancelledAssertion;
+    expect(worker.terminate).toHaveBeenCalledTimes(2);
   });
 });
