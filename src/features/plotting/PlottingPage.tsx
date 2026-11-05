@@ -5,10 +5,12 @@ import {
   Button,
   Card,
   Checkbox,
+  Collapse,
   Form,
   Input,
   InputNumber,
   Popconfirm,
+  Segmented,
   Space,
   Spin,
   Tag,
@@ -23,6 +25,8 @@ import {
 import {
   plotRequestSchema,
   preferencesSchema,
+  type HorizontalAsymptoteCandidate,
+  type IntersectionPoint,
   type PlotRequest,
   type PlotResult,
 } from '@/shared/contracts';
@@ -49,14 +53,29 @@ import {
 import { PageHeader } from '@/shared/ui/PageHeader';
 import {
   buildPlotExportName,
+  buildSequenceExportName,
   downloadBlob,
   pngDataUrlToBlob,
 } from '@/shared/ui/plot-export';
 import {
   useComparisonCalculation,
+  useIntersectionCalculation,
   usePlotCalculation,
+  useSequenceCalculation,
   useTangentCalculation,
 } from './usePlotCalculation';
+import { plotPresets } from '@/content/plot-presets';
+import styles from './PlottingPage.module.css';
+
+type PlotMode = 'function' | 'sequence';
+
+/** 两种模式共用一个表单：函数模式用 xMin/xMax，数列模式用 terms。 */
+type WorkspaceFormValues = {
+  expression: string;
+  xMin?: number;
+  xMax?: number;
+  terms?: number;
+};
 
 const DEFAULT: PlotRequest = { expression: 'x^2', xMin: -5, xMax: 5 };
 const preferences = createStorage('preferences', preferencesSchema);
@@ -64,9 +83,11 @@ const preferences = createStorage('preferences', preferencesSchema);
 function PlotSummaryPanel({
   summary,
   totalPoints,
+  asymptotes,
 }: {
   summary: PlotSummary;
   totalPoints: number;
+  asymptotes: HorizontalAsymptoteCandidate[];
 }) {
   const { finiteCount, minY, maxY, gapRanges } = summary;
   const rangeText =
@@ -82,6 +103,15 @@ function PlotSummaryPanel({
           .join(
             '；',
           )}${gapRanges.length > 6 ? ` 等 ${gapRanges.length} 处` : ''}`;
+  const asymptoteText =
+    asymptotes.length === 0
+      ? '未检测到水平渐近趋势候选。'
+      : `水平渐近趋势提示：${asymptotes
+          .map(
+            (candidate) =>
+              `${candidate.side === 'left' ? '左侧' : '右侧'}疑似趋于 y ≈ ${formatNumber(candidate.y)}`,
+          )
+          .join('；')}（数值观察，不构成极限证明）`;
   return (
     <section className="plot-summary" aria-labelledby="plot-summary-heading">
       <h3 id="plot-summary-heading">采样数据摘要</h3>
@@ -94,11 +124,59 @@ function PlotSummaryPanel({
         </li>
         <li>{rangeText}</li>
         <li>{gapsText}</li>
+        <li>{asymptoteText}</li>
       </ul>
       <p className="chart-summary">
         显示限制：超出定义域、非有限值或 |f(x)| 大于 10⁶
         的点留空。这些采样缺口不代表一定是数学间断；虚线标记的是疑似间断位置
-        （启发式检测，可能漏检或误判）。可用键盘在左/右端点调整观察范围，代替鼠标缩放。
+        （启发式检测，可能漏检或误判）。水平渐近趋势提示同样是数值启发式：在观察范围
+        外额外探测少量点（不绘制）判断趋势是否延续，可能漏检或误判，不构成极限证明。
+        可用键盘在左/右端点调整观察范围，代替鼠标缩放。
+      </p>
+    </section>
+  );
+}
+
+function SequenceSummaryPanel({
+  result,
+  terms,
+}: {
+  result: PlotResult;
+  terms: number;
+}) {
+  const finiteYs = result.points
+    .map((point) => point[1])
+    .filter((y): y is number => y !== null);
+  const minY = finiteYs.length > 0 ? Math.min(...finiteYs) : null;
+  const maxY = finiteYs.length > 0 ? Math.max(...finiteYs) : null;
+  const rangeText =
+    minY === null || maxY === null
+      ? '前若干项中没有可显示的有限实数值。'
+      : `前 ${terms} 项中的有限值范围：a_n ≈ ${formatNumber(minY)} 至 ${formatNumber(maxY)}`;
+  return (
+    <section
+      className="plot-summary"
+      aria-labelledby="sequence-summary-heading"
+    >
+      <h3 id="sequence-summary-heading">数列数据摘要</h3>
+      <p className="chart-summary">
+        键盘与屏幕阅读器可用的文本替代；只观察前若干项的数值，不构成收敛性、
+        单调性等数学结论的证明。
+      </p>
+      <ul>
+        <li>
+          有效项：{finiteYs.length} 项（共 {terms} 项）
+        </li>
+        <li>{rangeText}</li>
+        <li>
+          {result.gaps === 0
+            ? '所有项都采样到有限实数值。'
+            : `${result.gaps} 项未采样到有限实数值（如超出定义域），散点图中留空；留空不代表该处是数学间断。`}
+        </li>
+      </ul>
+      <p className="chart-summary">
+        显示限制：非有限值或 |a_n| 大于 10⁶ 的项留空。散点图只呈现前 {terms}{' '}
+        项的数值，观察有限多项不能证明数列收敛、单调或有界。
       </p>
     </section>
   );
@@ -110,12 +188,20 @@ const COMPARISON_LABELS = ['g', 'h', 'p'];
 function ComparisonEntry({
   index,
   range,
+  mainRequest,
   onUpdate,
   onRemove,
 }: {
   index: number;
   range: { xMin: number; xMax: number };
-  onUpdate: (entry: { expression: string; result: PlotResult } | null) => void;
+  mainRequest: PlotRequest | null;
+  onUpdate: (
+    entry: {
+      expression: string;
+      result: PlotResult;
+      intersections: IntersectionPoint[] | null;
+    } | null,
+  ) => void;
   onRemove: () => void;
 }) {
   const label = COMPARISON_LABELS[index] ?? `g${index + 1}`;
@@ -127,16 +213,26 @@ function ComparisonEntry({
   useEffect(() => {
     onUpdateRef.current = onUpdate;
   });
+  // 近似交点只在主曲线与对比曲线都绘制完成后计算（数值近似，非符号求解）。
+  const ownRequest = state.status === 'ready' ? state.request : null;
+  const intersectionState = useIntersectionCalculation(mainRequest, ownRequest);
 
-  // 把已绘制的对比曲线上报给父组件；空闲、计算中或卸载时上报 null。
+  // 把已绘制的对比曲线与交点结果上报给父组件；空闲、计算中或卸载时上报 null。
   useEffect(() => {
     const entry =
       state.status === 'ready'
-        ? { expression: state.request.expression, result: state.result }
+        ? {
+            expression: state.request.expression,
+            result: state.result,
+            intersections:
+              intersectionState.status === 'ready'
+                ? intersectionState.points
+                : null,
+          }
         : null;
     onUpdateRef.current(entry);
     return () => onUpdateRef.current(null);
-  }, [state]);
+  }, [state, intersectionState]);
 
   // 与主曲线共享观察区间：主曲线换区间重绘后，对比曲线用同一区间自动重绘。
   useEffect(() => {
@@ -211,8 +307,10 @@ function PlottingWorkspace({
   warning?: string;
   initialStorageError?: string;
 }) {
-  const [form] = Form.useForm<PlotRequest>();
+  const [form] = Form.useForm<WorkspaceFormValues>();
   const { state: plot, draw: drawPlot } = usePlotCalculation(initial);
+  const { state: sequence, draw: drawSequence } = useSequenceCalculation();
+  const [mode, setMode] = useState<PlotMode>('function');
   const [saving, setSaving] = useState(false);
   const [storageError, setStorageError] = useState(initialStorageError);
   // 知识来源提示只在当前绘图仍与链接示例一致时显示
@@ -230,7 +328,14 @@ function PlottingWorkspace({
   const [comparisonIds, setComparisonIds] = useState<number[]>([]);
   const nextComparisonId = useRef(1);
   const [comparisonEntries, setComparisonEntries] = useState<
-    Map<number, { expression: string; result: PlotResult }>
+    Map<
+      number,
+      {
+        expression: string;
+        result: PlotResult;
+        intersections: IntersectionPoint[] | null;
+      }
+    >
   >(new Map());
   // 对比曲线与主曲线共享观察区间：记录主曲线最近一次有效绘制的区间。
   const [range, setRange] = useState({
@@ -240,6 +345,8 @@ function PlottingWorkspace({
   const [tangentEnabled, setTangentEnabled] = useState(false);
   const [tangentX0, setTangentX0] = useState<number | null>(null);
   const result = plot.status === 'ready' ? plot.result : null;
+  // 主曲线绘制完成后才有交点可算；重绘期间置空。
+  const mainRequest = plot.status === 'ready' ? plot.request : null;
   const summary = useMemo(
     () => (result ? summarizePlot(result.points) : null),
     [result],
@@ -262,7 +369,14 @@ function PlottingWorkspace({
         }
       : null;
   const updateComparison = useCallback(
-    (id: number, entry: { expression: string; result: PlotResult } | null) => {
+    (
+      id: number,
+      entry: {
+        expression: string;
+        result: PlotResult;
+        intersections: IntersectionPoint[] | null;
+      } | null,
+    ) => {
       setComparisonEntries((prev) => {
         const existing = prev.get(id);
         if (entry === null) {
@@ -274,7 +388,8 @@ function PlottingWorkspace({
         if (
           existing &&
           existing.result === entry.result &&
-          existing.expression === entry.expression
+          existing.expression === entry.expression &&
+          existing.intersections === entry.intersections
         )
           return prev;
         const next = new Map(prev);
@@ -299,12 +414,14 @@ function PlottingWorkspace({
     });
   };
   const comparisonCurves = useMemo(() => {
-    const curves: ComparisonCurve[] = [];
-    for (const id of comparisonIds) {
+    const curves: Array<ComparisonCurve & { id: number; label: string }> = [];
+    for (const [index, id] of comparisonIds.entries()) {
       const entry = comparisonEntries.get(id);
       if (!entry) continue;
       const curveSummary = summarizePlot(entry.result.points);
       curves.push({
+        id,
+        label: COMPARISON_LABELS[index] ?? `g${index + 1}`,
         points: entry.result.points,
         expression: entry.expression,
         // 与主曲线同样的规则：只标记孤立的单点疑似缺口，控制密度。
@@ -312,6 +429,7 @@ function PlottingWorkspace({
           .filter((gapRange) => gapRange.from === gapRange.to)
           .map((gapRange) => gapRange.from)
           .slice(0, 8),
+        intersections: entry.intersections ?? undefined,
       });
     }
     return curves;
@@ -344,15 +462,43 @@ function PlottingWorkspace({
     setExportStatus(null);
     drawPlot({ ...value, sourceKnowledgeId });
   };
+  // 模式切换后提交：数列走通项+项数，函数走表达式+区间。
+  const onFinish = (values: WorkspaceFormValues) => {
+    if (mode === 'sequence') {
+      if (typeof values.terms !== 'number') return; // 表单校验已兜底
+      setExportStatus(null);
+      drawSequence({ expression: values.expression, terms: values.terms });
+      return;
+    }
+    const { expression, xMin, xMax } = values;
+    if (typeof xMin !== 'number' || typeof xMax !== 'number') return;
+    draw({ expression, xMin, xMax });
+  };
   // 导出当前画布为 PNG（ECharts getDataURL），不重新采样、不上传。
   const exportImage = () => {
-    if (plot.status !== 'ready') return;
+    let dataUrl: string;
+    let filename: string;
+    if (mode === 'function') {
+      if (plot.status !== 'ready') return;
+      dataUrl = chartRef.current?.exportPng() ?? '';
+      filename = buildPlotExportName(
+        plot.request.expression,
+        plot.request.xMin,
+        plot.request.xMax,
+      );
+    } else {
+      if (sequence.status !== 'ready') return;
+      dataUrl = chartRef.current?.exportPng() ?? '';
+      filename = buildSequenceExportName(
+        sequence.request.expression,
+        sequence.request.terms,
+      );
+    }
     try {
-      const dataUrl = chartRef.current?.exportPng() ?? '';
       if (!dataUrl) {
         setExportStatus({
           ok: false,
-          text: '导出失败：图像尚未绘制完成，请先绘制函数。',
+          text: `导出失败：图像尚未绘制完成，请先绘制${mode === 'function' ? '函数' : '数列'}。`,
         });
         return;
       }
@@ -361,11 +507,6 @@ function PlottingWorkspace({
         setExportStatus({ ok: false, text: '导出失败：画布数据无法解析。' });
         return;
       }
-      const filename = buildPlotExportName(
-        plot.request.expression,
-        plot.request.xMin,
-        plot.request.xMax,
-      );
       if (!downloadBlob(blob, filename)) {
         setExportStatus({ ok: false, text: '导出失败：浏览器下载不可用。' });
         return;
@@ -381,8 +522,12 @@ function PlottingWorkspace({
       });
     }
   };
-  const preset = (expression: string) => {
-    const next = { expression, xMin: -5, xMax: 5 };
+  const preset = (value: {
+    expression: string;
+    xMin: number;
+    xMax: number;
+  }) => {
+    const next = { ...value };
     form.setFieldsValue(next);
     draw(next);
   };
@@ -393,7 +538,7 @@ function PlottingWorkspace({
     setSaving(true);
     setSaveStatus(null);
     try {
-      let values: PlotRequest;
+      let values: WorkspaceFormValues;
       try {
         values = await form.validateFields();
       } catch {
@@ -520,7 +665,7 @@ function PlottingWorkspace({
           }
         />
       )}
-      {sourceId && (
+      {mode === 'function' && sourceId && (
         <Alert
           type="info"
           showIcon
@@ -529,149 +674,243 @@ function PlottingWorkspace({
           className="section-gap-bottom"
         />
       )}
+      <Segmented
+        className="section-gap-bottom"
+        options={[
+          { label: '函数图像', value: 'function' },
+          { label: '数列散点', value: 'sequence' },
+        ]}
+        value={mode}
+        onChange={(value) => {
+          setMode(value as PlotMode);
+          setExportStatus(null);
+        }}
+      />
       <div className="plot-layout">
-        <Card title="设置函数" className="plot-settings">
+        <Card
+          title={mode === 'function' ? '设置函数' : '设置数列'}
+          className="plot-settings"
+        >
           <Form
             form={form}
             layout="vertical"
             initialValues={initial}
-            onFinish={draw}
+            onFinish={onFinish}
             requiredMark={false}
           >
             <Form.Item
               name="expression"
-              label="函数表达式 f(x)"
+              label={mode === 'function' ? '函数表达式 f(x)' : '通项表达式 a_n'}
               rules={[
                 {
                   required: true,
                   whitespace: true,
-                  message: '请输入函数表达式',
+                  message:
+                    mode === 'function'
+                      ? '请输入函数表达式'
+                      : '请输入通项表达式',
                 },
                 { max: 160, message: '最多 160 个字符' },
               ]}
             >
-              <Input placeholder="例如 sin(x) + x^2" autoComplete="off" />
+              <Input
+                placeholder={
+                  mode === 'function' ? '例如 sin(x) + x^2' : '例如 sin(n)/n'
+                }
+                autoComplete="off"
+              />
             </Form.Item>
-            <div className="range-fields">
+            {mode === 'function' && (
+              <div className="range-fields">
+                <Form.Item
+                  name="xMin"
+                  label="左端点"
+                  rules={[
+                    { required: true, type: 'number', message: '请输入左端点' },
+                  ]}
+                >
+                  <InputNumber min={-10000} max={10000} />
+                </Form.Item>
+                <Form.Item
+                  name="xMax"
+                  label="右端点"
+                  rules={[
+                    { required: true, type: 'number', message: '请输入右端点' },
+                  ]}
+                >
+                  <InputNumber min={-10000} max={10000} />
+                </Form.Item>
+              </div>
+            )}
+            {mode === 'sequence' && (
               <Form.Item
-                name="xMin"
-                label="左端点"
+                name="terms"
+                label="绘制项数"
+                initialValue={30}
                 rules={[
-                  { required: true, type: 'number', message: '请输入左端点' },
+                  { required: true, type: 'number', message: '请输入项数' },
                 ]}
               >
-                <InputNumber min={-10000} max={10000} />
+                <InputNumber min={2} max={1000} precision={0} />
               </Form.Item>
-              <Form.Item
-                name="xMax"
-                label="右端点"
-                rules={[
-                  { required: true, type: 'number', message: '请输入右端点' },
-                ]}
-              >
-                <InputNumber min={-10000} max={10000} />
-              </Form.Item>
-            </div>
+            )}
             <Button
               type="primary"
               htmlType="submit"
               icon={<LineChartOutlined />}
               block
-              loading={plot.status === 'loading'}
+              loading={
+                mode === 'function'
+                  ? plot.status === 'loading'
+                  : sequence.status === 'loading'
+              }
             >
-              绘制函数
+              {mode === 'function' ? '绘制函数' : '绘制数列'}
             </Button>
           </Form>
-          <Button
-            className="section-gap"
-            icon={<SaveOutlined />}
-            onClick={() => void save()}
-            loading={saving}
-            block
-          >
-            保存默认设置
-          </Button>
-          <h3 className="detail-heading">快速尝试</h3>
-          <Space wrap>
-            {['x^2', 'abs(x)', '1/x', 'sin(x)'].map((expression) => (
+          {mode === 'function' && (
+            <>
               <Button
-                key={expression}
-                size="small"
-                onClick={() => preset(expression)}
+                className="section-gap"
+                icon={<SaveOutlined />}
+                onClick={() => void save()}
+                loading={saving}
+                block
               >
-                {expression}
+                保存默认设置
               </Button>
-            ))}
-          </Space>
-          <p className="small-note">
-            支持 x、pi、e，以及 sin / cos / tan / asin / acos / atan / abs /
-            sqrt / log / exp。log 为自然对数。幂指数限数字常量，绝对值不超过
-            20。
-          </p>
-          <h3 className="detail-heading">对比曲线</h3>
-          <p className="small-note comparison-note">
-            最多 3
-            条，与主曲线共享观察区间与缩放；每条曲线独立有限采样，不构成数学结论。
-          </p>
-          {comparisonIds.map((id, index) => (
-            <ComparisonEntry
-              key={id}
-              index={index}
-              range={range}
-              onUpdate={(entry) => updateComparison(id, entry)}
-              onRemove={() => removeComparison(id)}
-            />
-          ))}
-          <Button
-            className="add-comparison"
-            block
-            icon={<PlusOutlined />}
-            onClick={addComparison}
-            disabled={comparisonIds.length >= 3}
-          >
-            添加对比曲线
-          </Button>
-          <h3 className="detail-heading">切线</h3>
-          <p className="small-note comparison-note">
-            叠加 y = f(x₀) + f′(x₀)(x −
-            x₀)：斜率是符号求导在一点的数值，不构成极限证明；不可导或导数超出支持范围时会明确提示。
-          </p>
-          <div className="tangent-controls">
-            <Checkbox
-              checked={tangentEnabled}
-              onChange={(event) => setTangentEnabled(event.target.checked)}
-            >
-              显示切线
-            </Checkbox>
-            <InputNumber
-              className="tangent-input"
-              disabled={!tangentEnabled}
-              value={tangentX0}
-              onChange={(value) =>
-                setTangentX0(
-                  typeof value === 'number' && Number.isFinite(value)
-                    ? value
-                    : null,
-                )
-              }
-              placeholder="切点 x₀"
-              aria-label="切点横坐标 x₀"
-            />
-          </div>
-          {tangentState.status === 'error' && (
-            <p className="chart-summary comparison-error">
-              {tangentState.message}
-            </p>
+              <h3 className="detail-heading">快速尝试</h3>
+              <Space wrap>
+                {['x^2', 'abs(x)', '1/x', 'sin(x)'].map((expression) => (
+                  <Button
+                    key={expression}
+                    size="small"
+                    onClick={() => preset({ expression, xMin: -5, xMax: 5 })}
+                  >
+                    {expression}
+                  </Button>
+                ))}
+              </Space>
+            </>
           )}
-          {tangentState.status === 'ready' &&
-            tangentEnabled &&
-            tangentX0 !== null && (
-              <p className="chart-summary" role="status">
-                切线：x₀ = {formatNumber(tangentX0)}，斜率 f′(
-                {formatNumber(tangentX0)}) = {formatNumber(tangentState.slope)}
-                （符号求导在一点的数值，不构成极限证明。）
+          <p className="small-note">
+            支持 {mode === 'function' ? 'x' : 'n'}、pi、e，以及 sin / cos / tan
+            / asin / acos / atan / abs / sqrt / log / exp。log
+            为自然对数。幂指数限数字常量，绝对值不超过 20。
+          </p>
+          <div hidden={mode !== 'function'}>
+            <h3 className="detail-heading">对比曲线</h3>
+            <p className="small-note comparison-note">
+              最多 3
+              条，与主曲线共享观察区间与缩放；每条曲线独立有限采样，不构成数学结论。
+            </p>
+            {comparisonIds.map((id, index) => (
+              <ComparisonEntry
+                key={id}
+                index={index}
+                range={range}
+                mainRequest={mainRequest}
+                onUpdate={(entry) => updateComparison(id, entry)}
+                onRemove={() => removeComparison(id)}
+              />
+            ))}
+            <Button
+              className="add-comparison"
+              block
+              icon={<PlusOutlined />}
+              onClick={addComparison}
+              disabled={comparisonIds.length >= 3}
+            >
+              添加对比曲线
+            </Button>
+            <h3 className="detail-heading">切线</h3>
+            <p className="small-note comparison-note">
+              叠加 y = f(x₀) + f′(x₀)(x −
+              x₀)：斜率是符号求导在一点的数值，不构成极限证明；不可导或导数超出支持范围时会明确提示。
+            </p>
+            <div className="tangent-controls">
+              <Checkbox
+                checked={tangentEnabled}
+                onChange={(event) => setTangentEnabled(event.target.checked)}
+              >
+                显示切线
+              </Checkbox>
+              <InputNumber
+                className="tangent-input"
+                disabled={!tangentEnabled}
+                value={tangentX0}
+                onChange={(value) =>
+                  setTangentX0(
+                    typeof value === 'number' && Number.isFinite(value)
+                      ? value
+                      : null,
+                  )
+                }
+                placeholder="切点 x₀"
+                aria-label="切点横坐标 x₀"
+              />
+            </div>
+            {tangentState.status === 'error' && (
+              <p className="chart-summary comparison-error">
+                {tangentState.message}
               </p>
             )}
+            {tangentState.status === 'ready' &&
+              tangentEnabled &&
+              tangentX0 !== null && (
+                <p className="chart-summary" role="status">
+                  切线：x₀ = {formatNumber(tangentX0)}，斜率 f′(
+                  {formatNumber(tangentX0)}) ={' '}
+                  {formatNumber(tangentState.slope)}
+                  （符号求导在一点的数值，不构成极限证明。）
+                </p>
+              )}
+          </div>
+          {mode === 'function' && (
+            <Collapse
+              className="section-gap"
+              items={[
+                {
+                  key: 'presets',
+                  label: `经典函数示例（${plotPresets.length} 个）`,
+                  children: (
+                    <>
+                      <ul className={styles.presetList}>
+                        {plotPresets.map((item) => (
+                          <li key={item.id}>
+                            <button
+                              type="button"
+                              className={styles.presetItem}
+                              onClick={() =>
+                                preset({
+                                  expression: item.expression,
+                                  xMin: item.xMin,
+                                  xMax: item.xMax,
+                                })
+                              }
+                            >
+                              <span className={styles.presetName}>
+                                {item.name}
+                              </span>
+                              <code className={styles.presetExpression}>
+                                {item.expression}
+                              </code>
+                              <span className={styles.presetNote}>
+                                {item.note}
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="small-note">
+                        预置示例仅用于观察图像，不构成数学证明；内容需按教材核验。
+                      </p>
+                    </>
+                  ),
+                },
+              ]}
+            />
+          )}
           {saveStatus && (
             <Alert
               type={saveStatus.ok ? 'success' : 'error'}
@@ -681,13 +920,17 @@ function PlottingWorkspace({
           )}
         </Card>
         <Card
-          title="函数图像"
+          title={mode === 'function' ? '函数图像' : '数列散点'}
           extra={
             <Space>
               <Button
                 size="small"
                 icon={<DownloadOutlined />}
-                disabled={plot.status !== 'ready'}
+                disabled={
+                  mode === 'function'
+                    ? plot.status !== 'ready'
+                    : sequence.status !== 'ready'
+                }
                 onClick={exportImage}
               >
                 导出图像
@@ -696,87 +939,164 @@ function PlottingWorkspace({
             </Space>
           }
         >
-          {plot.status === 'loading' && (
-            <div className="chart-loading">
-              <Spin />
-              <p>正在计算采样点…</p>
-            </div>
-          )}
-          {plot.status === 'error' && (
-            <Alert
-              type="error"
-              showIcon
-              title="无法绘制"
-              description={plot.message}
-            />
-          )}
-          {plot.status === 'ready' && result && summary && (
+          {mode === 'function' ? (
             <>
-              {(comparisonCurves.length > 0 || tangentLine !== null) && (
-                <ul
-                  className="chart-legend"
-                  aria-label="图例：曲线颜色与表达式"
-                >
-                  <li>
-                    <span
-                      className="legend-swatch"
-                      style={{ background: MAIN_CURVE_COLOR }}
-                    />
-                    f(x) = {plot.request.expression}
-                  </li>
-                  {comparisonCurves.map((curve, index) => (
-                    <li key={curve.expression + index}>
-                      <span
-                        className="legend-swatch"
-                        style={{ background: comparisonCurveColor(index) }}
-                      />
-                      {COMPARISON_LABELS[index] ?? `g${index + 1}`}(x) ={' '}
-                      {curve.expression}
-                    </li>
-                  ))}
-                  {tangentLine !== null && (
-                    <li>
-                      <span
-                        className="legend-swatch"
-                        style={{ background: TANGENT_COLOR }}
-                      />
-                      切线（x₀ = {formatNumber(tangentLine.x0)}）
-                    </li>
-                  )}
-                </ul>
+              {plot.status === 'loading' && (
+                <div className="chart-loading">
+                  <Spin />
+                  <p>正在计算采样点…</p>
+                </div>
               )}
-              <FunctionChart
-                ref={chartRef}
-                points={result.points}
-                expression={plot.request.expression}
-                gapMarkers={gapMarkers}
-                comparisons={comparisonCurves}
-                tangent={tangentLine}
-              />
-              <p className="chart-summary" role="status">
-                f(x) = {plot.request.expression} · 区间 [{plot.request.xMin},{' '}
-                {plot.request.xMax}] · {result.points.length} 个图像点 ·{' '}
-                {result.gaps} 处采样缺口
-              </p>
-              {exportStatus && (
+              {plot.status === 'error' && (
                 <Alert
-                  type={exportStatus.ok ? 'success' : 'error'}
-                  title={exportStatus.text}
+                  type="error"
                   showIcon
+                  title="无法绘制"
+                  description={plot.message}
                 />
               )}
-              {result.points.every((point) => point[1] === null) && (
+              {plot.status === 'ready' && result && summary && (
+                <>
+                  {(comparisonCurves.length > 0 || tangentLine !== null) && (
+                    <ul
+                      className="chart-legend"
+                      aria-label="图例：曲线颜色与表达式"
+                    >
+                      <li>
+                        <span
+                          className="legend-swatch"
+                          style={{ background: MAIN_CURVE_COLOR }}
+                        />
+                        f(x) = {plot.request.expression}
+                      </li>
+                      {comparisonCurves.map((curve, index) => (
+                        <li key={curve.id}>
+                          <span
+                            className="legend-swatch"
+                            style={{ background: comparisonCurveColor(index) }}
+                          />
+                          {curve.label}(x) = {curve.expression}
+                        </li>
+                      ))}
+                      {tangentLine !== null && (
+                        <li>
+                          <span
+                            className="legend-swatch"
+                            style={{ background: TANGENT_COLOR }}
+                          />
+                          切线（x₀ = {formatNumber(tangentLine.x0)}）
+                        </li>
+                      )}
+                    </ul>
+                  )}
+                  <FunctionChart
+                    ref={chartRef}
+                    points={result.points}
+                    expression={plot.request.expression}
+                    gapMarkers={gapMarkers}
+                    horizontalMarkers={result.asymptotes}
+                    comparisons={comparisonCurves}
+                    tangent={tangentLine}
+                  />
+                  <p className="chart-summary" role="status">
+                    f(x) = {plot.request.expression} · 区间 [{plot.request.xMin}
+                    , {plot.request.xMax}] · {result.points.length} 个图像点 ·{' '}
+                    {result.gaps} 处采样缺口
+                  </p>
+                  {comparisonIds.map((id, index) => {
+                    const entry = comparisonEntries.get(id);
+                    if (!entry || entry.intersections === null) return null;
+                    const label = COMPARISON_LABELS[index] ?? `g${index + 1}`;
+                    const pointsText =
+                      entry.intersections.length === 0
+                        ? '近似交点：未检测到。'
+                        : `近似交点：${entry.intersections
+                            .map(
+                              (point) =>
+                                `x ≈ ${formatNumber(point.x)}，y ≈ ${formatNumber(point.y)}`,
+                            )
+                            .join('；')}。`;
+                    return (
+                      <p key={id} className="chart-summary" role="status">
+                        {label}(x) 与 f(x) 的{pointsText}
+                        （数值近似，非符号求解；切触或采样漏过的交点可能漏检。）
+                      </p>
+                    );
+                  })}
+                  {result.points.every((point) => point[1] === null) && (
+                    <Alert
+                      type="warning"
+                      title="该范围内没有可显示的有限实数值，请调整表达式或范围。"
+                    />
+                  )}
+                  <PlotSummaryPanel
+                    summary={summary}
+                    totalPoints={result.points.length}
+                    asymptotes={result.asymptotes ?? []}
+                  />
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              {sequence.status === 'idle' && (
+                <p className="chart-summary">
+                  输入通项表达式与项数，点击“绘制数列”后显示前若干项的散点。
+                </p>
+              )}
+              {sequence.status === 'loading' && (
+                <div className="chart-loading">
+                  <Spin />
+                  <p>正在计算前若干项…</p>
+                </div>
+              )}
+              {sequence.status === 'error' && (
                 <Alert
-                  type="warning"
-                  title="该范围内没有可显示的有限实数值，请调整表达式或范围。"
+                  type="error"
+                  showIcon
+                  title="无法绘制"
+                  description={sequence.message}
                 />
               )}
-              <PlotSummaryPanel
-                summary={summary}
-                totalPoints={result.points.length}
-              />
+              {sequence.status === 'ready' && (
+                <>
+                  <FunctionChart
+                    ref={chartRef}
+                    points={sequence.result.points}
+                    expression={sequence.request.expression}
+                    variant="sequence"
+                  />
+                  <p className="chart-summary" role="status">
+                    a_n = {sequence.request.expression} · 前{' '}
+                    {sequence.request.terms} 项 · {sequence.result.gaps}{' '}
+                    项无定义（留空）
+                  </p>
+                  {sequence.result.points.every(
+                    (point) => point[1] === null,
+                  ) && (
+                    <Alert
+                      type="warning"
+                      title="前若干项中没有可显示的有限实数值，请调整通项表达式。"
+                    />
+                  )}
+                  <SequenceSummaryPanel
+                    result={sequence.result}
+                    terms={sequence.request.terms}
+                  />
+                </>
+              )}
             </>
           )}
+          {(mode === 'function'
+            ? plot.status === 'ready'
+            : sequence.status === 'ready') &&
+            exportStatus && (
+              <Alert
+                type={exportStatus.ok ? 'success' : 'error'}
+                title={exportStatus.text}
+                showIcon
+              />
+            )}
         </Card>
       </div>
       <Alert
@@ -784,7 +1104,11 @@ function PlottingWorkspace({
         type="warning"
         showIcon
         title="观察图像，不等于证明结论"
-        description="这里只做有限采样。超出实数定义域、非有限值和绝对值大于 10⁶ 的结果会留空，留空只是采样缺口，不一定是数学间断；自适应探测与二分定位仅能启发式识别部分疑似间断，可能漏检或误判，不保证识别全部间断点或高频变化。"
+        description={
+          mode === 'function'
+            ? '这里只做有限采样。超出实数定义域、非有限值和绝对值大于 10⁶ 的结果会留空，留空只是采样缺口，不一定是数学间断；自适应探测与二分定位仅能启发式识别部分疑似间断，可能漏检或误判，不保证识别全部间断点或高频变化。水平渐近趋势提示同样是数值启发式（含观察范围外的少量探测点），可能漏检或误判，不构成极限证明。'
+            : '这里只对前若干项做数值采样。无定义或非有限的项会留空，留空只是采样缺口，不一定是数学间断；观察前若干项的散点不能证明数列收敛、单调或有界，也不能代替极限计算。'
+        }
       />
     </>
   );

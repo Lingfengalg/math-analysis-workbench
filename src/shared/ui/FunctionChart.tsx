@@ -10,12 +10,17 @@ import {
   TooltipComponent,
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
-import type { PlotPoint } from '@/shared/contracts';
+import type {
+  HorizontalAsymptoteCandidate,
+  IntersectionPoint,
+  PlotPoint,
+} from '@/shared/contracts';
 import {
   comparisonCurveColor,
   curveExpressionsLabel,
   finiteYRange,
   GAP_MARKER_COLOR,
+  INTERSECTION_MARKER_COLOR,
   MAIN_CURVE_COLOR,
   TANGENT_COLOR,
   tangentPoints,
@@ -43,6 +48,8 @@ export interface ComparisonCurve {
   points: PlotPoint[];
   expression: string;
   gapMarkers?: number[];
+  /** 与主曲线的近似交点（数值二分），在图上以圆点标记。 */
+  intersections?: IntersectionPoint[];
 }
 
 interface FunctionChartProps {
@@ -50,6 +57,8 @@ interface FunctionChartProps {
   expression: string;
   gapMarkers?: number[];
   comparisons?: ComparisonCurve[];
+  horizontalMarkers?: HorizontalAsymptoteCandidate[];
+  variant?: 'function' | 'sequence';
   tangent?: TangentLine | null;
 }
 
@@ -57,7 +66,15 @@ export const FunctionChart = forwardRef<
   FunctionChartHandle,
   FunctionChartProps
 >(function FunctionChart(
-  { points, expression, gapMarkers = [], comparisons = [], tangent = null },
+  {
+    points,
+    expression,
+    gapMarkers = [],
+    comparisons = [],
+    horizontalMarkers = [],
+    variant = 'function',
+    tangent = null,
+  },
   ref,
 ) {
   const element = useRef<HTMLDivElement>(null);
@@ -75,11 +92,12 @@ export const FunctionChart = forwardRef<
   useEffect(() => {
     if (!element.current) return;
     const curves = [
-      { points, expression, gapMarkers },
+      { points, expression, gapMarkers, intersections: [] },
       ...comparisons.map((curve) => ({
         points: curve.points,
         expression: curve.expression,
         gapMarkers: curve.gapMarkers ?? [],
+        intersections: curve.intersections ?? [],
       })),
     ];
     // ECharts discards marker lines whose endpoints fall outside the axis
@@ -87,27 +105,29 @@ export const FunctionChart = forwardRef<
     // (which stays inside the auto-scaled axis thanks to its default margin).
     const { min: dataMin, max: dataMax } = finiteYRange([
       ...curves,
-      // 切线两端点参与 y 范围，保证切线在初始视野内可见。
       ...(tangent ? [{ points: tangentPoints(tangent), expression: '' }] : []),
     ]);
+    const isSequence = variant === 'sequence';
     const chart = init(element.current);
     chartRef.current = chart;
     chart.setOption({
       animation: false,
       aria: {
         enabled: true,
-        description: `函数 ${curveExpressionsLabel(curves)} 的采样图像${tangent ? `，叠加 x₀ = ${tangent.x0} 处的切线` : ''}`,
+        description: isSequence
+          ? `数列 ${expression} 的前若干项散点图`
+          : `函数 ${curveExpressionsLabel(curves)} 的采样图像${tangent ? `，叠加 x₀ = ${tangent.x0} 处的切线` : ''}`,
       },
       grid: { left: 58, right: 28, top: 28, bottom: 65 },
       tooltip: { trigger: 'axis', renderMode: 'richText' },
       xAxis: {
         type: 'value',
-        name: 'x',
+        name: isSequence ? 'n' : 'x',
         splitLine: { lineStyle: { color: '#e8ebf2' } },
       },
       yAxis: {
         type: 'value',
-        name: 'f(x)',
+        name: isSequence ? 'a_n' : 'f(x)',
         splitLine: { lineStyle: { color: '#e8ebf2' } },
       },
       dataZoom: [
@@ -121,11 +141,12 @@ export const FunctionChart = forwardRef<
           return {
             type: 'line',
             data: curve.points,
-            showSymbol: false,
+            showSymbol: isSequence,
+            symbolSize: isSequence ? 5 : undefined,
             connectNulls: false,
-            lineStyle: { color, width: 2.5 },
+            lineStyle: { color, width: isSequence ? 1.5 : 2.5 },
             markLine:
-              curve.gapMarkers.length > 0
+              !isSequence && curve.gapMarkers.length > 0
                 ? {
                     silent: true,
                     symbol: 'none',
@@ -139,6 +160,23 @@ export const FunctionChart = forwardRef<
                       { coord: [x, dataMin] },
                       { coord: [x, dataMax] },
                     ]),
+                  }
+                : undefined,
+            markPoint:
+              curve.intersections.length > 0
+                ? {
+                    silent: true,
+                    symbol: 'circle',
+                    symbolSize: 7,
+                    itemStyle: {
+                      color: INTERSECTION_MARKER_COLOR,
+                      borderColor: '#ffffff',
+                      borderWidth: 1,
+                    },
+                    label: { show: false },
+                    data: curve.intersections.map((point) => ({
+                      coord: [point.x, point.y],
+                    })),
                   }
                 : undefined,
           };
@@ -167,6 +205,19 @@ export const FunctionChart = forwardRef<
               },
             ]
           : []),
+        // 渐近趋势提示画成独立 series 的水平虚线：样式与竖直间断标记
+        // （橙色虚线）区分，静默且不进提示框。
+        ...horizontalMarkers.map((marker) => ({
+          type: 'line' as const,
+          silent: true,
+          data: [
+            [marker.xFrom, marker.y],
+            [marker.xTo, marker.y],
+          ],
+          showSymbol: false,
+          lineStyle: { type: 'dashed' as const, color: '#0e7490', width: 1.5 },
+          tooltip: { show: false },
+        })),
       ],
     });
     const observer = new ResizeObserver(() => chart.resize());
@@ -176,20 +227,26 @@ export const FunctionChart = forwardRef<
       chart.dispose();
       chartRef.current = null;
     };
-  }, [points, expression, gapMarkers, comparisons, tangent]);
+  }, [
+    points,
+    expression,
+    gapMarkers,
+    comparisons,
+    horizontalMarkers,
+    variant,
+    tangent,
+  ]);
   return (
     <div
       ref={element}
       className="function-chart"
       data-annotation-anchor="plotting:chart"
       role="img"
-      aria-label={`函数 ${curveExpressionsLabel([
-        { points, expression },
-        ...comparisons.map((curve) => ({
-          points: curve.points,
-          expression: curve.expression,
-        })),
-      ])} 的采样图像${tangent ? `，含 x₀ = ${tangent.x0} 处切线` : ''}`}
+      aria-label={
+        variant === 'sequence'
+          ? `数列 ${expression} 的前若干项散点图`
+          : `函数 ${curveExpressionsLabel([{ points, expression }, ...comparisons])} 的采样图像${tangent ? `，含 x₀ = ${tangent.x0} 处切线` : ''}`
+      }
     />
   );
 });

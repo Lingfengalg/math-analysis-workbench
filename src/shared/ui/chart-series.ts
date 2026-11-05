@@ -9,7 +9,9 @@ export interface ChartCurve {
 
 export const MAIN_CURVE_COLOR = '#485bb2';
 export const GAP_MARKER_COLOR = '#c47f17';
-// 与主曲线蓝、疑似间断橙 #c47f17 保持可区分；渐近提示色（#60）为 #0e7490。
+export const INTERSECTION_MARKER_COLOR = '#854d0e';
+// 对比曲线色与主曲线蓝、疑似间断橙 #c47f17 保持可区分；渐近提示色（#60）
+// 为 #0e7490；交点标记色 #854d0e 也与以上各色保持可区分。
 export const COMPARISON_CURVE_COLORS = ['#b03a5b', '#2f855a', '#7b5ea7'];
 // 切线：亮青色，与渐近提示的深青 #0e7490 及上述各色保持可区分。
 export const TANGENT_COLOR = '#06b6d4';
