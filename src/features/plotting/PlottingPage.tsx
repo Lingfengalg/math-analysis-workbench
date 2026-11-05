@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import {
   Alert,
@@ -15,8 +15,10 @@ import {
   Tag,
 } from 'antd';
 import {
+  DeleteOutlined,
   DownloadOutlined,
   LineChartOutlined,
+  PlusOutlined,
   SaveOutlined,
 } from '@ant-design/icons';
 import {
@@ -36,7 +38,12 @@ import {
   type PlotSummary,
 } from '@/shared/math/plot-summary';
 import {
+  comparisonCurveColor,
+  MAIN_CURVE_COLOR,
+} from '@/shared/ui/chart-series';
+import {
   FunctionChart,
+  type ComparisonCurve,
   type FunctionChartHandle,
 } from '@/shared/ui/FunctionChart';
 import { PageHeader } from '@/shared/ui/PageHeader';
@@ -47,6 +54,7 @@ import {
   pngDataUrlToBlob,
 } from '@/shared/ui/plot-export';
 import {
+  useComparisonCalculation,
   usePlotCalculation,
   useSequenceCalculation,
 } from './usePlotCalculation';
@@ -168,6 +176,104 @@ function SequenceSummaryPanel({
   );
 }
 
+// 对比曲线占位字母，按添加顺序分配；上限 3 条。
+const COMPARISON_LABELS = ['g', 'h', 'p'];
+
+function ComparisonEntry({
+  index,
+  range,
+  onUpdate,
+  onRemove,
+}: {
+  index: number;
+  range: { xMin: number; xMax: number };
+  onUpdate: (entry: { expression: string; result: PlotResult } | null) => void;
+  onRemove: () => void;
+}) {
+  const label = COMPARISON_LABELS[index] ?? `g${index + 1}`;
+  const [expression, setExpression] = useState('');
+  const { state, draw } = useComparisonCalculation();
+  const drawnExpression = useRef('');
+  const lastRange = useRef(range);
+  const onUpdateRef = useRef(onUpdate);
+  useEffect(() => {
+    onUpdateRef.current = onUpdate;
+  });
+
+  // 把已绘制的对比曲线上报给父组件；空闲、计算中或卸载时上报 null。
+  useEffect(() => {
+    const entry =
+      state.status === 'ready'
+        ? { expression: state.request.expression, result: state.result }
+        : null;
+    onUpdateRef.current(entry);
+    return () => onUpdateRef.current(null);
+  }, [state]);
+
+  // 与主曲线共享观察区间：主曲线换区间重绘后，对比曲线用同一区间自动重绘。
+  useEffect(() => {
+    const { xMin, xMax } = range;
+    const changed =
+      lastRange.current.xMin !== xMin || lastRange.current.xMax !== xMax;
+    lastRange.current = { xMin, xMax };
+    if (changed && drawnExpression.current !== '') {
+      draw({ expression: drawnExpression.current, xMin, xMax });
+    }
+  }, [range, draw]);
+
+  const submit = () => {
+    const value = expression.trim();
+    if (value === '') return;
+    drawnExpression.current = value;
+    draw({ expression: value, xMin: range.xMin, xMax: range.xMax });
+  };
+
+  return (
+    <div className="comparison-entry">
+      <div className="comparison-controls">
+        <Input
+          className="comparison-input"
+          value={expression}
+          onChange={(event) => setExpression(event.target.value)}
+          onPressEnter={submit}
+          placeholder={`例如 ${label}(x) = abs(x)`}
+          aria-label={`对比表达式 ${label}(x)`}
+          autoComplete="off"
+        />
+        <Button
+          onClick={submit}
+          loading={state.status === 'loading'}
+          aria-label={`绘制对比曲线 ${label}(x)`}
+        >
+          绘制
+        </Button>
+        <Button
+          danger
+          onClick={onRemove}
+          aria-label={`移除对比曲线 ${label}(x)`}
+          icon={<DeleteOutlined />}
+        />
+      </div>
+      {state.status === 'loading' && (
+        <p className="chart-summary" role="status">
+          正在计算 {label}(x) 的采样点…
+        </p>
+      )}
+      {state.status === 'error' && (
+        <p className="chart-summary comparison-error">
+          无法绘制 {label}(x)：{state.message}
+        </p>
+      )}
+      {state.status === 'ready' && (
+        <p className="chart-summary" role="status">
+          {label}(x) = {state.request.expression} · {state.result.points.length}{' '}
+          个图像点 · {state.result.gaps} 处采样缺口
+        </p>
+      )}
+    </div>
+  );
+}
+
 function PlottingWorkspace({
   initial,
   warning,
@@ -195,11 +301,78 @@ function PlottingWorkspace({
     ok: boolean;
     text: string;
   } | null>(null);
+  const [comparisonIds, setComparisonIds] = useState<number[]>([]);
+  const nextComparisonId = useRef(1);
+  const [comparisonEntries, setComparisonEntries] = useState<
+    Map<number, { expression: string; result: PlotResult }>
+  >(new Map());
+  // 对比曲线与主曲线共享观察区间：记录主曲线最近一次有效绘制的区间。
+  const [range, setRange] = useState({
+    xMin: initial.xMin,
+    xMax: initial.xMax,
+  });
   const result = plot.status === 'ready' ? plot.result : null;
   const summary = useMemo(
     () => (result ? summarizePlot(result.points) : null),
     [result],
   );
+  const updateComparison = useCallback(
+    (id: number, entry: { expression: string; result: PlotResult } | null) => {
+      setComparisonEntries((prev) => {
+        const existing = prev.get(id);
+        if (entry === null) {
+          if (existing === undefined) return prev;
+          const next = new Map(prev);
+          next.delete(id);
+          return next;
+        }
+        if (
+          existing &&
+          existing.result === entry.result &&
+          existing.expression === entry.expression
+        )
+          return prev;
+        const next = new Map(prev);
+        next.set(id, entry);
+        return next;
+      });
+    },
+    [],
+  );
+  const addComparison = () => {
+    setComparisonIds((ids) =>
+      ids.length >= 3 ? ids : [...ids, nextComparisonId.current++],
+    );
+  };
+  const removeComparison = (id: number) => {
+    setComparisonIds((ids) => ids.filter((item) => item !== id));
+    setComparisonEntries((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Map(prev);
+      next.delete(id);
+      return next;
+    });
+  };
+  const comparisonCurves = useMemo(() => {
+    const curves: Array<ComparisonCurve & { id: number; label: string }> = [];
+    for (const [index, id] of comparisonIds.entries()) {
+      const entry = comparisonEntries.get(id);
+      if (!entry) continue;
+      const curveSummary = summarizePlot(entry.result.points);
+      curves.push({
+        id,
+        label: COMPARISON_LABELS[index] ?? `g${index + 1}`,
+        points: entry.result.points,
+        expression: entry.expression,
+        // 与主曲线同样的规则：只标记孤立的单点疑似缺口，控制密度。
+        gapMarkers: curveSummary.gapRanges
+          .filter((gapRange) => gapRange.from === gapRange.to)
+          .map((gapRange) => gapRange.from)
+          .slice(0, 8),
+      });
+    }
+    return curves;
+  }, [comparisonIds, comparisonEntries]);
   // Only isolated single-point gaps (suspected poles or jumps) get a dashed
   // marker; merged gap ranges stay unmarked. Cap keeps dense cases readable.
   const gapMarkers = useMemo(
@@ -221,8 +394,10 @@ function PlottingWorkspace({
     const sourceKnowledgeId = unchangedFromLink
       ? initial.sourceKnowledgeId
       : undefined;
-    if (plotRequestSchema.safeParse(value).success)
+    if (plotRequestSchema.safeParse(value).success) {
       setSourceId(sourceKnowledgeId);
+      setRange({ xMin: value.xMin, xMax: value.xMax });
+    }
     setExportStatus(null);
     drawPlot({ ...value, sourceKnowledgeId });
   };
@@ -562,6 +737,31 @@ function PlottingWorkspace({
             / asin / acos / atan / abs / sqrt / log / exp。log
             为自然对数。幂指数限数字常量，绝对值不超过 20。
           </p>
+          <div hidden={mode !== 'function'}>
+            <h3 className="detail-heading">对比曲线</h3>
+            <p className="small-note comparison-note">
+              最多 3
+              条，与主曲线共享观察区间与缩放；每条曲线独立有限采样，不构成数学结论。
+            </p>
+            {comparisonIds.map((id, index) => (
+              <ComparisonEntry
+                key={id}
+                index={index}
+                range={range}
+                onUpdate={(entry) => updateComparison(id, entry)}
+                onRemove={() => removeComparison(id)}
+              />
+            ))}
+            <Button
+              className="add-comparison"
+              block
+              icon={<PlusOutlined />}
+              onClick={addComparison}
+              disabled={comparisonIds.length >= 3}
+            >
+              添加对比曲线
+            </Button>
+          </div>
           {mode === 'function' && (
             <Collapse
               className="section-gap"
@@ -653,12 +853,36 @@ function PlottingWorkspace({
               )}
               {plot.status === 'ready' && result && summary && (
                 <>
+                  {comparisonCurves.length > 0 && (
+                    <ul
+                      className="chart-legend"
+                      aria-label="图例：曲线颜色与表达式"
+                    >
+                      <li>
+                        <span
+                          className="legend-swatch"
+                          style={{ background: MAIN_CURVE_COLOR }}
+                        />
+                        f(x) = {plot.request.expression}
+                      </li>
+                      {comparisonCurves.map((curve, index) => (
+                        <li key={curve.id}>
+                          <span
+                            className="legend-swatch"
+                            style={{ background: comparisonCurveColor(index) }}
+                          />
+                          {curve.label}(x) = {curve.expression}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                   <FunctionChart
                     ref={chartRef}
                     points={result.points}
                     expression={plot.request.expression}
                     gapMarkers={gapMarkers}
                     horizontalMarkers={result.asymptotes}
+                    comparisons={comparisonCurves}
                   />
                   <p className="chart-summary" role="status">
                     f(x) = {plot.request.expression} · 区间 [{plot.request.xMin}

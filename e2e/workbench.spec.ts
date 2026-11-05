@@ -415,3 +415,109 @@ test('知识搜索覆盖条件、例题与误区', async ({ page }) => {
   await search.fill('不存在的关键词');
   await expect(page.getByText(/没有找到匹配的知识点/)).toBeVisible();
 });
+
+test('对比曲线与主曲线共享坐标轴并以颜色区分', async ({ page }) => {
+  await page.goto('/#/plotting');
+  await expect(page.getByRole('status')).toContainText('f(x)', {
+    timeout: 20000,
+  });
+  await page.getByRole('button', { name: '添加对比曲线' }).click();
+  await page.getByLabel('对比表达式 g(x)').fill('abs(x)');
+  await page.getByRole('button', { name: '绘制对比曲线 g(x)' }).click();
+  const comparisonStatus = page
+    .getByRole('status')
+    .filter({ hasText: 'g(x) = abs(x)' });
+  await expect(comparisonStatus).toBeVisible({ timeout: 20000 });
+  // 图像无障碍名称同时包含两条曲线
+  await expect(
+    page.getByRole('img', { name: '函数 x^2 与 abs(x) 的采样图像' }),
+  ).toBeVisible();
+  // 图例列出两条表达式
+  const legend = page.getByRole('list', { name: '图例：曲线颜色与表达式' });
+  await expect(legend).toContainText('f(x) = x^2');
+  await expect(legend).toContainText('g(x) = abs(x)');
+  // 画布像素验证：主曲线蓝 #485bb2 与对比曲线玫红 #b03a5b 同时出现
+  await expect
+    .poll(
+      async () =>
+        page.locator('.function-chart canvas').evaluateAll((canvases) => {
+          let blue = 0;
+          let rose = 0;
+          for (const element of canvases) {
+            const canvas = element as HTMLCanvasElement;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) continue;
+            const pixels = ctx.getImageData(
+              0,
+              0,
+              canvas.width,
+              canvas.height,
+            ).data;
+            for (let i = 0; i < pixels.length; i += 4) {
+              if (pixels[i + 3] <= 100) continue;
+              const [r, g, b] = [pixels[i], pixels[i + 1], pixels[i + 2]];
+              if (
+                r >= 60 &&
+                r <= 85 &&
+                g >= 75 &&
+                g <= 110 &&
+                b >= 160 &&
+                b <= 195
+              )
+                blue++;
+              if (
+                r >= 160 &&
+                r <= 195 &&
+                g >= 45 &&
+                g <= 75 &&
+                b >= 75 &&
+                b <= 110
+              )
+                rose++;
+            }
+          }
+          return blue > 10 && rose > 10;
+        }),
+      { timeout: 10000 },
+    )
+    .toBe(true);
+  // 最多 3 条：再加两条后按钮禁用；移除一条后恢复
+  await page.getByRole('button', { name: '添加对比曲线' }).click();
+  await page.getByRole('button', { name: '添加对比曲线' }).click();
+  await expect(
+    page.getByRole('button', { name: '添加对比曲线' }),
+  ).toBeDisabled();
+  await page.getByRole('button', { name: '移除对比曲线 g(x)' }).click();
+  await expect(
+    page.getByRole('button', { name: '添加对比曲线' }),
+  ).toBeEnabled();
+});
+
+test('对比曲线图例与输入行的标签保持一致', async ({ page }) => {
+  await page.goto('/#/plotting');
+  await expect(page.getByRole('status')).toContainText('f(x)', {
+    timeout: 20000,
+  });
+  const add = page.getByRole('button', { name: '添加对比曲线' });
+  await add.click();
+  await add.click();
+  const legend = page.getByRole('list', { name: '图例：曲线颜色与表达式' });
+  await page.getByLabel('对比表达式 h(x)').fill('abs(x)');
+  await page.getByRole('button', { name: '绘制对比曲线 h(x)' }).click();
+  await expect(legend).toContainText('h(x) = abs(x)', { timeout: 20000 });
+  await expect(legend).not.toContainText('g(x) = abs(x)');
+  await page.getByLabel('对比表达式 g(x)').fill('x^3');
+  await page.getByRole('button', { name: '绘制对比曲线 g(x)' }).click();
+  await expect(legend).toContainText('g(x) = x^3', { timeout: 20000 });
+  await expect(legend).toContainText('h(x) = abs(x)');
+  await page.getByRole('button', { name: '移除对比曲线 g(x)' }).click();
+  await expect(legend).toContainText('g(x) = abs(x)');
+  await expect(legend).not.toContainText('h(x) = abs(x)');
+  await page.getByText('数列散点', { exact: true }).click();
+  await expect(page.getByRole('button', { name: '添加对比曲线' })).toHaveCount(
+    0,
+  );
+  await page.getByText('函数图像', { exact: true }).click();
+  await expect(page.getByLabel('对比表达式 g(x)')).toHaveValue('abs(x)');
+  await expect(legend).toContainText('g(x) = abs(x)');
+});

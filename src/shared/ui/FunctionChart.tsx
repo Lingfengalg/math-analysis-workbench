@@ -13,6 +13,13 @@ import type {
   HorizontalAsymptoteCandidate,
   PlotPoint,
 } from '@/shared/contracts';
+import {
+  comparisonCurveColor,
+  curveExpressionsLabel,
+  finiteYRange,
+  GAP_MARKER_COLOR,
+  MAIN_CURVE_COLOR,
+} from './chart-series';
 
 registerCharts([
   LineChart,
@@ -29,13 +36,19 @@ export interface FunctionChartHandle {
   exportPng: () => string;
 }
 
+/** 对比曲线：与主曲线共享坐标轴与缩放，独立采样、独立颜色。 */
+export interface ComparisonCurve {
+  points: PlotPoint[];
+  expression: string;
+  gapMarkers?: number[];
+}
+
 interface FunctionChartProps {
   points: PlotPoint[];
   expression: string;
   gapMarkers?: number[];
-  /** 水平渐近趋势候选：以青绿色虚线画在对应尾部的 x 跨度上。 */
+  comparisons?: ComparisonCurve[];
   horizontalMarkers?: HorizontalAsymptoteCandidate[];
-  /** 数列模式：散点显示、横轴为项序号 n，不做间断虚线标记。 */
   variant?: 'function' | 'sequence';
 }
 
@@ -47,6 +60,7 @@ export const FunctionChart = forwardRef<
     points,
     expression,
     gapMarkers = [],
+    comparisons = [],
     horizontalMarkers = [],
     variant = 'function',
   },
@@ -66,18 +80,18 @@ export const FunctionChart = forwardRef<
   }));
   useEffect(() => {
     if (!element.current) return;
+    const curves = [
+      { points, expression, gapMarkers },
+      ...comparisons.map((curve) => ({
+        points: curve.points,
+        expression: curve.expression,
+        gapMarkers: curve.gapMarkers ?? [],
+      })),
+    ];
     // ECharts discards marker lines whose endpoints fall outside the axis
-    // extent, so span only the finite data range (which stays inside the
-    // auto-scaled axis thanks to its default margin).
-    const finiteYs = points
-      .map((point) => point[1])
-      .filter((y): y is number => y !== null);
-    const dataMin = finiteYs.length > 0 ? Math.min(...finiteYs) : 0;
-    const dataMax = finiteYs.length > 0 ? Math.max(...finiteYs) : 1;
-    // For flat data the data range degenerates to a point; widen it a bit
-    // so the marker line still has a visible length.
-    const span = dataMax - dataMin;
-    const pad = span > 0 ? 0 : Math.max(Math.abs(dataMin) * 0.05, 0.5);
+    // extent, so span only the finite data range shared by all curves
+    // (which stays inside the auto-scaled axis thanks to its default margin).
+    const { min: dataMin, max: dataMax } = finiteYRange(curves);
     const isSequence = variant === 'sequence';
     const chart = init(element.current);
     chartRef.current = chart;
@@ -87,7 +101,7 @@ export const FunctionChart = forwardRef<
         enabled: true,
         description: isSequence
           ? `数列 ${expression} 的前若干项散点图`
-          : `函数 ${expression} 的采样图像`,
+          : `函数 ${curveExpressionsLabel(curves)} 的采样图像`,
       },
       grid: { left: 58, right: 28, top: 28, bottom: 65 },
       tooltip: { trigger: 'axis', renderMode: 'richText' },
@@ -106,32 +120,35 @@ export const FunctionChart = forwardRef<
         { type: 'slider', height: 18, bottom: 8 },
       ],
       series: [
-        {
-          type: 'line',
-          data: points,
-          // 数列模式显示散点并连线观察趋势；函数模式只连曲线。
-          showSymbol: isSequence,
-          symbolSize: isSequence ? 5 : undefined,
-          connectNulls: false,
-          lineStyle: { color: '#485bb2', width: isSequence ? 1.5 : 2.5 },
-          markLine:
-            !isSequence && gapMarkers.length > 0
-              ? {
-                  silent: true,
-                  symbol: 'none',
-                  label: { show: false },
-                  lineStyle: {
-                    type: 'dashed',
-                    color: '#c47f17',
-                    width: 1.5,
-                  },
-                  data: gapMarkers.map((x) => [
-                    { coord: [x, dataMin - pad] },
-                    { coord: [x, dataMax + pad] },
-                  ]),
-                }
-              : undefined,
-        },
+        ...curves.map((curve, index) => {
+          const color =
+            index === 0 ? MAIN_CURVE_COLOR : comparisonCurveColor(index - 1);
+          return {
+            type: 'line',
+            data: curve.points,
+            showSymbol: isSequence,
+            symbolSize: isSequence ? 5 : undefined,
+            connectNulls: false,
+            lineStyle: { color, width: isSequence ? 1.5 : 2.5 },
+            markLine:
+              !isSequence && curve.gapMarkers.length > 0
+                ? {
+                    silent: true,
+                    symbol: 'none',
+                    label: { show: false },
+                    lineStyle: {
+                      type: 'dashed',
+                      color: GAP_MARKER_COLOR,
+                      width: 1.5,
+                    },
+                    data: curve.gapMarkers.map((x) => [
+                      { coord: [x, dataMin] },
+                      { coord: [x, dataMax] },
+                    ]),
+                  }
+                : undefined,
+          };
+        }),
         // 渐近趋势提示画成独立 series 的水平虚线：样式与竖直间断标记
         // （橙色虚线）区分，静默且不进提示框。
         ...horizontalMarkers.map((marker) => ({
@@ -154,7 +171,7 @@ export const FunctionChart = forwardRef<
       chart.dispose();
       chartRef.current = null;
     };
-  }, [points, expression, gapMarkers, horizontalMarkers, variant]);
+  }, [points, expression, gapMarkers, comparisons, horizontalMarkers, variant]);
   return (
     <div
       ref={element}
@@ -164,7 +181,7 @@ export const FunctionChart = forwardRef<
       aria-label={
         variant === 'sequence'
           ? `数列 ${expression} 的前若干项散点图`
-          : `函数 ${expression} 的采样图像`
+          : `函数 ${curveExpressionsLabel([{ points, expression }, ...comparisons])} 的采样图像`
       }
     />
   );
