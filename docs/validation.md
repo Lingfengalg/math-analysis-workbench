@@ -411,7 +411,7 @@
 | `npm run typecheck`    | 通过                                                                                                                              |
 | `npm run test:run`     | 25 个测试文件，254 项测试通过（新增 taylor 7 项、标签 4 项 + 颜色 1 项、client 生命周期 3 项、泰勒 hook 3 项）                    |
 | `npm run build`        | 通过，产物在 dist/                                                                                                                |
-| `npm run test:e2e`     | 45 项 Chromium 流程通过（含新增泰勒用例）；首轮有 1 项无关 annotation 用例并发下偶发超时，单独重跑与全量重跑均通过（见排错记录） |
+| `npm run test:e2e`     | 45 项 Chromium 流程通过（含新增泰勒用例）；首轮有 1 项无关 annotation 用例并发下偶发超时，单独重跑与全量重跑均通过（见排错记录）  |
 | `npm run perf:budget`  | plotting 609.3/204.3、plot.worker 738.5/201.8、knowledge 260.8/78.4、index 164.9/57.3；全部 JS 2600.7/812.8，预算 2800/880 → 通过 |
 
 环境说明：Windows 11、Node 24.21.0（CI 为 Linux、Node 22.23.4），仅 Chromium。
@@ -426,7 +426,7 @@
   FunctionNode 报错指明不支持的具体函数名（如「（不支持 sec）」）。该重构与
   #63 同源，本分支因求导结果复用校验而先行落地（见排错记录）。
 - 新增 `src/shared/math/taylor.ts`：`calculateTaylorPolynomial(request, center,
-  order)` 循环做「符号求导 → 白名单校验 → 编译求值」，系数为导数在展开中心处
+order)` 循环做「符号求导 → 白名单校验 → 编译求值」，系数为导数在展开中心处
   的数值除以阶乘；任一步求导失败、超出白名单或中心处不可求值时报明确错误；
   `points` 按 801 点采样（非有限值或量级 > 10⁶ 留空）。
 - `src/shared/math/client.ts`：`runWorkerTask` 通用生命周期 + `calculateTaylor`
