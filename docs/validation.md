@@ -338,15 +338,15 @@
 
 环境说明：Windows 11，Node.js 24.21.0（本机无 nvm，与 `.nvmrc` 的 22.23.4 不一致），npm 11.19.0；CI 按仓库配置的 Node 22.23.4 运行，以 GitHub Actions 结果为准。
 
-| 检查                   | 结果                                                          |
-| ---------------------- | ------------------------------------------------------------- |
-| `npm run format:check` | 通过                                                          |
-| `npm run lint`         | 通过                                                          |
-| `npm run typecheck`    | 通过                                                          |
-| `npm run test:run`     | 24 个测试文件，230 项测试通过（新增预置内容 3 项）             |
-| `npm run build`        | 通过，产物在 dist/                                            |
-| `npm run test:e2e`     | 44 项 Chromium 流程通过（新增经典函数库 1 项）                 |
-| `npm run perf:budget`  | 通过（plotting 585.5 / 196.8 kB，plot.worker 737.3 / 201.3 kB，预算内）  |
+| 检查                   | 结果                                                                    |
+| ---------------------- | ----------------------------------------------------------------------- |
+| `npm run format:check` | 通过                                                                    |
+| `npm run lint`         | 通过                                                                    |
+| `npm run typecheck`    | 通过                                                                    |
+| `npm run test:run`     | 24 个测试文件，230 项测试通过（新增预置内容 3 项）                      |
+| `npm run build`        | 通过，产物在 dist/                                                      |
+| `npm run test:e2e`     | 44 项 Chromium 流程通过（新增经典函数库 1 项）                          |
+| `npm run perf:budget`  | 通过（plotting 585.5 / 196.8 kB，plot.worker 737.3 / 201.3 kB，预算内） |
 
 ### 改动要点
 
