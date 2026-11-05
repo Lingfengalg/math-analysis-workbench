@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-import { compileExpression, sampleFunction } from './sample';
+import { compileExpression, sampleFunction, sampleSequence } from './sample';
 import { detectIntersections } from './intersections';
 import {
   plotRequestSchema,
@@ -27,6 +27,12 @@ self.onmessage = (event: MessageEvent<PlotWorkerMessage>) => {
         a.xMax,
       );
       response = { ok: true, type: 'intersections', data: { points } };
+    } else if (event.data.type === 'sequence') {
+      response = {
+        ok: true,
+        type: 'sequence',
+        data: sampleSequence(event.data.request),
+      };
     } else {
       response = {
         ok: true,

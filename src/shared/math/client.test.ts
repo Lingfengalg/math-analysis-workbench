@@ -4,8 +4,13 @@ import type {
   PlotResult,
   PlotWorkerMessage,
   PlotWorkerResponse,
+  SequenceRequest,
 } from '@/shared/contracts';
-import { calculateIntersections, calculatePlot } from './client';
+import {
+  calculateIntersections,
+  calculatePlot,
+  calculateSequence,
+} from './client';
 
 type MessageHandler = (event: { data: PlotWorkerResponse }) => void;
 
@@ -172,6 +177,46 @@ describe('calculatePlot 生命周期与错误语义（#25）', () => {
     controller.abort();
     await vi.advanceTimersByTimeAsync(8000);
     expect(states).toEqual(['resolve']);
+    expect(worker.terminate).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('calculateSequence 与函数模式共用生命周期（#59）', () => {
+  const sequence: SequenceRequest = { expression: 'sin(n)/n', terms: 30 };
+
+  it('发送数列消息并在完成后终止 Worker', async () => {
+    const { worker, createWorker, controller, states, track } = setup();
+    const promise = calculateSequence(
+      sequence,
+      controller.signal,
+      createWorker,
+    );
+    track(promise);
+    expect(worker.postMessage).toHaveBeenCalledWith({
+      type: 'sequence',
+      request: sequence,
+    });
+    worker.onmessage?.({ data: { ok: true, type: 'sequence', data: result } });
+    await expect(promise).resolves.toEqual(result);
+    expect(worker.terminate).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+    controller.abort();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(states).toEqual(['resolve']);
+  });
+
+  it('取消以 AbortError 拒绝并清理', async () => {
+    const { worker, createWorker, controller } = setup();
+    const promise = calculateSequence(
+      sequence,
+      controller.signal,
+      createWorker,
+    );
+    const assertion = expect(promise).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+    controller.abort();
+    await assertion;
     expect(worker.terminate).toHaveBeenCalledTimes(1);
   });
 });

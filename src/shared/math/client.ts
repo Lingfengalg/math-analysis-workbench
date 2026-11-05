@@ -4,6 +4,7 @@ import type {
   PlotResult,
   PlotWorkerMessage,
   PlotWorkerResponse,
+  SequenceRequest,
 } from '@/shared/contracts';
 
 // 测试注入点：默认创建真实绘图 Worker；单测可传入模拟实现。
@@ -92,6 +93,23 @@ export function calculatePlot(
       return response.data;
     },
   );
+}
+
+export function calculateSequence(
+  request: SequenceRequest,
+  signal: AbortSignal,
+  createWorker: PlotWorkerFactory = createPlotWorker,
+): Promise<PlotResult> {
+  return runWorkerTask(
+    { type: 'sequence', request },
+    signal,
+    createWorker,
+  ).then((response) => {
+    if (!response.ok) throw new Error(response.error);
+    if (response.type !== 'sequence')
+      throw new Error('计算模块返回了无法解析的数据，请刷新后重试。');
+    return response.data;
+  });
 }
 
 export function calculateIntersections(
