@@ -28,7 +28,7 @@
 
 ## 计算协议
 
-- 请求：`PlotRequest`（函数）或 `SequenceRequest`（数列：`expression` 用 n 表示项序号，`terms` 为 2–1000 的整数）。Worker 消息用 `type: 'plot' | 'sequence' | 'intersections' | 'tangent'` 区分，成功响应携带对应的 `type`。
+- 请求：`PlotRequest`（函数）或 `SequenceRequest`（数列：`expression` 用 n 表示项序号，`terms` 为 2–1000 的整数）。Worker 消息用 `type: 'plot' | 'sequence' | 'intersections' | 'tangent' | 'taylor'` 区分，成功响应携带对应的 `type`。
 - 响应：`{ ok: true, type: 'plot' | 'sequence', data: { points, gaps, asymptotes? } }` 或 `{ ok: false, error }`。
 - 函数模式 `points` 为 `[x, y | null][]`，null 表示不可显示的值或启发式断点，图表不得跨 null 连线；数列模式为 `[n, y | null][]`，n 从 1 到 terms 每项一个点，null 表示该项没有有限实数值（数列模式不做启发式断点探测）。
 - 数值量级 > 10⁶、复数、非有限值留空。此规则是可视化限制，不等于数学上无定义。
@@ -41,6 +41,8 @@
 - 近似交点通过同一 `PlotRequest` 协议成对计算（主曲线与每条对比曲线各一次请求，比较曲线之间不两两计算），响应为 `{ ok: true, type: 'intersections', data: { points } }`。交点为数值近似而非符号求解：按 x 升序扫描，穿越型交点二分求根，切触（相切）或采样漏过的交点可能漏检；两侧不可求值的区间保守跳过；最多返回 8 个交点。
 
 - 切线通过 `{ type: 'tangent', request, x0 }` 消息单独请求，响应为 `{ ok: true, type: 'tangent', data: { slope, value } }`：斜率为 mathjs 符号求导在 x₀ 处的数值（导函数节点仍须通过白名单校验），不构成极限证明；切点处无有限值、不可导或导数超出白名单时返回明确错误。切线直线由界面按 y = value + slope·(x − x₀) 绘制，不进入响应结构。
+
+- 泰勒多项式通过独立消息单独请求：`{ type: 'taylor', request, center, order }`，响应 `{ ok: true, type: 'taylor', data: { coefficients, points } }`。系数为符号求导在展开中心处的数值除以阶乘（阶数 1–8，中心须为有限实数），`points` 为该多项式按观察区间的采样点；任一步求导失败或超白名单时明确报错。此协议只给出近似多项式，不声称收敛或等价。
 
 ## 存储协议
 

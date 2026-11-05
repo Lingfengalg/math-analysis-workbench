@@ -23,6 +23,8 @@ import {
   INTERSECTION_MARKER_COLOR,
   MAIN_CURVE_COLOR,
   TANGENT_COLOR,
+  TAYLOR_COLOR,
+  type TaylorOverlay,
   tangentPoints,
   type TangentLine,
 } from './chart-series';
@@ -60,6 +62,7 @@ interface FunctionChartProps {
   horizontalMarkers?: HorizontalAsymptoteCandidate[];
   variant?: 'function' | 'sequence';
   tangent?: TangentLine | null;
+  taylor?: TaylorOverlay | null;
 }
 
 export const FunctionChart = forwardRef<
@@ -74,6 +77,7 @@ export const FunctionChart = forwardRef<
     horizontalMarkers = [],
     variant = 'function',
     tangent = null,
+    taylor = null,
   },
   ref,
 ) {
@@ -106,6 +110,7 @@ export const FunctionChart = forwardRef<
     const { min: dataMin, max: dataMax } = finiteYRange([
       ...curves,
       ...(tangent ? [{ points: tangentPoints(tangent), expression: '' }] : []),
+      ...(taylor ? [{ points: taylor.points, expression: '' }] : []),
     ]);
     const isSequence = variant === 'sequence';
     const chart = init(element.current);
@@ -116,7 +121,7 @@ export const FunctionChart = forwardRef<
         enabled: true,
         description: isSequence
           ? `数列 ${expression} 的前若干项散点图`
-          : `函数 ${curveExpressionsLabel(curves)} 的采样图像${tangent ? `，叠加 x₀ = ${tangent.x0} 处的切线` : ''}`,
+          : `函数 ${curveExpressionsLabel(curves)} 的采样图像${tangent ? `，叠加 x₀ = ${tangent.x0} 处的切线` : ''}${taylor ? `，叠加 ${taylor.order} 阶泰勒多项式（展开中心 ${taylor.center}）` : ''}`,
       },
       grid: { left: 58, right: 28, top: 28, bottom: 65 },
       tooltip: { trigger: 'axis', renderMode: 'richText' },
@@ -205,6 +210,19 @@ export const FunctionChart = forwardRef<
               },
             ]
           : []),
+        ...(taylor
+          ? [
+              {
+                name: '泰勒多项式',
+                type: 'line',
+                data: taylor.points,
+                showSymbol: false,
+                connectNulls: false,
+                silent: true,
+                lineStyle: { color: TAYLOR_COLOR, width: 2 },
+              },
+            ]
+          : []),
         // 渐近趋势提示画成独立 series 的水平虚线：样式与竖直间断标记
         // （橙色虚线）区分，静默且不进提示框。
         ...horizontalMarkers.map((marker) => ({
@@ -235,6 +253,7 @@ export const FunctionChart = forwardRef<
     horizontalMarkers,
     variant,
     tangent,
+    taylor,
   ]);
   return (
     <div
@@ -245,7 +264,7 @@ export const FunctionChart = forwardRef<
       aria-label={
         variant === 'sequence'
           ? `数列 ${expression} 的前若干项散点图`
-          : `函数 ${curveExpressionsLabel([{ points, expression }, ...comparisons])} 的采样图像${tangent ? `，含 x₀ = ${tangent.x0} 处切线` : ''}`
+          : `函数 ${curveExpressionsLabel([{ points, expression }, ...comparisons])} 的采样图像${tangent ? `，含 x₀ = ${tangent.x0} 处切线` : ''}${taylor ? `，叠加 ${taylor.order} 阶泰勒多项式（展开中心 ${taylor.center}）` : ''}`
       }
     />
   );

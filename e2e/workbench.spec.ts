@@ -660,3 +660,188 @@ test('切线可见且斜率文本注明数值来源', async ({ page }) => {
     )
     .toBeLessThanOrEqual(10);
 });
+
+test('泰勒多项式滑块叠加 Tₙ(x) 并注明近似前提', async ({ page }) => {
+  await page.goto('/#/plotting');
+  await expect(page.getByRole('status')).toContainText('f(x)', {
+    timeout: 20000,
+  });
+  await page.getByRole('button', { name: 'sin(x)' }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'f(x)' }),
+  ).toContainText('sin(x)');
+  await page.getByRole('checkbox', { name: '显示泰勒多项式' }).check();
+  const taylorStatus = page.getByRole('status').filter({ hasText: 'T₃(x)' });
+  await expect(taylorStatus).toBeVisible({ timeout: 20000 });
+  await expect(taylorStatus).toContainText('x − 0.16667·x^3');
+  // 状态文本注明图像不等于证明
+  await expect(taylorStatus).toContainText('图像不等于证明');
+  // 图例列出泰勒多项式
+  await expect(
+    page.getByRole('list', { name: '图例：曲线颜色与表达式' }),
+  ).toContainText('T₃(x)（展开中心 0）');
+  // 图像无障碍名称包含叠加曲线信息
+  await expect(
+    page.getByRole('img', {
+      name: '函数 sin(x) 的采样图像，叠加 3 阶泰勒多项式（展开中心 0）',
+    }),
+  ).toBeVisible();
+  // 画布像素验证：紫红 #d946ef 叠加曲线可见
+  await expect
+    .poll(
+      async () =>
+        page.locator('.function-chart canvas').evaluateAll((canvases) => {
+          let fuchsia = 0;
+          for (const element of canvases) {
+            const canvas = element as HTMLCanvasElement;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) continue;
+            const pixels = ctx.getImageData(
+              0,
+              0,
+              canvas.width,
+              canvas.height,
+            ).data;
+            for (let i = 0; i < pixels.length; i += 4) {
+              if (pixels[i + 3] <= 100) continue;
+              const [r, g, b] = [pixels[i], pixels[i + 1], pixels[i + 2]];
+              if (
+                r >= 190 &&
+                r <= 240 &&
+                g >= 45 &&
+                g <= 95 &&
+                b >= 215 &&
+                b <= 255
+              )
+                fuchsia++;
+            }
+          }
+          return fuchsia;
+        }),
+      { timeout: 10000 },
+    )
+    .toBeGreaterThan(10);
+  // 阶数滑块 3 → 5：状态与图像随之更新，且曲线仍可见
+  const slider = page.getByRole('slider', { name: '泰勒多项式阶数' });
+  await slider.focus();
+  await slider.press('ArrowRight');
+  await slider.press('ArrowRight');
+  const taylor5 = page.getByRole('status').filter({ hasText: 'T₅(x)' });
+  await expect(taylor5).toBeVisible({ timeout: 20000 });
+  await expect(taylor5).toContainText('0.0083333·x^5');
+  await expect(
+    page.getByRole('img', {
+      name: '函数 sin(x) 的采样图像，叠加 5 阶泰勒多项式（展开中心 0）',
+    }),
+  ).toBeVisible();
+  await expect
+    .poll(
+      async () =>
+        page.locator('.function-chart canvas').evaluateAll((canvases) => {
+          let fuchsia = 0;
+          for (const element of canvases) {
+            const canvas = element as HTMLCanvasElement;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) continue;
+            const pixels = ctx.getImageData(
+              0,
+              0,
+              canvas.width,
+              canvas.height,
+            ).data;
+            for (let i = 0; i < pixels.length; i += 4) {
+              if (pixels[i + 3] <= 100) continue;
+              const [r, g, b] = [pixels[i], pixels[i + 1], pixels[i + 2]];
+              if (
+                r >= 190 &&
+                r <= 240 &&
+                g >= 45 &&
+                g <= 95 &&
+                b >= 215 &&
+                b <= 255
+              )
+                fuchsia++;
+            }
+          }
+          return fuchsia;
+        }),
+      { timeout: 10000 },
+    )
+    .toBeGreaterThan(10);
+  // 取消勾选后状态与叠加曲线均消失
+  await page.getByRole('checkbox', { name: '显示泰勒多项式' }).uncheck();
+  await expect(taylor5).toHaveCount(0);
+  await expect
+    .poll(
+      async () =>
+        page.locator('.function-chart canvas').evaluateAll((canvases) => {
+          let fuchsia = 0;
+          for (const element of canvases) {
+            const canvas = element as HTMLCanvasElement;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) continue;
+            const pixels = ctx.getImageData(
+              0,
+              0,
+              canvas.width,
+              canvas.height,
+            ).data;
+            for (let i = 0; i < pixels.length; i += 4) {
+              if (pixels[i + 3] <= 100) continue;
+              const [r, g, b] = [pixels[i], pixels[i + 1], pixels[i + 2]];
+              if (
+                r >= 190 &&
+                r <= 240 &&
+                g >= 45 &&
+                g <= 95 &&
+                b >= 215 &&
+                b <= 255
+              )
+                fuchsia++;
+            }
+          }
+          return fuchsia;
+        }),
+      { timeout: 10000 },
+    )
+    .toBeLessThanOrEqual(10);
+});
+
+test('对比交点、切线和泰勒曲线可同时使用并跨模式保留', async ({ page }) => {
+  await page.goto('/#/plotting');
+  await expect(page.getByRole('status')).toContainText('f(x)', {
+    timeout: 20000,
+  });
+  await page.getByRole('button', { name: 'sin(x)', exact: true }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'f(x)' }),
+  ).toContainText('sin(x)');
+  await page.getByRole('button', { name: '添加对比曲线' }).click();
+  await page.getByLabel('对比表达式 g(x)').fill('0');
+  await page.getByRole('button', { name: '绘制对比曲线 g(x)' }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'g(x) 与 f(x) 的近似交点' }),
+  ).toBeVisible({ timeout: 20000 });
+  await page.getByRole('checkbox', { name: '显示切线' }).check();
+  await page.getByLabel('切点横坐标 x₀').fill('0');
+  await expect(
+    page.getByRole('status').filter({ hasText: '切线：x₀ = 0' }),
+  ).toBeVisible({ timeout: 20000 });
+  await page.getByRole('checkbox', { name: '显示泰勒多项式' }).check();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'T₃(x)' }),
+  ).toBeVisible({ timeout: 20000 });
+  await expect(
+    page.getByRole('list', { name: '图例：曲线颜色与表达式' }),
+  ).toContainText('切线');
+  await expect(
+    page.getByRole('list', { name: '图例：曲线颜色与表达式' }),
+  ).toContainText('T₃(x)');
+  await page.getByText('数列散点', { exact: true }).click();
+  await expect(page.getByRole('checkbox', { name: '显示切线' })).toHaveCount(0);
+  await page.getByText('函数图像', { exact: true }).click();
+  await expect(page.getByLabel('对比表达式 g(x)')).toHaveValue('0');
+  await expect(
+    page.getByRole('status').filter({ hasText: 'T₃(x)' }),
+  ).toBeVisible({ timeout: 20000 });
+});

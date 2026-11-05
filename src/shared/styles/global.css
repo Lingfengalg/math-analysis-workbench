@@ -573,3 +573,16 @@ code {
     transition-duration: 0.01ms !important;
   }
 }
+
+.taylor-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 4px;
+}
+.taylor-slider {
+  margin: 12px 8px 4px 0;
+}
+.taylor-slider + .chart-summary {
+  margin: 4px 0 0;
+}

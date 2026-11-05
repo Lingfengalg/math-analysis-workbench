@@ -8,6 +8,8 @@ import {
   INTERSECTION_MARKER_COLOR,
   MAIN_CURVE_COLOR,
   TANGENT_COLOR,
+  TAYLOR_COLOR,
+  taylorPolynomialLabel,
   tangentPoints,
 } from './chart-series';
 
@@ -132,4 +134,38 @@ describe('曲线表达式无障碍标签', () => {
       ]),
     ).toBe('x^2 与 abs(x)');
   });
+});
+
+describe('泰勒多项式可读标签', () => {
+  it('sin 在 0 处的 T₃：x − 0.16667·x^3', () => {
+    expect(taylorPolynomialLabel([0, 1, 0, -1 / 6], 0)).toBe('x − 0.16667·x^3');
+  });
+
+  it('exp 在 0 处的 T₂：1 + x + 0.5·x^2', () => {
+    expect(taylorPolynomialLabel([1, 1, 0.5], 0)).toBe('1 + x + 0.5·x^2');
+  });
+
+  it('展开中心非零时以 (x − a) 形式展开', () => {
+    expect(taylorPolynomialLabel([1, 2, 3], 1)).toBe(
+      '1 + 2·(x − 1) + 3·(x − 1)^2',
+    );
+  });
+
+  it('系数为 0 的项跳过；全零时输出 0；系数 −1 输出 −x', () => {
+    expect(taylorPolynomialLabel([0, 0, 1], 0)).toBe('x^2');
+    expect(taylorPolynomialLabel([0, 0, 0], 0)).toBe('0');
+    expect(taylorPolynomialLabel([0, -1], 0)).toBe('−x');
+  });
+});
+
+it('泰勒颜色与现有曲线和标记互不相同', () => {
+  const used = [
+    TAYLOR_COLOR,
+    TANGENT_COLOR,
+    MAIN_CURVE_COLOR,
+    GAP_MARKER_COLOR,
+    INTERSECTION_MARKER_COLOR,
+    ...COMPARISON_CURVE_COLORS,
+  ];
+  expect(new Set(used).size).toBe(used.length);
 });

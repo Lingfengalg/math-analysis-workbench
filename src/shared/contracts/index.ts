@@ -64,15 +64,22 @@ export interface TangentResult {
   slope: number;
   value: number;
 }
+/** 数值计算的泰勒系数及采样点。 */
+export interface TaylorResult {
+  coefficients: number[];
+  points: PlotPoint[];
+}
 export type PlotWorkerMessage =
   | { type: 'plot'; request: PlotRequest }
   | { type: 'sequence'; request: SequenceRequest }
   | { type: 'intersections'; a: PlotRequest; b: PlotRequest }
-  | { type: 'tangent'; request: PlotRequest; x0: number };
+  | { type: 'tangent'; request: PlotRequest; x0: number }
+  | { type: 'taylor'; request: PlotRequest; center: number; order: number };
 export type PlotWorkerResponse =
   | { ok: true; type: 'plot' | 'sequence'; data: PlotResult }
   | { ok: true; type: 'intersections'; data: IntersectionResult }
   | { ok: true; type: 'tangent'; data: TangentResult }
+  | { ok: true; type: 'taylor'; data: TaylorResult }
   | { ok: false; error: string };
 
 export const knowledgeCardSchema = z.object({

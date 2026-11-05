@@ -5,17 +5,21 @@ import type {
   PlotRequest,
   PlotResult,
   TangentResult,
+  TaylorResult,
 } from '@/shared/contracts';
 import {
   calculateIntersections,
   calculatePlot,
   calculateTangent,
+  calculateTaylor,
 } from '@/shared/math/client';
 import {
   useComparisonCalculation,
   useIntersectionCalculation,
   usePlotCalculation,
   useTangentCalculation,
+  useTaylorCalculation,
+  type TaylorState,
   type TangentState,
   type IntersectionState,
 } from './usePlotCalculation';
@@ -24,11 +28,17 @@ vi.mock('@/shared/math/client', () => ({
   calculatePlot: vi.fn(),
   calculateIntersections: vi.fn(),
   calculateTangent: vi.fn(),
+  calculateTaylor: vi.fn(),
 }));
 const calculate = vi.mocked(calculatePlot);
 const calculatePoints = vi.mocked(calculateIntersections);
 const calculateSlope = vi.mocked(calculateTangent);
 const tangentData: TangentResult = { slope: 1, value: 1 };
+const calculatePolynomial = vi.mocked(calculateTaylor);
+const taylorData: TaylorResult = {
+  coefficients: [0, 1],
+  points: [[0, 0]],
+};
 const initial = { expression: 'x', xMin: -1, xMax: 1 };
 const data: PlotResult = { points: [[0, 0]], gaps: 0 };
 
@@ -56,6 +66,16 @@ function deferredTangent() {
   let resolve!: (value: TangentResult) => void;
   let reject!: (reason: Error) => void;
   const promise = new Promise<TangentResult>((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
+  return { promise, resolve, reject };
+}
+
+function deferredTaylor() {
+  let resolve!: (value: TaylorResult) => void;
+  let reject!: (reason: Error) => void;
+  const promise = new Promise<TaylorResult>((yes, no) => {
     resolve = yes;
     reject = no;
   });
@@ -255,5 +275,91 @@ describe('切线请求生命周期', () => {
     await waitFor(() => expect(calculateSlope).toHaveBeenCalledTimes(1));
     await act(async () => pending.reject(new Error('不可导')));
     expect(result.current).toEqual({ status: 'error', message: '不可导' });
+  });
+});
+
+type TaylorProps = {
+  request: PlotRequest | null;
+  center: number | null;
+  order: number | null;
+};
+
+describe('泰勒多项式自动计算（#64）', () => {
+  it('请求、展开中心与阶数齐备时自动计算；任一缺失则回空闲并中止', async () => {
+    const pending = deferredTaylor();
+    calculatePolynomial.mockReturnValue(pending.promise);
+    const props: TaylorProps = { request: initial, center: 0, order: 3 };
+    const { result, rerender } = renderHook<TaylorState, TaylorProps>(
+      ({ request, center, order }) =>
+        useTaylorCalculation(request, center, order),
+      { initialProps: props },
+    );
+    expect(result.current).toEqual({ status: 'idle' });
+    await waitFor(() => expect(calculatePolynomial).toHaveBeenCalledTimes(1));
+    expect(calculatePolynomial.mock.calls[0].slice(0, 3)).toEqual([
+      initial,
+      0,
+      3,
+    ]);
+    const signal = calculatePolynomial.mock.calls[0][3];
+    rerender({ request: initial, center: null, order: 3 });
+    expect(result.current).toEqual({ status: 'idle' });
+    expect(signal.aborted).toBe(true);
+    await act(async () => pending.resolve(taylorData));
+    expect(result.current).toEqual({ status: 'idle' });
+  });
+
+  it('阶数变化重新计算，旧结果晚到不覆盖新结果', async () => {
+    const first = deferredTaylor();
+    const second = deferredTaylor();
+    calculatePolynomial
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+    const props: TaylorProps = { request: initial, center: 0, order: 3 };
+    const { result, rerender } = renderHook<TaylorState, TaylorProps>(
+      ({ request, center, order }) =>
+        useTaylorCalculation(request, center, order),
+      { initialProps: props },
+    );
+    await waitFor(() => expect(calculatePolynomial).toHaveBeenCalledTimes(1));
+    rerender({ request: initial, center: 0, order: 5 });
+    await waitFor(() => expect(calculatePolynomial).toHaveBeenCalledTimes(2));
+    expect(calculatePolynomial.mock.calls[0][3].aborted).toBe(true);
+    await act(async () => second.resolve(taylorData));
+    await act(async () => first.reject(new Error('旧错误')));
+    expect(result.current).toEqual({
+      status: 'ready',
+      coefficients: taylorData.coefficients,
+      points: taylorData.points,
+    });
+  });
+
+  it('计算失败给出错误状态，重新计算可恢复', async () => {
+    const failed = deferredTaylor();
+    const recovered = deferredTaylor();
+    calculatePolynomial
+      .mockReturnValueOnce(failed.promise)
+      .mockReturnValueOnce(recovered.promise);
+    const props: TaylorProps = { request: initial, center: 0, order: 3 };
+    const { result, rerender } = renderHook<TaylorState, TaylorProps>(
+      ({ request, center, order }) =>
+        useTaylorCalculation(request, center, order),
+      { initialProps: props },
+    );
+    await waitFor(() => expect(calculatePolynomial).toHaveBeenCalledTimes(1));
+    await act(async () => failed.reject(new Error('第 1 阶导数超出支持范围')));
+    expect(result.current).toEqual({
+      status: 'error',
+      message: '第 1 阶导数超出支持范围',
+    });
+    rerender({ request: initial, center: 0, order: 2 });
+    expect(result.current).toEqual({ status: 'idle' });
+    await waitFor(() => expect(calculatePolynomial).toHaveBeenCalledTimes(2));
+    await act(async () => recovered.resolve(taylorData));
+    expect(result.current).toEqual({
+      status: 'ready',
+      coefficients: taylorData.coefficients,
+      points: taylorData.points,
+    });
   });
 });

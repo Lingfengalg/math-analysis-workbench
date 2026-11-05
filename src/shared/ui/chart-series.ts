@@ -1,4 +1,5 @@
 import type { PlotPoint } from '@/shared/contracts';
+import { formatNumber } from '@/shared/math/plot-summary';
 
 /** FunctionChart 的一条曲线（主曲线或对比曲线）。 */
 export interface ChartCurve {
@@ -15,6 +16,7 @@ export const INTERSECTION_MARKER_COLOR = '#854d0e';
 export const COMPARISON_CURVE_COLORS = ['#b03a5b', '#2f855a', '#7b5ea7'];
 // 切线：亮青色，与渐近提示的深青 #0e7490 及上述各色保持可区分。
 export const TANGENT_COLOR = '#06b6d4';
+export const TAYLOR_COLOR = '#d946ef';
 
 /** 第 index 条对比曲线（0 起）的颜色；超出调色板（或负索引）时循环取用。 */
 export function comparisonCurveColor(index: number): string {
@@ -61,4 +63,48 @@ export function tangentPoints(tangent: TangentLine): PlotPoint[] {
     [tangent.xMin, y(tangent.xMin)],
     [tangent.xMax, y(tangent.xMax)],
   ];
+}
+
+/** 叠加在图上的一条泰勒多项式曲线 T_n(x)。 */
+export interface TaylorOverlay {
+  points: PlotPoint[];
+  center: number;
+  order: number;
+}
+
+/** 系数列表的可读多项式，例如 sin 在 0 处的 T₃：「x − 0.16667·x^3」。 */
+export function taylorPolynomialLabel(
+  coefficients: number[],
+  center: number,
+): string {
+  const terms: Array<{ negative: boolean; body: string }> = [];
+  for (let power = 0; power < coefficients.length; power += 1) {
+    const coefficient = coefficients[power];
+    if (coefficient === 0) continue;
+    const variable =
+      center === 0
+        ? power === 0
+          ? ''
+          : power === 1
+            ? 'x'
+            : `x^${power}`
+        : power === 0
+          ? ''
+          : power === 1
+            ? `(x − ${formatNumber(center)})`
+            : `(x − ${formatNumber(center)})^${power}`;
+    const body =
+      Math.abs(coefficient) === 1 && power > 0
+        ? variable
+        : `${formatNumber(Math.abs(coefficient))}${variable === '' ? '' : '·'}${variable}`;
+    terms.push({ negative: coefficient < 0, body });
+  }
+  if (terms.length === 0) return '0';
+  return terms
+    .map((term, index) =>
+      index === 0
+        ? `${term.negative ? '−' : ''}${term.body}`
+        : `${term.negative ? ' − ' : ' + '}${term.body}`,
+    )
+    .join('');
 }

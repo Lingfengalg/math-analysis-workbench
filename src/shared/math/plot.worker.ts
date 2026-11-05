@@ -2,6 +2,7 @@
 import { compileExpression, sampleFunction, sampleSequence } from './sample';
 import { detectIntersections } from './intersections';
 import { calculateTangent } from './tangent';
+import { calculateTaylorPolynomial } from './taylor';
 import {
   plotRequestSchema,
   type PlotRequest,
@@ -18,7 +19,17 @@ function validated(request: PlotRequest): PlotRequest {
 self.onmessage = (event: MessageEvent<PlotWorkerMessage>) => {
   let response: PlotWorkerResponse;
   try {
-    if (event.data.type === 'tangent') {
+    if (event.data.type === 'taylor') {
+      response = {
+        ok: true,
+        type: 'taylor',
+        data: calculateTaylorPolynomial(
+          event.data.request,
+          event.data.center,
+          event.data.order,
+        ),
+      };
+    } else if (event.data.type === 'tangent') {
       response = {
         ok: true,
         type: 'tangent',
