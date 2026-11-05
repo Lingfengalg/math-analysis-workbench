@@ -9,7 +9,10 @@ import {
   TooltipComponent,
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
-import type { PlotPoint } from '@/shared/contracts';
+import type {
+  HorizontalAsymptoteCandidate,
+  PlotPoint,
+} from '@/shared/contracts';
 
 registerCharts([
   LineChart,
@@ -30,6 +33,8 @@ interface FunctionChartProps {
   points: PlotPoint[];
   expression: string;
   gapMarkers?: number[];
+  /** 水平渐近趋势候选：以青绿色虚线画在对应尾部的 x 跨度上。 */
+  horizontalMarkers?: HorizontalAsymptoteCandidate[];
   /** 数列模式：散点显示、横轴为项序号 n，不做间断虚线标记。 */
   variant?: 'function' | 'sequence';
 }
@@ -38,7 +43,13 @@ export const FunctionChart = forwardRef<
   FunctionChartHandle,
   FunctionChartProps
 >(function FunctionChart(
-  { points, expression, gapMarkers = [], variant = 'function' },
+  {
+    points,
+    expression,
+    gapMarkers = [],
+    horizontalMarkers = [],
+    variant = 'function',
+  },
   ref,
 ) {
   const element = useRef<HTMLDivElement>(null);
@@ -121,6 +132,19 @@ export const FunctionChart = forwardRef<
                 }
               : undefined,
         },
+        // 渐近趋势提示画成独立 series 的水平虚线：样式与竖直间断标记
+        // （橙色虚线）区分，静默且不进提示框。
+        ...horizontalMarkers.map((marker) => ({
+          type: 'line' as const,
+          silent: true,
+          data: [
+            [marker.xFrom, marker.y],
+            [marker.xTo, marker.y],
+          ],
+          showSymbol: false,
+          lineStyle: { type: 'dashed' as const, color: '#0e7490', width: 1.5 },
+          tooltip: { show: false },
+        })),
       ],
     });
     const observer = new ResizeObserver(() => chart.resize());
@@ -130,7 +154,7 @@ export const FunctionChart = forwardRef<
       chart.dispose();
       chartRef.current = null;
     };
-  }, [points, expression, gapMarkers, variant]);
+  }, [points, expression, gapMarkers, horizontalMarkers, variant]);
   return (
     <div
       ref={element}

@@ -22,6 +22,7 @@ import {
 import {
   plotRequestSchema,
   preferencesSchema,
+  type HorizontalAsymptoteCandidate,
   type PlotRequest,
   type PlotResult,
 } from '@/shared/contracts';
@@ -68,9 +69,11 @@ const preferences = createStorage('preferences', preferencesSchema);
 function PlotSummaryPanel({
   summary,
   totalPoints,
+  asymptotes,
 }: {
   summary: PlotSummary;
   totalPoints: number;
+  asymptotes: HorizontalAsymptoteCandidate[];
 }) {
   const { finiteCount, minY, maxY, gapRanges } = summary;
   const rangeText =
@@ -86,6 +89,15 @@ function PlotSummaryPanel({
           .join(
             '；',
           )}${gapRanges.length > 6 ? ` 等 ${gapRanges.length} 处` : ''}`;
+  const asymptoteText =
+    asymptotes.length === 0
+      ? '未检测到水平渐近趋势候选。'
+      : `水平渐近趋势提示：${asymptotes
+          .map(
+            (candidate) =>
+              `${candidate.side === 'left' ? '左侧' : '右侧'}疑似趋于 y ≈ ${formatNumber(candidate.y)}`,
+          )
+          .join('；')}（数值观察，不构成极限证明）`;
   return (
     <section className="plot-summary" aria-labelledby="plot-summary-heading">
       <h3 id="plot-summary-heading">采样数据摘要</h3>
@@ -98,11 +110,14 @@ function PlotSummaryPanel({
         </li>
         <li>{rangeText}</li>
         <li>{gapsText}</li>
+        <li>{asymptoteText}</li>
       </ul>
       <p className="chart-summary">
         显示限制：超出定义域、非有限值或 |f(x)| 大于 10⁶
         的点留空。这些采样缺口不代表一定是数学间断；虚线标记的是疑似间断位置
-        （启发式检测，可能漏检或误判）。可用键盘在左/右端点调整观察范围，代替鼠标缩放。
+        （启发式检测，可能漏检或误判）。水平渐近趋势提示同样是数值启发式：在观察范围
+        外额外探测少量点（不绘制）判断趋势是否延续，可能漏检或误判，不构成极限证明。
+        可用键盘在左/右端点调整观察范围，代替鼠标缩放。
       </p>
     </section>
   );
@@ -643,6 +658,7 @@ function PlottingWorkspace({
                     points={result.points}
                     expression={plot.request.expression}
                     gapMarkers={gapMarkers}
+                    horizontalMarkers={result.asymptotes}
                   />
                   <p className="chart-summary" role="status">
                     f(x) = {plot.request.expression} · 区间 [{plot.request.xMin}
@@ -658,6 +674,7 @@ function PlottingWorkspace({
                   <PlotSummaryPanel
                     summary={summary}
                     totalPoints={result.points.length}
+                    asymptotes={result.asymptotes ?? []}
                   />
                 </>
               )}
@@ -731,7 +748,7 @@ function PlottingWorkspace({
         title="观察图像，不等于证明结论"
         description={
           mode === 'function'
-            ? '这里只做有限采样。超出实数定义域、非有限值和绝对值大于 10⁶ 的结果会留空，留空只是采样缺口，不一定是数学间断；自适应探测与二分定位仅能启发式识别部分疑似间断，可能漏检或误判，不保证识别全部间断点或高频变化。'
+            ? '这里只做有限采样。超出实数定义域、非有限值和绝对值大于 10⁶ 的结果会留空，留空只是采样缺口，不一定是数学间断；自适应探测与二分定位仅能启发式识别部分疑似间断，可能漏检或误判，不保证识别全部间断点或高频变化。水平渐近趋势提示同样是数值启发式（含观察范围外的少量探测点），可能漏检或误判，不构成极限证明。'
             : '这里只对前若干项做数值采样。无定义或非有限的项会留空，留空只是采样缺口，不一定是数学间断；观察前若干项的散点不能证明数列收敛、单调或有界，也不能代替极限计算。'
         }
       />
