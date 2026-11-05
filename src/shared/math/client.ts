@@ -5,6 +5,7 @@ import type {
   PlotWorkerMessage,
   PlotWorkerResponse,
   SequenceRequest,
+  TangentResult,
 } from '@/shared/contracts';
 
 // 测试注入点：默认创建真实绘图 Worker；单测可传入模拟实现。
@@ -125,6 +126,24 @@ export function calculateIntersections(
   ).then((response) => {
     if (!response.ok) throw new Error(response.error);
     if (response.type !== 'intersections')
+      throw new Error('计算模块返回了无法解析的数据，请刷新后重试。');
+    return response.data;
+  });
+}
+
+export function calculateTangent(
+  request: PlotRequest,
+  x0: number,
+  signal: AbortSignal,
+  createWorker: PlotWorkerFactory = createPlotWorker,
+): Promise<TangentResult> {
+  return runWorkerTask(
+    { type: 'tangent', request, x0 },
+    signal,
+    createWorker,
+  ).then((response) => {
+    if (!response.ok) throw new Error(response.error);
+    if (response.type !== 'tangent')
       throw new Error('计算模块返回了无法解析的数据，请刷新后重试。');
     return response.data;
   });

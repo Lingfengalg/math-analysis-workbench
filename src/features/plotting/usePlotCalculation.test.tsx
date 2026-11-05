@@ -4,21 +4,31 @@ import type {
   IntersectionResult,
   PlotRequest,
   PlotResult,
+  TangentResult,
 } from '@/shared/contracts';
-import { calculateIntersections, calculatePlot } from '@/shared/math/client';
+import {
+  calculateIntersections,
+  calculatePlot,
+  calculateTangent,
+} from '@/shared/math/client';
 import {
   useComparisonCalculation,
   useIntersectionCalculation,
   usePlotCalculation,
+  useTangentCalculation,
+  type TangentState,
   type IntersectionState,
 } from './usePlotCalculation';
 
 vi.mock('@/shared/math/client', () => ({
   calculatePlot: vi.fn(),
   calculateIntersections: vi.fn(),
+  calculateTangent: vi.fn(),
 }));
 const calculate = vi.mocked(calculatePlot);
 const calculatePoints = vi.mocked(calculateIntersections);
+const calculateSlope = vi.mocked(calculateTangent);
+const tangentData: TangentResult = { slope: 1, value: 1 };
 const initial = { expression: 'x', xMin: -1, xMax: 1 };
 const data: PlotResult = { points: [[0, 0]], gaps: 0 };
 
@@ -36,6 +46,16 @@ function deferredIntersections() {
   let resolve!: (value: IntersectionResult) => void;
   let reject!: (reason: Error) => void;
   const promise = new Promise<IntersectionResult>((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
+  return { promise, resolve, reject };
+}
+
+function deferredTangent() {
+  let resolve!: (value: TangentResult) => void;
+  let reject!: (reason: Error) => void;
+  const promise = new Promise<TangentResult>((yes, no) => {
     resolve = yes;
     reject = no;
   });
@@ -178,5 +198,62 @@ describe('近似交点请求生命周期', () => {
     await waitFor(() => expect(calculatePoints).toHaveBeenCalledTimes(1));
     await act(async () => pending.reject(new Error('计算失败')));
     expect(result.current).toEqual({ status: 'error', message: '计算失败' });
+  });
+});
+
+describe('切线请求生命周期', () => {
+  it('主曲线请求与切点都可用时自动计算，任一为空则空闲并取消', async () => {
+    const pending = deferredTangent();
+    calculateSlope.mockReturnValue(pending.promise);
+    const { result, rerender } = renderHook<
+      TangentState,
+      { request: PlotRequest | null; x0: number | null }
+    >(({ request, x0 }) => useTangentCalculation(request, x0), {
+      initialProps: { request: null, x0: null },
+    });
+    expect(result.current).toEqual({ status: 'idle' });
+    expect(calculateSlope).not.toHaveBeenCalled();
+    rerender({ request: initial, x0: 1 });
+    await waitFor(() => expect(calculateSlope).toHaveBeenCalledTimes(1));
+    expect(calculateSlope.mock.calls[0][0]).toBe(initial);
+    expect(calculateSlope.mock.calls[0][1]).toBe(1);
+    // 计算期间保持空闲（没有中间 loading 状态），完成后给出斜率与切点值
+    expect(result.current).toEqual({ status: 'idle' });
+    await act(async () => pending.resolve(tangentData));
+    expect(result.current).toEqual({ status: 'ready', slope: 1, value: 1 });
+    // 主曲线重绘期间请求为空：回到空闲并取消进行中的请求
+    rerender({ request: null, x0: 1 });
+    expect(result.current).toEqual({ status: 'idle' });
+    expect(calculateSlope.mock.calls[0][2].aborted).toBe(true);
+  });
+
+  it('切点变化触发重算，旧结果不覆盖新请求', async () => {
+    const first = deferredTangent();
+    const second = deferredTangent();
+    calculateSlope
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+    const { result, rerender } = renderHook<
+      TangentState,
+      { request: PlotRequest | null; x0: number | null }
+    >(({ request, x0 }) => useTangentCalculation(request, x0), {
+      initialProps: { request: initial, x0: 1 },
+    });
+    await waitFor(() => expect(calculateSlope).toHaveBeenCalledTimes(1));
+    rerender({ request: initial, x0: 2 });
+    await waitFor(() => expect(calculateSlope).toHaveBeenCalledTimes(2));
+    expect(calculateSlope.mock.calls[0][2].aborted).toBe(true);
+    await act(async () => second.resolve({ slope: 4, value: 4 }));
+    await act(async () => first.resolve(tangentData));
+    expect(result.current).toEqual({ status: 'ready', slope: 4, value: 4 });
+  });
+
+  it('计算失败给出错误信息', async () => {
+    const pending = deferredTangent();
+    calculateSlope.mockReturnValue(pending.promise);
+    const { result } = renderHook(() => useTangentCalculation(initial, 0));
+    await waitFor(() => expect(calculateSlope).toHaveBeenCalledTimes(1));
+    await act(async () => pending.reject(new Error('不可导')));
+    expect(result.current).toEqual({ status: 'error', message: '不可导' });
   });
 });

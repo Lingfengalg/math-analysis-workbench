@@ -31,10 +31,10 @@ const TYPES = new Set([
   'FunctionNode',
 ]);
 
-export function compileExpression(
+export function parseValidatedExpression(
   expression: string,
   variable: 'x' | 'n' = 'x',
-): (value: number) => number | null {
+): MathNode {
   if (!expression.trim() || expression.length > 160)
     throw new Error('表达式长度应为 1–160 个字符。');
   let root: MathNode;
@@ -43,6 +43,13 @@ export function compileExpression(
   } catch {
     throw new Error('表达式无法解析，请检查括号和运算符。');
   }
+  validateMathNode(root, variable);
+  return root;
+}
+export function validateMathNode(
+  root: MathNode,
+  variable: 'x' | 'n' = 'x',
+): void {
   const otherVariable = variable === 'x' ? 'n' : 'x';
   let count = 0;
   root.traverse((node, _path, parent) => {
@@ -80,7 +87,11 @@ export function compileExpression(
         !FUNCTIONS.has(String(fn.fn)) ||
         fn.args.length !== 1
       )
-        throw new Error('仅支持白名单内的单参数函数。');
+        throw new Error(
+          fn.fn.type === 'SymbolNode' && !FUNCTIONS.has(String(fn.fn))
+            ? `仅支持白名单内的单参数函数（不支持 ${String(fn.fn)}）。`
+            : '仅支持白名单内的单参数函数。',
+        );
     }
     if (node.type === 'ConstantNode') {
       const value = (node as unknown as { value: unknown }).value;
@@ -105,6 +116,11 @@ export function compileExpression(
       }
     }
   });
+}
+export function compileNode(
+  root: MathNode,
+  variable: 'x' | 'n' = 'x',
+): (value: number) => number | null {
   const compiled = root.compile();
   return (value) => {
     try {
@@ -118,6 +134,13 @@ export function compileExpression(
       return null;
     }
   };
+}
+
+export function compileExpression(
+  expression: string,
+  variable: 'x' | 'n' = 'x',
+): (value: number) => number | null {
+  return compileNode(parseValidatedExpression(expression, variable), variable);
 }
 
 type Evaluator = (x: number) => number | null;

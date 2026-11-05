@@ -389,6 +389,18 @@ input {
 .add-comparison {
   margin-top: 16px;
 }
+.tangent-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 4px;
+}
+.tangent-input {
+  width: 120px;
+}
+.tangent-controls + .chart-summary {
+  margin: 8px 0 0;
+}
 .task-index {
   display: inline-block;
   font-size: 11px;

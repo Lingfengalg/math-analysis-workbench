@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 import { compileExpression, sampleFunction, sampleSequence } from './sample';
 import { detectIntersections } from './intersections';
+import { calculateTangent } from './tangent';
 import {
   plotRequestSchema,
   type PlotRequest,
@@ -17,7 +18,13 @@ function validated(request: PlotRequest): PlotRequest {
 self.onmessage = (event: MessageEvent<PlotWorkerMessage>) => {
   let response: PlotWorkerResponse;
   try {
-    if (event.data.type === 'intersections') {
+    if (event.data.type === 'tangent') {
+      response = {
+        ok: true,
+        type: 'tangent',
+        data: calculateTangent(event.data.request.expression, event.data.x0),
+      };
+    } else if (event.data.type === 'intersections') {
       const a = validated(event.data.a);
       const b = validated(event.data.b);
       const points = detectIntersections(

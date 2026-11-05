@@ -59,13 +59,20 @@ export interface IntersectionResult {
   points: IntersectionPoint[];
 }
 /** Worker 协议：按 kind 区分函数采样与数列采样，响应格式相同。 */
+/** 符号导数在给定点的数值，不构成极限证明。 */
+export interface TangentResult {
+  slope: number;
+  value: number;
+}
 export type PlotWorkerMessage =
   | { type: 'plot'; request: PlotRequest }
   | { type: 'sequence'; request: SequenceRequest }
-  | { type: 'intersections'; a: PlotRequest; b: PlotRequest };
+  | { type: 'intersections'; a: PlotRequest; b: PlotRequest }
+  | { type: 'tangent'; request: PlotRequest; x0: number };
 export type PlotWorkerResponse =
   | { ok: true; type: 'plot' | 'sequence'; data: PlotResult }
   | { ok: true; type: 'intersections'; data: IntersectionResult }
+  | { ok: true; type: 'tangent'; data: TangentResult }
   | { ok: false; error: string };
 
 export const knowledgeCardSchema = z.object({

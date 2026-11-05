@@ -602,3 +602,73 @@
   过于复杂；改为断言 `{ type: 'plot', request }` 形状并在各函数内联收窄后通过。
 - 首次全量 e2e 运行输出仅计入 29 项（输出被 tail 截断，其余 16 项状态无法
   确证）；重跑一次后 45 项全部通过，以重跑结果为准。
+
+## 2026-11-04 切线可视化（#63）
+
+背景与验收：issue #63。绘图页支持指定切点 x₀ 叠加切线
+y = f(x₀) + f′(x₀)(x − x₀) 并显示斜率；斜率由 mathjs 符号求导在一点取值，
+导函数节点仍须通过白名单校验；不可导或导数超出支持范围时明确提示；依赖
+#61 的多 series 基础（PR 链标注依赖）。
+
+| 检查                   | 结果                                                                                                                              |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run format:check` | 通过（切换分支后 CRLF 幻影差异已用 prettier 归一化）                                                                              |
+| `npm run lint`         | 通过                                                                                                                              |
+| `npm run typecheck`    | 通过                                                                                                                              |
+| `npm run test:run`     | 25 个测试文件，254 项测试通过（新增 tangent 9 项、client 3 项、chart-series 3 项、usePlotCalculation 3 项）                       |
+| `npm run build`        | 通过，产物在 dist/                                                                                                                |
+| `npm run test:e2e`     | 45 项 Chromium 流程通过（含新增 1 项切线用例）                                                                                    |
+| `npm run perf:budget`  | plotting 587.3/196.8、plot.worker 738.2/201.7、knowledge 260.8/78.4、index 164.9/57.3；全部 JS 2578.4/805.3，预算 2800/880 → 通过 |
+
+环境说明：Windows 11、Node 24.21.0（CI 为 Linux、Node 22.23.4），仅 Chromium。
+
+### 改动要点
+
+- `sample.ts` 抽出 `parseValidatedExpression` / `validateMathNode` /
+  `compileNode`，切线复用同一白名单校验；`compileExpression` 改为组合。
+- 新增 `src/shared/math/tangent.ts`：先编译原表达式求 f(x₀)（切点处无有限值
+  → 明确报错），再 mathjs `derivative` 符号求导、导函数节点复校验（失败 →
+  「切线无法显示：…」并附 cause）、在 x₀ 求值（非有限 → 「不可导，或导数值
+  无法计算」）。
+- 计算协议新增 tangent 消息类型与 `TangentResult { slope, value }`；worker 按
+  type 分派；client 提取 `runWorkerTask` 共用生命周期并新增
+  `calculateTangent`。
+- 新增 `useTangentCalculation(request, x0)`：两者齐备时自动计算，任一缺失回
+  空闲并取消；渲染期重置模式（无中间 loading 态，不闪状态行）。
+- `FunctionChart` 新增 tangent 属性：亮青色 #06b6d4 直线（两端点由切线公式
+  计算并参与 y 范围，保证初始视野可见）+ 切点圆点标记（MarkPointComponent
+  单独注册）；aria 名称与描述附加切线信息。
+- 绘图页「切线」区：显示切线开关 + 切点 x₀ 输入；状态行「切线：x₀ = …，斜率
+  f′(…) = …（符号求导在一点的数值，不构成极限证明。）」；图例增加切线条目。
+
+### 验证
+
+- 单测 18 项：tangent 9 项（x²@1 斜率 2、x³@1 斜率 3、sqrt@4 斜率 0.25、
+  exp@0 斜率 1、常数表达式导数 0、abs@0 不可导、tan 导函数含 sec 超出白名单、
+  1/x@0 无有限值、非法 x₀ 报错）；client 3 项（消息形状与清理、返回类型不符
+  报错、业务错误与中止共享生命周期）；chart-series 3 项（切线颜色与主曲线蓝、
+  间断橙、对比三色互异；切线端点公式；水平切线）；usePlotCalculation 3 项
+  （自动计算与取消、切点变化重算且旧结果不覆盖、错误信息）。
+- e2e 1 项：开启切线并填 x₀ = 1 后状态行含 `f′(1) = 2` 与「不构成极限证明」，
+  图例含「切线（x₀ = 1）」，画布像素命中亮青色窗口（与主曲线蓝互不重叠）；
+  关闭后状态行与像素一起消失。既有 44 项 e2e 全部保持通过。
+
+### 已知限制
+
+- 斜率为符号求导在一点的数值，不构成极限定义的证明（文案已注明）。
+- 导函数超出白名单时拒绝显示（如 tan 的导函数含 sec），明确提示而非静默
+  失败。
+- x₀ 超出观察区间时切线仍按区间两端绘制，但切点圆点标记在视野外。
+- 切线只针对主曲线；对比曲线暂无切线支持。
+- 组件级渲染（切线条 series 与标记点）未做 jsdom 单测：jsdom 无 canvas 2D，
+  改为纯逻辑单测 + Playwright 画布像素扫描验证。
+
+### 排错记录
+
+- tan(x) 的导函数 sec(x)^2 复校验时先触发 FunctionNode 检查而非 SymbolNode
+  检查，报错未点名具体函数，测试期望与实现不一致；改为在消息中带上函数名
+  （「仅支持白名单内的单参数函数（不支持 sec）。」）并同步更新测试。
+- 重抛导数校验错误时首版未附加 cause，被 eslint（preserve-caught-error）
+  拦截；改为 `new Error(message, { cause })` 后通过。
+- 编辑 chart-series.ts 时曾误把 GAP_MARKER_COLOR 的值改成渐近提示色，自查
+  发现后立即还原为 #c47f17；切线颜色作为新常量添加，不触碰既有颜色。

@@ -579,3 +579,84 @@ test('对比曲线出现近似交点标记与坐标文本', async ({ page }) => 
     page.getByRole('status').filter({ hasText: 'g(x) 与 f(x) 的近似交点' }),
   ).toContainText('近似交点：未检测到');
 });
+
+test('切线可见且斜率文本注明数值来源', async ({ page }) => {
+  await page.goto('/#/plotting');
+  await expect(page.getByRole('status')).toContainText('f(x)', {
+    timeout: 20000,
+  });
+  // 未开启时没有切线相关状态行
+  await expect(
+    page.getByRole('status').filter({ hasText: '切线' }),
+  ).toHaveCount(0);
+  // 开启切线并指定切点 x₀ = 1：x^2 的符号导数为 2x，斜率应为 2
+  await page.getByRole('checkbox', { name: '显示切线' }).check();
+  await page.getByLabel('切点横坐标 x₀').fill('1');
+  const tangentStatus = page.getByRole('status').filter({ hasText: '切线' });
+  await expect(tangentStatus).toContainText('f′(1) = 2', { timeout: 20000 });
+  await expect(tangentStatus).toContainText('不构成极限证明');
+  // 图例包含切线条目
+  await expect(
+    page.getByRole('list', { name: '图例：曲线颜色与表达式' }),
+  ).toContainText('切线（x₀ = 1）');
+  // 画布像素验证：亮青色切线 #06b6d4（窗口与主曲线蓝等颜色互不重叠）
+  await expect
+    .poll(
+      async () =>
+        page.locator('.function-chart canvas').evaluateAll((canvases) => {
+          let cyan = 0;
+          for (const element of canvases) {
+            const canvas = element as HTMLCanvasElement;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) continue;
+            const pixels = ctx.getImageData(
+              0,
+              0,
+              canvas.width,
+              canvas.height,
+            ).data;
+            for (let i = 0; i < pixels.length; i += 4) {
+              if (pixels[i + 3] <= 100) continue;
+              const [r, g, b] = [pixels[i], pixels[i + 1], pixels[i + 2]];
+              if (r <= 35 && g >= 150 && g <= 215 && b >= 180 && b <= 235)
+                cyan++;
+            }
+          }
+          return cyan > 10;
+        }),
+      { timeout: 10000 },
+    )
+    .toBe(true);
+  // 关闭后切线状态行与图像一起消失
+  await page.getByRole('checkbox', { name: '显示切线' }).uncheck();
+  await expect(
+    page.getByRole('status').filter({ hasText: '切线' }),
+  ).toHaveCount(0);
+  await expect
+    .poll(
+      async () =>
+        page.locator('.function-chart canvas').evaluateAll((canvases) => {
+          let cyan = 0;
+          for (const element of canvases) {
+            const canvas = element as HTMLCanvasElement;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) continue;
+            const pixels = ctx.getImageData(
+              0,
+              0,
+              canvas.width,
+              canvas.height,
+            ).data;
+            for (let i = 0; i < pixels.length; i += 4) {
+              if (pixels[i + 3] <= 100) continue;
+              const [r, g, b] = [pixels[i], pixels[i + 1], pixels[i + 2]];
+              if (r <= 35 && g >= 150 && g <= 215 && b >= 180 && b <= 235)
+                cyan++;
+            }
+          }
+          return cyan;
+        }),
+      { timeout: 10000 },
+    )
+    .toBeLessThanOrEqual(10);
+});

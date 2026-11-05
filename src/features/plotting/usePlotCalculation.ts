@@ -11,6 +11,7 @@ import {
   calculateIntersections,
   calculatePlot,
   calculateSequence,
+  calculateTangent,
 } from '@/shared/math/client';
 
 export type PlotState =
@@ -208,5 +209,51 @@ export function useIntersectionCalculation(
     );
     return () => controller.abort();
   }, [a, b]);
+  return state;
+}
+
+export type TangentState =
+  | { status: 'idle' }
+  | { status: 'ready'; slope: number; value: number }
+  | { status: 'error'; message: string };
+
+/** 主曲线已绘制且给出切点 x₀ 时自动计算切线；任一缺失则回到空闲并取消。 */
+export function useTangentCalculation(
+  request: PlotRequest | null,
+  x0: number | null,
+): TangentState {
+  const [state, setState] = useState<TangentState>({ status: 'idle' });
+  const [previous, setPrevious] = useState<{
+    request: PlotRequest | null;
+    x0: number | null;
+  } | null>(null);
+  // 请求或切点变化时在渲染期回到空闲（React「存储上次渲染信息」模式），
+  // 不在 effect 中同步 setState，避免级联渲染。
+  if (previous === null || previous.request !== request || previous.x0 !== x0) {
+    setPrevious({ request, x0 });
+    if (state.status !== 'idle') setState({ status: 'idle' });
+  }
+  useEffect(() => {
+    if (!request || x0 === null) return;
+    const controller = new AbortController();
+    calculateTangent(request, x0, controller.signal).then(
+      (result) => {
+        if (!controller.signal.aborted)
+          setState({
+            status: 'ready',
+            slope: result.slope,
+            value: result.value,
+          });
+      },
+      (cause: unknown) => {
+        if (!controller.signal.aborted)
+          setState({
+            status: 'error',
+            message: cause instanceof Error ? cause.message : '计算失败',
+          });
+      },
+    );
+    return () => controller.abort();
+  }, [request, x0]);
   return state;
 }
