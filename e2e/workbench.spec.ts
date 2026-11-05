@@ -54,6 +54,22 @@ test('知识来源提示在编辑或切换示例后清除', async ({ page }) => 
   await expect(page.getByText('已接收知识导航中的示例')).toBeVisible();
 });
 
+test('经典函数库可以一键载入并绘制', async ({ page }) => {
+  await page.goto('/#/plotting');
+  await expect(page.getByRole('status')).toContainText('f(x)', {
+    timeout: 20000,
+  });
+  await page.getByRole('button', { name: /经典函数示例/ }).click();
+  await page.getByRole('button', { name: /可去间断/ }).click();
+  await expect(page.getByLabel('函数表达式 f(x)')).toHaveValue('(x^2-1)/(x-1)');
+  await expect(page.getByRole('status')).toContainText('f(x) = (x^2-1)/(x-1)', {
+    timeout: 20000,
+  });
+  await expect(
+    page.getByRole('img', { name: '函数 (x^2-1)/(x-1) 的采样图像' }),
+  ).toBeVisible();
+});
+
 test('函数图像可以导出为 PNG 下载', async ({ page }) => {
   await page.goto('/#/plotting');
   await expect(page.getByRole('status')).toContainText('f(x)', {
@@ -171,6 +187,89 @@ test('绘图结果提供数据摘要与疑似间断标记，键盘可操作', as
   // 连续函数的摘要不含缺口表述
   await page.getByRole('button', { name: 'x^2', exact: true }).click();
   await expect(page.getByText('未检测到采样缺口。')).toBeVisible();
+});
+
+test('数列模式可以绘制散点并显示项数', async ({ page }) => {
+  await page.goto('/#/plotting');
+  await expect(page.getByRole('status')).toContainText('f(x)', {
+    timeout: 20000,
+  });
+  // antd Segmented 的 radio 被视觉隐藏，点击可见的选项文本
+  await page.getByText('数列散点', { exact: true }).click();
+  await expect(page.getByLabel('通项表达式 a_n')).toBeVisible();
+  // 函数模式专属控件在数列模式下隐藏
+  await expect(page.getByLabel('左端点')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /经典函数示例/ })).toHaveCount(
+    0,
+  );
+  await expect(page.getByRole('button', { name: '保存默认设置' })).toHaveCount(
+    0,
+  );
+  await page.getByLabel('通项表达式 a_n').fill('sin(n)/n');
+  await expect(page.getByLabel('绘制项数')).toHaveValue('30');
+  await page.getByRole('button', { name: /绘制数列/ }).click();
+  await expect(page.getByRole('status')).toContainText('a_n = sin(n)/n');
+  await expect(page.getByRole('status')).toContainText('前 30 项');
+  await expect(
+    page.getByRole('img', { name: '数列 sin(n)/n 的前若干项散点图' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: '数列数据摘要' }),
+  ).toBeVisible();
+  await expect(page.getByText(/有效项：30 项（共 30 项）/)).toBeVisible();
+  // sin(n)/n 的前 30 项都在定义域内
+  await expect(page.getByText(/所有项都采样到有限实数值/)).toBeVisible();
+  // 换一个带无定义项的数列：log(n-1) 在 n=1 无定义，留空但不称为间断
+  await page.getByLabel('通项表达式 a_n').fill('log(n-1)');
+  await page.getByRole('button', { name: /绘制数列/ }).click();
+  await expect(page.getByRole('status')).toContainText('1 项无定义（留空）');
+  await expect(page.getByText(/留空不代表该处是数学间断/)).toBeVisible();
+});
+
+test('水平渐近趋势提示以虚线绘制并注明是数值观察', async ({ page }) => {
+  await page.goto('/#/plotting');
+  await expect(page.getByRole('status')).toContainText('f(x)', {
+    timeout: 20000,
+  });
+  await page.getByRole('button', { name: '1/x', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('f(x) = 1/x');
+  await expect(page.getByText(/水平渐近趋势提示：左侧疑似趋于/)).toBeVisible();
+  await expect(page.getByText(/右侧疑似趋于/)).toBeVisible();
+  await expect(page.getByText(/数值观察，不构成极限证明/)).toBeVisible();
+  // Verify the actual canvas line, not just the surrounding text:
+  // 渐近趋势虚线为青绿色 #0e7490，与竖直间断标记的橙色 #c47f17 区分。
+  await expect
+    .poll(async () =>
+      page.locator('.function-chart canvas').evaluateAll(
+        (canvases) =>
+          canvases.some((element) => {
+            const canvas = element as HTMLCanvasElement;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return false;
+            const pixels = ctx.getImageData(
+              0,
+              0,
+              canvas.width,
+              canvas.height,
+            ).data;
+            let count = 0;
+            for (let i = 0; i < pixels.length; i += 4) {
+              if (
+                pixels[i] <= 45 &&
+                pixels[i + 1] >= 90 &&
+                pixels[i + 1] <= 140 &&
+                pixels[i + 2] >= 120 &&
+                pixels[i + 2] <= 170 &&
+                pixels[i + 3] > 100
+              )
+                count++;
+            }
+            return count > 10;
+          }),
+        { timeout: 10000 },
+      ),
+    )
+    .toBe(true);
 });
 
 test('默认绘图设置可在刷新后保留', async ({ page }) => {
@@ -394,6 +493,174 @@ test('对比曲线与主曲线共享坐标轴并以颜色区分', async ({ page 
   ).toBeEnabled();
 });
 
+test('对比曲线图例与输入行的标签保持一致', async ({ page }) => {
+  await page.goto('/#/plotting');
+  await expect(page.getByRole('status')).toContainText('f(x)', {
+    timeout: 20000,
+  });
+  const add = page.getByRole('button', { name: '添加对比曲线' });
+  await add.click();
+  await add.click();
+  const legend = page.getByRole('list', { name: '图例：曲线颜色与表达式' });
+  await page.getByLabel('对比表达式 h(x)').fill('abs(x)');
+  await page.getByRole('button', { name: '绘制对比曲线 h(x)' }).click();
+  await expect(legend).toContainText('h(x) = abs(x)', { timeout: 20000 });
+  await expect(legend).not.toContainText('g(x) = abs(x)');
+  await page.getByLabel('对比表达式 g(x)').fill('x^3');
+  await page.getByRole('button', { name: '绘制对比曲线 g(x)' }).click();
+  await expect(legend).toContainText('g(x) = x^3', { timeout: 20000 });
+  await expect(legend).toContainText('h(x) = abs(x)');
+  await page.getByRole('button', { name: '移除对比曲线 g(x)' }).click();
+  await expect(legend).toContainText('g(x) = abs(x)');
+  await expect(legend).not.toContainText('h(x) = abs(x)');
+  await page.getByText('数列散点', { exact: true }).click();
+  await expect(page.getByRole('button', { name: '添加对比曲线' })).toHaveCount(
+    0,
+  );
+  await page.getByText('函数图像', { exact: true }).click();
+  await expect(page.getByLabel('对比表达式 g(x)')).toHaveValue('abs(x)');
+  await expect(legend).toContainText('g(x) = abs(x)');
+});
+
+test('对比曲线出现近似交点标记与坐标文本', async ({ page }) => {
+  await page.goto('/#/plotting');
+  await expect(page.getByRole('status')).toContainText('f(x)', {
+    timeout: 20000,
+  });
+  // 无对比曲线时不出现交点相关内容
+  await expect(page.getByText(/近似交点/)).toHaveCount(0);
+  await page.getByRole('button', { name: '添加对比曲线' }).click();
+  await page.getByLabel('对比表达式 g(x)').fill('2');
+  await page.getByRole('button', { name: '绘制对比曲线 g(x)' }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'g(x) = 2' }),
+  ).toBeVisible({ timeout: 20000 });
+  // 交点坐标文本：x^2 与 2 交于 ±√2，且写明数值近似、非符号求解
+  const intersectionLine = page
+    .getByRole('status')
+    .filter({ hasText: 'g(x) 与 f(x) 的近似交点' });
+  await expect(intersectionLine).toBeVisible({ timeout: 20000 });
+  await expect(intersectionLine).toContainText('x ≈ 1.4142');
+  await expect(intersectionLine).toContainText('x ≈ -1.4142');
+  await expect(intersectionLine).toContainText('y ≈ 2');
+  await expect(intersectionLine).toContainText('数值近似，非符号求解');
+  // 画布出现交点标记色 #854d0e（与曲线、虚线标记颜色都可区分）
+  await expect
+    .poll(
+      async () =>
+        page.locator('.function-chart canvas').evaluateAll((canvases) => {
+          let markers = 0;
+          for (const element of canvases) {
+            const canvas = element as HTMLCanvasElement;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) continue;
+            const pixels = ctx.getImageData(
+              0,
+              0,
+              canvas.width,
+              canvas.height,
+            ).data;
+            for (let i = 0; i < pixels.length; i += 4) {
+              if (pixels[i + 3] <= 100) continue;
+              const [r, g, b] = [pixels[i], pixels[i + 1], pixels[i + 2]];
+              if (r >= 115 && r <= 155 && g >= 60 && g <= 100 && b <= 45)
+                markers++;
+            }
+          }
+          return markers > 4;
+        }),
+      { timeout: 10000 },
+    )
+    .toBe(true);
+  // 无交点时给出「未检测到」而非空白
+  await page.getByLabel('对比表达式 g(x)').fill('x^2 + 5');
+  await page.getByRole('button', { name: '绘制对比曲线 g(x)' }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'g(x) 与 f(x) 的近似交点' }),
+  ).toContainText('近似交点：未检测到');
+});
+
+test('切线可见且斜率文本注明数值来源', async ({ page }) => {
+  await page.goto('/#/plotting');
+  await expect(page.getByRole('status')).toContainText('f(x)', {
+    timeout: 20000,
+  });
+  // 未开启时没有切线相关状态行
+  await expect(
+    page.getByRole('status').filter({ hasText: '切线' }),
+  ).toHaveCount(0);
+  // 开启切线并指定切点 x₀ = 1：x^2 的符号导数为 2x，斜率应为 2
+  await page.getByRole('checkbox', { name: '显示切线' }).check();
+  await page.getByLabel('切点横坐标 x₀').fill('1');
+  const tangentStatus = page.getByRole('status').filter({ hasText: '切线' });
+  await expect(tangentStatus).toContainText('f′(1) = 2', { timeout: 20000 });
+  await expect(tangentStatus).toContainText('不构成极限证明');
+  // 图例包含切线条目
+  await expect(
+    page.getByRole('list', { name: '图例：曲线颜色与表达式' }),
+  ).toContainText('切线（x₀ = 1）');
+  // 画布像素验证：亮青色切线 #06b6d4（窗口与主曲线蓝等颜色互不重叠）
+  await expect
+    .poll(
+      async () =>
+        page.locator('.function-chart canvas').evaluateAll((canvases) => {
+          let cyan = 0;
+          for (const element of canvases) {
+            const canvas = element as HTMLCanvasElement;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) continue;
+            const pixels = ctx.getImageData(
+              0,
+              0,
+              canvas.width,
+              canvas.height,
+            ).data;
+            for (let i = 0; i < pixels.length; i += 4) {
+              if (pixels[i + 3] <= 100) continue;
+              const [r, g, b] = [pixels[i], pixels[i + 1], pixels[i + 2]];
+              if (r <= 35 && g >= 150 && g <= 215 && b >= 180 && b <= 235)
+                cyan++;
+            }
+          }
+          return cyan > 10;
+        }),
+      { timeout: 10000 },
+    )
+    .toBe(true);
+  // 关闭后切线状态行与图像一起消失
+  await page.getByRole('checkbox', { name: '显示切线' }).uncheck();
+  await expect(
+    page.getByRole('status').filter({ hasText: '切线' }),
+  ).toHaveCount(0);
+  await expect
+    .poll(
+      async () =>
+        page.locator('.function-chart canvas').evaluateAll((canvases) => {
+          let cyan = 0;
+          for (const element of canvases) {
+            const canvas = element as HTMLCanvasElement;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) continue;
+            const pixels = ctx.getImageData(
+              0,
+              0,
+              canvas.width,
+              canvas.height,
+            ).data;
+            for (let i = 0; i < pixels.length; i += 4) {
+              if (pixels[i + 3] <= 100) continue;
+              const [r, g, b] = [pixels[i], pixels[i + 1], pixels[i + 2]];
+              if (r <= 35 && g >= 150 && g <= 215 && b >= 180 && b <= 235)
+                cyan++;
+            }
+          }
+          return cyan;
+        }),
+      { timeout: 10000 },
+    )
+    .toBeLessThanOrEqual(10);
+});
+
 test('泰勒多项式滑块叠加 Tₙ(x) 并注明近似前提', async ({ page }) => {
   await page.goto('/#/plotting');
   await expect(page.getByRole('status')).toContainText('f(x)', {
@@ -538,4 +805,43 @@ test('泰勒多项式滑块叠加 Tₙ(x) 并注明近似前提', async ({ page 
       { timeout: 10000 },
     )
     .toBeLessThanOrEqual(10);
+});
+
+test('对比交点、切线和泰勒曲线可同时使用并跨模式保留', async ({ page }) => {
+  await page.goto('/#/plotting');
+  await expect(page.getByRole('status')).toContainText('f(x)', {
+    timeout: 20000,
+  });
+  await page.getByRole('button', { name: 'sin(x)', exact: true }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'f(x)' }),
+  ).toContainText('sin(x)');
+  await page.getByRole('button', { name: '添加对比曲线' }).click();
+  await page.getByLabel('对比表达式 g(x)').fill('0');
+  await page.getByRole('button', { name: '绘制对比曲线 g(x)' }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'g(x) 与 f(x) 的近似交点' }),
+  ).toBeVisible({ timeout: 20000 });
+  await page.getByRole('checkbox', { name: '显示切线' }).check();
+  await page.getByLabel('切点横坐标 x₀').fill('0');
+  await expect(
+    page.getByRole('status').filter({ hasText: '切线：x₀ = 0' }),
+  ).toBeVisible({ timeout: 20000 });
+  await page.getByRole('checkbox', { name: '显示泰勒多项式' }).check();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'T₃(x)' }),
+  ).toBeVisible({ timeout: 20000 });
+  await expect(
+    page.getByRole('list', { name: '图例：曲线颜色与表达式' }),
+  ).toContainText('切线');
+  await expect(
+    page.getByRole('list', { name: '图例：曲线颜色与表达式' }),
+  ).toContainText('T₃(x)');
+  await page.getByText('数列散点', { exact: true }).click();
+  await expect(page.getByRole('checkbox', { name: '显示切线' })).toHaveCount(0);
+  await page.getByText('函数图像', { exact: true }).click();
+  await expect(page.getByLabel('对比表达式 g(x)')).toHaveValue('0');
+  await expect(
+    page.getByRole('status').filter({ hasText: 'T₃(x)' }),
+  ).toBeVisible({ timeout: 20000 });
 });

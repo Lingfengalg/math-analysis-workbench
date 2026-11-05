@@ -1,23 +1,63 @@
 /// <reference lib="webworker" />
-import { sampleFunction } from './sample';
+import { compileExpression, sampleFunction, sampleSequence } from './sample';
+import { detectIntersections } from './intersections';
+import { calculateTangent } from './tangent';
 import { calculateTaylorPolynomial } from './taylor';
-import type { PlotWorkerMessage, PlotWorkerResponse } from '@/shared/contracts';
+import {
+  plotRequestSchema,
+  type PlotRequest,
+  type PlotWorkerMessage,
+  type PlotWorkerResponse,
+} from '@/shared/contracts';
+
+function validated(request: PlotRequest): PlotRequest {
+  const valid = plotRequestSchema.safeParse(request);
+  if (!valid.success) throw new Error(valid.error.issues[0].message);
+  return valid.data;
+}
 
 self.onmessage = (event: MessageEvent<PlotWorkerMessage>) => {
   let response: PlotWorkerResponse;
   try {
-    response =
-      event.data.type === 'taylor'
-        ? {
-            ok: true,
-            type: 'taylor',
-            data: calculateTaylorPolynomial(
-              event.data.request,
-              event.data.center,
-              event.data.order,
-            ),
-          }
-        : { ok: true, type: 'plot', data: sampleFunction(event.data.request) };
+    if (event.data.type === 'taylor') {
+      response = {
+        ok: true,
+        type: 'taylor',
+        data: calculateTaylorPolynomial(
+          event.data.request,
+          event.data.center,
+          event.data.order,
+        ),
+      };
+    } else if (event.data.type === 'tangent') {
+      response = {
+        ok: true,
+        type: 'tangent',
+        data: calculateTangent(event.data.request.expression, event.data.x0),
+      };
+    } else if (event.data.type === 'intersections') {
+      const a = validated(event.data.a);
+      const b = validated(event.data.b);
+      const points = detectIntersections(
+        compileExpression(a.expression),
+        compileExpression(b.expression),
+        a.xMin,
+        a.xMax,
+      );
+      response = { ok: true, type: 'intersections', data: { points } };
+    } else if (event.data.type === 'sequence') {
+      response = {
+        ok: true,
+        type: 'sequence',
+        data: sampleSequence(event.data.request),
+      };
+    } else {
+      response = {
+        ok: true,
+        type: 'plot',
+        data: sampleFunction(event.data.request),
+      };
+    }
   } catch (error) {
     response = {
       ok: false,

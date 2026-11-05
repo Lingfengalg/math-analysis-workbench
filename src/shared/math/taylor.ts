@@ -23,7 +23,7 @@ function factorial(n: number): number {
  * 反复符号求导得到各阶系数 c_k = f⁽ᵏ⁾(a) / k!，再按与主曲线相同的采样
  * 规则计算 T_n(x) 在观察区间上的图像点。每一步导函数仍须通过白名单校验，
  * 任一步求导或求值失败时给出明确错误并停止。系数是符号求导在一点的数值，
- * 泰勒多项式仅在收敛区间内近似原函数，图像不等于证明。
+ * 泰勒多项式用于观察展开中心附近的局部近似，图像不等于证明。
  */
 export function calculateTaylorPolynomial(
   request: PlotRequest,

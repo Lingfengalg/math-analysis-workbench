@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compileExpression, sampleFunction } from './sample';
+import { compileExpression, sampleFunction, sampleSequence } from './sample';
 import { summarizePlot } from './plot-summary';
 import type { PlotResult } from '@/shared/contracts';
 
@@ -217,5 +217,54 @@ describe('采样缺口表述（#28）', () => {
       sampleFunction({ expression: 'x^2', xMin: -2, xMax: 2 }).points,
     );
     expect(summary.gapRanges).toEqual([]);
+  });
+});
+
+describe('数列采样（#59）', () => {
+  it('计算前 N 项，n 从 1 开始', () => {
+    const result = sampleSequence({ expression: '1/n', terms: 3 });
+    expect(result.points).toEqual([
+      [1, 1],
+      [2, 0.5],
+      [3, 1 / 3],
+    ]);
+    expect(result.gaps).toBe(0);
+  });
+  it('无定义或超出显示量级的项留空并计数，不做间断启发式', () => {
+    const result = sampleSequence({ expression: 'log(n-1)', terms: 4 });
+    // n=1 时 log(0) 非有限值留空；n=2 起均为有限值。
+    expect(result.points[0]).toEqual([1, null]);
+    expect(result.points.slice(1).every((point) => point[1] !== null)).toBe(
+      true,
+    );
+    expect(result.gaps).toBe(1);
+  });
+  it('数列模式拒绝 x，函数模式拒绝 n', () => {
+    expect(() => compileExpression('x^2', 'n')).toThrow(
+      '不支持的变量：x。数列模式请用 n 表示项序号。',
+    );
+    expect(() => compileExpression('n^2', 'x')).toThrow(
+      '不支持的变量：n。函数模式请用 x 表示自变量。',
+    );
+  });
+  it('数列模式白名单与函数模式一致（函数名、幂指数限制）', () => {
+    expect(() => compileExpression('sin(n)+pi', 'n')).not.toThrow();
+    expect(() => compileExpression('n^n', 'n')).toThrow(
+      '幂指数须为绝对值不超过 20 的数字常量。',
+    );
+    expect(() => compileExpression('sin', 'n')).toThrow(
+      '函数名 sin 不能作为数值使用，请写成 sin(n) 的形式。',
+    );
+  });
+  it('拒绝非法项数与非整数项数', () => {
+    expect(() => sampleSequence({ expression: 'n', terms: 1 })).toThrow(
+      '项数至少为 2',
+    );
+    expect(() => sampleSequence({ expression: 'n', terms: 1001 })).toThrow(
+      '项数最多为 1000',
+    );
+    expect(() => sampleSequence({ expression: 'n', terms: 2.5 })).toThrow(
+      '项数须为整数',
+    );
   });
 });

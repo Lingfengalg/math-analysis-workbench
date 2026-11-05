@@ -5,25 +5,29 @@ import {
   curveExpressionsLabel,
   finiteYRange,
   GAP_MARKER_COLOR,
+  INTERSECTION_MARKER_COLOR,
   MAIN_CURVE_COLOR,
+  TANGENT_COLOR,
   TAYLOR_COLOR,
   taylorPolynomialLabel,
+  tangentPoints,
 } from './chart-series';
 
 describe('对比曲线颜色分配', () => {
-  it('前三条颜色互不相同，且与主曲线、间断标记颜色可区分', () => {
+  it('前三条颜色互不相同，且与主曲线、间断与交点标记颜色可区分', () => {
     expect(COMPARISON_CURVE_COLORS.length).toBeGreaterThanOrEqual(3);
     const used = [
       MAIN_CURVE_COLOR,
       GAP_MARKER_COLOR,
+      INTERSECTION_MARKER_COLOR,
       ...COMPARISON_CURVE_COLORS.slice(0, 3),
     ];
     expect(new Set(used).size).toBe(used.length);
   });
 
-  it('泰勒多项式颜色与主曲线、间断标记、对比三色均可区分', () => {
+  it('切线颜色与主曲线、间断标记、对比三色均可区分', () => {
     const used = [
-      TAYLOR_COLOR,
+      TANGENT_COLOR,
       MAIN_CURVE_COLOR,
       GAP_MARKER_COLOR,
       ...COMPARISON_CURVE_COLORS.slice(0, 3),
@@ -85,6 +89,53 @@ describe('多曲线有限值范围', () => {
   });
 });
 
+describe('切线端点', () => {
+  it('按 y = value + slope·(x − x0) 计算区间两端点', () => {
+    const points = tangentPoints({
+      x0: 1,
+      slope: 2,
+      value: 1,
+      xMin: -5,
+      xMax: 5,
+    });
+    expect(points).toEqual([
+      [-5, -11],
+      [5, 9],
+    ]);
+  });
+
+  it('水平切线两端点与切点同高', () => {
+    const points = tangentPoints({
+      x0: 0,
+      slope: 0,
+      value: 4,
+      xMin: -2,
+      xMax: 2,
+    });
+    expect(points).toEqual([
+      [-2, 4],
+      [2, 4],
+    ]);
+  });
+});
+
+describe('曲线表达式无障碍标签', () => {
+  it('单条曲线只返回表达式本身', () => {
+    expect(curveExpressionsLabel([{ points: [], expression: 'x^2' }])).toBe(
+      'x^2',
+    );
+  });
+
+  it('多条曲线以「与」连接', () => {
+    expect(
+      curveExpressionsLabel([
+        { points: [], expression: 'x^2' },
+        { points: [], expression: 'abs(x)' },
+      ]),
+    ).toBe('x^2 与 abs(x)');
+  });
+});
+
 describe('泰勒多项式可读标签', () => {
   it('sin 在 0 处的 T₃：x − 0.16667·x^3', () => {
     expect(taylorPolynomialLabel([0, 1, 0, -1 / 6], 0)).toBe('x − 0.16667·x^3');
@@ -107,19 +158,14 @@ describe('泰勒多项式可读标签', () => {
   });
 });
 
-describe('曲线表达式无障碍标签', () => {
-  it('单条曲线只返回表达式本身', () => {
-    expect(curveExpressionsLabel([{ points: [], expression: 'x^2' }])).toBe(
-      'x^2',
-    );
-  });
-
-  it('多条曲线以「与」连接', () => {
-    expect(
-      curveExpressionsLabel([
-        { points: [], expression: 'x^2' },
-        { points: [], expression: 'abs(x)' },
-      ]),
-    ).toBe('x^2 与 abs(x)');
-  });
+it('泰勒颜色与现有曲线和标记互不相同', () => {
+  const used = [
+    TAYLOR_COLOR,
+    TANGENT_COLOR,
+    MAIN_CURVE_COLOR,
+    GAP_MARKER_COLOR,
+    INTERSECTION_MARKER_COLOR,
+    ...COMPARISON_CURVE_COLORS,
+  ];
+  expect(new Set(used).size).toBe(used.length);
 });

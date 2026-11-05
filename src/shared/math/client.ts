@@ -1,8 +1,11 @@
 import type {
+  IntersectionResult,
   PlotRequest,
   PlotResult,
   PlotWorkerMessage,
   PlotWorkerResponse,
+  SequenceRequest,
+  TangentResult,
   TaylorResult,
 } from '@/shared/contracts';
 
@@ -15,7 +18,7 @@ function createPlotWorker(): Worker {
   });
 }
 
-/** 持有一次 Worker 任务的完整生命周期：清理、结算、中止、超时与各类错误。 */
+/** 单次 Worker 任务的通用生命周期：超时、取消、错误路径统一清理。 */
 function runWorkerTask(
   message: PlotWorkerMessage,
   signal: AbortSignal,
@@ -92,6 +95,59 @@ export function calculatePlot(
       return response.data;
     },
   );
+}
+
+export function calculateSequence(
+  request: SequenceRequest,
+  signal: AbortSignal,
+  createWorker: PlotWorkerFactory = createPlotWorker,
+): Promise<PlotResult> {
+  return runWorkerTask(
+    { type: 'sequence', request },
+    signal,
+    createWorker,
+  ).then((response) => {
+    if (!response.ok) throw new Error(response.error);
+    if (response.type !== 'sequence')
+      throw new Error('计算模块返回了无法解析的数据，请刷新后重试。');
+    return response.data;
+  });
+}
+
+export function calculateIntersections(
+  a: PlotRequest,
+  b: PlotRequest,
+  signal: AbortSignal,
+  createWorker: PlotWorkerFactory = createPlotWorker,
+): Promise<IntersectionResult> {
+  return runWorkerTask(
+    { type: 'intersections', a, b },
+    signal,
+    createWorker,
+  ).then((response) => {
+    if (!response.ok) throw new Error(response.error);
+    if (response.type !== 'intersections')
+      throw new Error('计算模块返回了无法解析的数据，请刷新后重试。');
+    return response.data;
+  });
+}
+
+export function calculateTangent(
+  request: PlotRequest,
+  x0: number,
+  signal: AbortSignal,
+  createWorker: PlotWorkerFactory = createPlotWorker,
+): Promise<TangentResult> {
+  return runWorkerTask(
+    { type: 'tangent', request, x0 },
+    signal,
+    createWorker,
+  ).then((response) => {
+    if (!response.ok) throw new Error(response.error);
+    if (response.type !== 'tangent')
+      throw new Error('计算模块返回了无法解析的数据，请刷新后重试。');
+    return response.data;
+  });
 }
 
 export function calculateTaylor(
