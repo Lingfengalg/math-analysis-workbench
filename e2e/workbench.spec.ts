@@ -54,6 +54,22 @@ test('知识来源提示在编辑或切换示例后清除', async ({ page }) => 
   await expect(page.getByText('已接收知识导航中的示例')).toBeVisible();
 });
 
+test('经典函数库可以一键载入并绘制', async ({ page }) => {
+  await page.goto('/#/plotting');
+  await expect(page.getByRole('status')).toContainText('f(x)', {
+    timeout: 20000,
+  });
+  await page.getByRole('button', { name: /经典函数示例/ }).click();
+  await page.getByRole('button', { name: /可去间断/ }).click();
+  await expect(page.getByLabel('函数表达式 f(x)')).toHaveValue('(x^2-1)/(x-1)');
+  await expect(page.getByRole('status')).toContainText('f(x) = (x^2-1)/(x-1)', {
+    timeout: 20000,
+  });
+  await expect(
+    page.getByRole('img', { name: '函数 (x^2-1)/(x-1) 的采样图像' }),
+  ).toBeVisible();
+});
+
 test('函数图像可以导出为 PNG 下载', async ({ page }) => {
   await page.goto('/#/plotting');
   await expect(page.getByRole('status')).toContainText('f(x)', {

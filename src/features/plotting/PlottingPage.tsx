@@ -4,6 +4,7 @@ import {
   Alert,
   Button,
   Card,
+  Collapse,
   Form,
   Input,
   InputNumber,
@@ -42,6 +43,8 @@ import {
   pngDataUrlToBlob,
 } from '@/shared/ui/plot-export';
 import { usePlotCalculation } from './usePlotCalculation';
+import { plotPresets } from '@/content/plot-presets';
+import styles from './PlottingPage.module.css';
 
 const DEFAULT: PlotRequest = { expression: 'x^2', xMin: -5, xMax: 5 };
 const preferences = createStorage('preferences', preferencesSchema);
@@ -182,8 +185,12 @@ function PlottingWorkspace({
       });
     }
   };
-  const preset = (expression: string) => {
-    const next = { expression, xMin: -5, xMax: 5 };
+  const preset = (value: {
+    expression: string;
+    xMin: number;
+    xMax: number;
+  }) => {
+    const next = { ...value };
     form.setFieldsValue(next);
     draw(next);
   };
@@ -398,7 +405,7 @@ function PlottingWorkspace({
               <Button
                 key={expression}
                 size="small"
-                onClick={() => preset(expression)}
+                onClick={() => preset({ expression, xMin: -5, xMax: 5 })}
               >
                 {expression}
               </Button>
@@ -409,6 +416,49 @@ function PlottingWorkspace({
             sqrt / log / exp。log 为自然对数。幂指数限数字常量，绝对值不超过
             20。
           </p>
+          <Collapse
+            className="section-gap"
+            items={[
+              {
+                key: 'presets',
+                label: `经典函数示例（${plotPresets.length} 个）`,
+                children: (
+                  <>
+                    <ul className={styles.presetList}>
+                      {plotPresets.map((item) => (
+                        <li key={item.id}>
+                          <button
+                            type="button"
+                            className={styles.presetItem}
+                            onClick={() =>
+                              preset({
+                                expression: item.expression,
+                                xMin: item.xMin,
+                                xMax: item.xMax,
+                              })
+                            }
+                          >
+                            <span className={styles.presetName}>
+                              {item.name}
+                            </span>
+                            <code className={styles.presetExpression}>
+                              {item.expression}
+                            </code>
+                            <span className={styles.presetNote}>
+                              {item.note}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="small-note">
+                      预置示例仅用于观察图像，不构成数学证明；内容需按教材核验。
+                    </p>
+                  </>
+                ),
+              },
+            ]}
+          />
           {saveStatus && (
             <Alert
               type={saveStatus.ok ? 'success' : 'error'}
