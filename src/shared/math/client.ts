@@ -1,7 +1,9 @@
 import type {
   PlotRequest,
   PlotResult,
+  PlotWorkerMessage,
   PlotWorkerResponse,
+  SequenceRequest,
 } from '@/shared/contracts';
 
 // 测试注入点：默认创建真实绘图 Worker；单测可传入模拟实现。
@@ -13,10 +15,11 @@ function createPlotWorker(): Worker {
   });
 }
 
-export function calculatePlot(
-  request: PlotRequest,
+// 函数与数列共用同一套生命周期：消息按 kind 区分，其余路径完全一致。
+function runPlotWorker(
+  message: PlotWorkerMessage,
   signal: AbortSignal,
-  createWorker: PlotWorkerFactory = createPlotWorker,
+  createWorker: PlotWorkerFactory,
 ): Promise<PlotResult> {
   return new Promise((resolve, reject) => {
     if (signal.aborted) {
@@ -72,9 +75,25 @@ export function calculatePlot(
       );
     };
     try {
-      worker.postMessage(request);
+      worker.postMessage(message);
     } catch {
       settle(() => reject(new Error('无法向计算模块发送任务，请刷新后重试。')));
     }
   });
+}
+
+export function calculatePlot(
+  request: PlotRequest,
+  signal: AbortSignal,
+  createWorker: PlotWorkerFactory = createPlotWorker,
+): Promise<PlotResult> {
+  return runPlotWorker({ kind: 'function', request }, signal, createWorker);
+}
+
+export function calculateSequence(
+  request: SequenceRequest,
+  signal: AbortSignal,
+  createWorker: PlotWorkerFactory = createPlotWorker,
+): Promise<PlotResult> {
+  return runPlotWorker({ kind: 'sequence', request }, signal, createWorker);
 }
