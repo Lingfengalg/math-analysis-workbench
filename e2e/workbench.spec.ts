@@ -393,3 +393,25 @@ test('对比曲线与主曲线共享坐标轴并以颜色区分', async ({ page 
     page.getByRole('button', { name: '添加对比曲线' }),
   ).toBeEnabled();
 });
+
+test('对比曲线图例与输入行的标签保持一致', async ({ page }) => {
+  await page.goto('/#/plotting');
+  await expect(page.getByRole('status')).toContainText('f(x)', {
+    timeout: 20000,
+  });
+  const add = page.getByRole('button', { name: '添加对比曲线' });
+  await add.click();
+  await add.click();
+  const legend = page.getByRole('list', { name: '图例：曲线颜色与表达式' });
+  await page.getByLabel('对比表达式 h(x)').fill('abs(x)');
+  await page.getByRole('button', { name: '绘制对比曲线 h(x)' }).click();
+  await expect(legend).toContainText('h(x) = abs(x)', { timeout: 20000 });
+  await expect(legend).not.toContainText('g(x) = abs(x)');
+  await page.getByLabel('对比表达式 g(x)').fill('x^3');
+  await page.getByRole('button', { name: '绘制对比曲线 g(x)' }).click();
+  await expect(legend).toContainText('g(x) = x^3', { timeout: 20000 });
+  await expect(legend).toContainText('h(x) = abs(x)');
+  await page.getByRole('button', { name: '移除对比曲线 g(x)' }).click();
+  await expect(legend).toContainText('g(x) = abs(x)');
+  await expect(legend).not.toContainText('h(x) = abs(x)');
+});

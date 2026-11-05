@@ -276,12 +276,14 @@ function PlottingWorkspace({
     });
   };
   const comparisonCurves = useMemo(() => {
-    const curves: ComparisonCurve[] = [];
-    for (const id of comparisonIds) {
+    const curves: Array<ComparisonCurve & { id: number; label: string }> = [];
+    for (const [index, id] of comparisonIds.entries()) {
       const entry = comparisonEntries.get(id);
       if (!entry) continue;
       const curveSummary = summarizePlot(entry.result.points);
       curves.push({
+        id,
+        label: COMPARISON_LABELS[index] ?? `g${index + 1}`,
         points: entry.result.points,
         expression: entry.expression,
         // 与主曲线同样的规则：只标记孤立的单点疑似缺口，控制密度。
@@ -661,13 +663,12 @@ function PlottingWorkspace({
                     f(x) = {plot.request.expression}
                   </li>
                   {comparisonCurves.map((curve, index) => (
-                    <li key={curve.expression + index}>
+                    <li key={curve.id}>
                       <span
                         className="legend-swatch"
                         style={{ background: comparisonCurveColor(index) }}
                       />
-                      {COMPARISON_LABELS[index] ?? `g${index + 1}`}(x) ={' '}
-                      {curve.expression}
+                      {curve.label}(x) = {curve.expression}
                     </li>
                   ))}
                 </ul>
