@@ -845,3 +845,32 @@ test('对比交点、切线和泰勒曲线可同时使用并跨模式保留', as
     page.getByRole('status').filter({ hasText: 'T₃(x)' }),
   ).toBeVisible({ timeout: 20000 });
 });
+
+test('首页与侧栏的模块入口、路由和待开发状态一致', async ({ page }) => {
+  await page.goto('/#/');
+  const tools = page.getByRole('region', { name: '学习工具' });
+  const nav = page.getByRole('navigation', { name: '主导航' });
+  await expect(tools.getByRole('link')).toHaveCount(4);
+  await expect(tools.getByRole('link', { name: /AI 助教/ })).toContainText(
+    '待开发',
+  );
+  for (const [title, path] of [
+    ['知识导航', '/knowledge'],
+    ['绘图计算', '/plotting'],
+    ['错题本', '/mistakes'],
+    ['AI 助教', '/assistant'],
+  ]) {
+    await tools.getByRole('link', { name: new RegExp(title) }).click();
+    await expect(page).toHaveURL(new RegExp(`#${path}$`));
+    await expect(
+      nav.getByRole('link', { name: new RegExp(title) }),
+    ).toHaveAttribute('aria-current', 'page');
+    if (title === 'AI 助教') {
+      await expect(
+        page.getByText('这是扩展入口，不是已完成功能'),
+      ).toBeVisible();
+    }
+    await nav.getByRole('link', { name: /工作台概览/ }).click();
+    await expect(tools).toBeVisible();
+  }
+});

@@ -1,18 +1,10 @@
-import { lazy, Suspense, type ComponentType } from 'react';
+import { Suspense } from 'react';
 import { HashRouter, Route, Routes, useLocation } from 'react-router';
 import { Button, Result, Spin } from 'antd';
 import { Link } from 'react-router';
 import { ErrorBoundary } from '@/shared/ui/ErrorBoundary';
-import { modules, type ModuleId } from '@/shared/navigation/modules';
+import { modules } from './moduleRegistry';
 import { AppLayout } from './AppLayout';
-
-const pages = {
-  dashboard: lazy(() => import('@/features/dashboard')),
-  knowledge: lazy(() => import('@/features/knowledge')),
-  plotting: lazy(() => import('@/features/plotting')),
-  mistakes: lazy(() => import('@/features/mistakes')),
-  assistant: lazy(() => import('@/features/assistant')),
-} satisfies Record<ModuleId, ComponentType>;
 
 function AppRoutes() {
   const location = useLocation();
@@ -28,7 +20,7 @@ function AppRoutes() {
         >
           <Routes>
             {modules.map((module) => {
-              const Page = pages[module.id];
+              const Page = module.Page;
               return (
                 <Route key={module.id} path={module.path} element={<Page />} />
               );

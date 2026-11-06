@@ -1,25 +1,16 @@
 import { Link } from 'react-router';
-import {
-  ArrowRightOutlined,
-  BookOutlined,
-  LineChartOutlined,
-  EditOutlined,
-  RobotOutlined,
-} from '@ant-design/icons';
+import { ArrowRightOutlined } from '@ant-design/icons';
 import { Tag } from 'antd';
-import { modules } from '@/shared/navigation/modules';
+import type { NavigationModule } from '@/shared/navigation/modules';
 import styles from './DashboardPage.module.css';
 
 const examplePlot = '/plotting?expression=abs%28x%29&xMin=-5&xMax=5';
 
-const icons = {
-  knowledge: BookOutlined,
-  plotting: LineChartOutlined,
-  mistakes: EditOutlined,
-  assistant: RobotOutlined,
-};
-
-export default function DashboardPage() {
+export default function DashboardPage({
+  modules,
+}: {
+  modules: readonly NavigationModule[];
+}) {
   return (
     <>
       <header className={styles.pageHeading}>
@@ -129,36 +120,32 @@ export default function DashboardPage() {
         <p>从想做的事开始，选择一个工具。</p>
       </div>
       <section className={styles.moduleGrid} aria-label="学习工具">
-        {modules
-          .filter((module) => module.id !== 'dashboard')
-          .map((module) => {
-            const Icon = icons[module.id as keyof typeof icons];
-            return (
-              <Link
-                to={module.path}
-                key={module.id}
-                className={styles.moduleCard}
-              >
-                <div className={styles.cardTop}>
-                  <span className={styles.moduleIcon}>
-                    <Icon />
-                  </span>
-                  <Tag
-                    color={
-                      module.status === 'available' ? 'geekblue' : 'default'
-                    }
-                  >
-                    {module.status === 'available' ? '示例可用' : '待开发'}
-                  </Tag>
-                </div>
-                <h3>{module.title}</h3>
-                <p>{module.caption}</p>
-                <span className={styles.cardLink}>
-                  进入模块 <ArrowRightOutlined />
+        {modules.map((module) => {
+          const Icon = module.Icon;
+          return (
+            <Link
+              to={module.path}
+              key={module.id}
+              className={styles.moduleCard}
+            >
+              <div className={styles.cardTop}>
+                <span className={styles.moduleIcon}>
+                  <Icon />
                 </span>
-              </Link>
-            );
-          })}
+                <Tag
+                  color={module.status === 'available' ? 'geekblue' : 'default'}
+                >
+                  {module.status === 'available' ? '示例可用' : '待开发'}
+                </Tag>
+              </div>
+              <h3>{module.title}</h3>
+              <p>{module.caption}</p>
+              <span className={styles.cardLink}>
+                进入模块 <ArrowRightOutlined />
+              </span>
+            </Link>
+          );
+        })}
       </section>
       <section className={styles.teamNote}>
         <div>

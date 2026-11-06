@@ -59,11 +59,11 @@ app → features → shared
         content → shared/contracts
 ```
 
-- `app`：入口、路由、布局，集成负责人维护。
+- `app`：入口、路由、布局与模块注册表 `moduleRegistry.ts`，集成负责人维护。
 - `features/<module>`：一个模块自己的页面、组件、hooks、测试和 CSS Modules。
 - `content`：人工审查的数学内容，不放界面逻辑。
 - `shared/contracts`：跨模块 TypeScript 类型及 Zod schema。
-- `shared/navigation`：模块导航元数据和跨模块链接。
+- `shared/navigation`：导航展示类型和跨模块链接；不依赖 app 或具体功能模块。
 - `shared/math`：受限计算及 Worker；不要在页面中自己执行表达式。
 - `shared/storage`：版本化 localStorage；模块不要直接读写 localStorage。
 - `shared/ui`：已实际复用的公共组件，不为假设需求过度抽象。
@@ -75,9 +75,9 @@ app → features → shared
 
 1. 建立 `src/features/<name>/<Name>Page.tsx` 和 `index.ts`。
 2. 页面使用 `PageHeader`，样式放 `<Name>Page.module.css`，不随意改全局样式。
-3. 在 `shared/navigation/modules.ts` 添加唯一 id、路由、名称与真实状态。
-4. 在 `app/App.tsx` 添加懒加载入口；在 `app/AppLayout.tsx` 添加图标。
-5. 更新 ESLint 模块列表，新增契约、单元测试与至少一个使用流程测试。
+3. 在 `app/moduleRegistry.ts` 增加一项：唯一 id、绝对路径、名称、说明、真实状态、图标、懒加载页面，以及是否在首页展示。路由、侧栏和首页均由这份表派生；不要在 feature 中反向导入 app。
+4. `defineModuleRegistry` 在启动时拒绝重复 id、重复路径和不规范的 id / 路径；`RegisteredModule` 在类型检查时要求页面、图标、状态等字段齐全。`planned` 模块仍需指向诚实的占位页。
+5. 更新 ESLint 模块列表，扩充模块注册、路由和至少一个使用流程测试。
 6. 更新 README 的实际功能状态，再提交 PR。
 
 可从 `mistakes` 和 `assistant` 的独立目录开始实现，完成前保留 `planned` 状态；不能仅因为路由存在就标记功能完成。
