@@ -1,24 +1,8 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { NavLink, useLocation } from 'react-router';
-import {
-  AppstoreOutlined,
-  BookOutlined,
-  LineChartOutlined,
-  EditOutlined,
-  RobotOutlined,
-  GithubOutlined,
-  ArrowUpOutlined,
-} from '@ant-design/icons';
-import { modules, type ModuleId } from '@/shared/navigation/modules';
+import { GithubOutlined, ArrowUpOutlined } from '@ant-design/icons';
+import { modules } from './moduleRegistry';
 import { AnnotationOverlay } from '@/shared/annotation/AnnotationOverlay';
-
-const icons = {
-  dashboard: AppstoreOutlined,
-  knowledge: BookOutlined,
-  plotting: LineChartOutlined,
-  mistakes: EditOutlined,
-  assistant: RobotOutlined,
-} satisfies Record<ModuleId, typeof AppstoreOutlined>;
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const location = useLocation();
@@ -52,12 +36,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <div className="nav-label">学习空间 / WORKSPACE</div>
         <nav aria-label="主导航">
           {modules.map((module) => {
-            const Icon = icons[module.id];
+            const Icon = module.Icon;
             return (
               <NavLink
                 key={module.id}
                 to={module.path}
-                end={module.path === '/'}
+                end
                 className={({ isActive }) =>
                   `nav-item${isActive ? ' active' : ''}`
                 }
