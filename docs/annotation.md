@@ -32,7 +32,7 @@
 <AnnotationOverlay pageId={location.pathname}>{children}</AnnotationOverlay>
 ```
 
-新增模块只要注册进导航（`src/shared/navigation/modules.ts`），就自动获得批注能力。批注层放在 `src/shared/annotation/`，因为它被 app 层使用，且不应被任何 feature 反向依赖；放进 `src/features/*` 会违反「模块之间不得互相引用内部实现」的约定。
+新增模块只要注册进应用层模块表（`src/app/moduleRegistry.ts`），其页面就自动获得批注能力。批注层放在 `src/shared/annotation/`，因为它被 app 层使用，且不应被任何 feature 反向依赖；放进 `src/features/*` 会违反「模块之间不得互相引用内部实现」的约定。
 
 ## 数据结构
 
