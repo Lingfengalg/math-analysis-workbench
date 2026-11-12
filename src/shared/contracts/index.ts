@@ -70,12 +70,19 @@ export interface TaylorResult {
   points: PlotPoint[];
 }
 export type PlotWorkerMessage =
+  | {
+      type: 'editor-roundtrip';
+      original: string;
+      converted: string;
+      variable: 'x' | 'n';
+    }
   | { type: 'plot'; request: PlotRequest }
   | { type: 'sequence'; request: SequenceRequest }
   | { type: 'intersections'; a: PlotRequest; b: PlotRequest }
   | { type: 'tangent'; request: PlotRequest; x0: number }
   | { type: 'taylor'; request: PlotRequest; center: number; order: number };
 export type PlotWorkerResponse =
+  | { ok: true; type: 'editor-roundtrip' }
   | { ok: true; type: 'plot' | 'sequence'; data: PlotResult }
   | { ok: true; type: 'intersections'; data: IntersectionResult }
   | { ok: true; type: 'tangent'; data: TangentResult }

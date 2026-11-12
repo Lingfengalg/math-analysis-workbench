@@ -13,6 +13,7 @@ import {
   calculateSequence,
   calculateTangent,
   calculateTaylor,
+  verifyMathEditorRoundtrip,
 } from './client';
 
 type MessageHandler = (event: { data: PlotWorkerResponse }) => void;
@@ -416,5 +417,51 @@ describe('calculateTaylor 生命周期与错误语义（#64）', () => {
     await vi.advanceTimersByTimeAsync(8000);
     expect(states).toEqual(['error:第 1 阶导数超出支持范围']);
     expect(worker.terminate).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('数学编辑器语法树比较 Worker', () => {
+  it('发送原文和转换结果，完成后释放 Worker', async () => {
+    const { worker, createWorker, controller } = setup();
+    const promise = verifyMathEditorRoundtrip(
+      'x+1',
+      'x+1',
+      'x',
+      controller.signal,
+      createWorker,
+    );
+    expect(worker.postMessage).toHaveBeenCalledWith({
+      type: 'editor-roundtrip',
+      original: 'x+1',
+      converted: 'x+1',
+      variable: 'x',
+    });
+    worker.onmessage?.({ data: { ok: true, type: 'editor-roundtrip' } });
+    await expect(promise).resolves.toBeUndefined();
+    expect(worker.terminate).toHaveBeenCalledOnce();
+  });
+  it('错误和取消都拒绝并释放 Worker', async () => {
+    const a = setup();
+    const failure = verifyMathEditorRoundtrip(
+      '2x',
+      '2*x',
+      'x',
+      a.controller.signal,
+      a.createWorker,
+    );
+    a.worker.onmessage?.({ data: { ok: false, error: '隐式乘法' } });
+    await expect(failure).rejects.toThrow('隐式乘法');
+    expect(a.worker.terminate).toHaveBeenCalledOnce();
+    const b = setup();
+    const cancelled = verifyMathEditorRoundtrip(
+      'n',
+      'n',
+      'n',
+      b.controller.signal,
+      b.createWorker,
+    );
+    b.controller.abort();
+    await expect(cancelled).rejects.toMatchObject({ name: 'AbortError' });
+    expect(b.worker.terminate).toHaveBeenCalledOnce();
   });
 });

@@ -168,3 +168,22 @@ export function calculateTaylor(
     return response.data;
   });
 }
+
+/** 使用同一个受限计算 Worker 校验编辑器转换前后的语法树。 */
+export function verifyMathEditorRoundtrip(
+  original: string,
+  converted: string,
+  variable: 'x' | 'n',
+  signal: AbortSignal,
+  createWorker: PlotWorkerFactory = createPlotWorker,
+): Promise<void> {
+  return runWorkerTask(
+    { type: 'editor-roundtrip', original, converted, variable },
+    signal,
+    createWorker,
+  ).then((response) => {
+    if (!response.ok) throw new Error(response.error);
+    if (response.type !== 'editor-roundtrip')
+      throw new Error('计算模块返回了无法解析的数据，请刷新后重试。');
+  });
+}
