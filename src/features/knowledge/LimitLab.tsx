@@ -25,6 +25,9 @@ export function LimitLab() {
   const [reducedMotion, setReducedMotion] = useState(false);
   const [ready, setReady] = useState(false);
   const [exportError, setExportError] = useState('');
+  const [videoProgress, setVideoProgress] = useState<number | null>(null);
+  const [videoMessage, setVideoMessage] = useState('');
+  const videoController = useRef<AbortController | null>(null);
   const current = useRef(0);
   const frame = useRef<number | null>(null);
   const tween = useRef<Tween<{ value: number }> | null>(null);
@@ -49,7 +52,10 @@ export function LimitLab() {
       if (reduced) stop();
     };
     const visibility = () => {
-      if (document.hidden) stop();
+      if (document.hidden) {
+        stop();
+        videoController.current?.abort();
+      }
     };
     update();
     media?.addEventListener?.('change', update);
@@ -60,6 +66,9 @@ export function LimitLab() {
       if (frame.current !== null) cancelAnimationFrame(frame.current);
       tween.current?.stop();
       tween.current = null;
+      const controller = videoController.current;
+      videoController.current = null;
+      controller?.abort();
     };
   }, [stop]);
 
@@ -114,6 +123,49 @@ export function LimitLab() {
       setExportError('');
     } catch {
       setExportError('导出未成功，请等待图像加载后重试。');
+    }
+  };
+  const exportVideo = async () => {
+    if (videoController.current) return;
+    stop();
+    setExportError('');
+    setVideoMessage('');
+    const controller = new AbortController();
+    videoController.current = controller;
+    setVideoProgress(0);
+    try {
+      const { exportLimitVideo } = await import('./exportLimitVideo');
+      const video = await exportLimitVideo(
+        example,
+        controller.signal,
+        setVideoProgress,
+      );
+      const url = URL.createObjectURL(video);
+      try {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `limit-${example}-animation.webm`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setVideoMessage('视频已生成，请查看浏览器下载。');
+      } finally {
+        // 下载开始后再释放 URL，避免浏览器尚未读取时失效。
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+    } catch (error) {
+      if (controller.signal.aborted) {
+        if (videoController.current === controller)
+          setVideoMessage('已取消视频导出。');
+      } else
+        setExportError(
+          error instanceof Error ? error.message : '视频导出失败，请重试。',
+        );
+    } finally {
+      if (videoController.current === controller) {
+        videoController.current = null;
+        setVideoProgress(null);
+      }
     }
   };
   const sample = observeLimit(example, progress);
@@ -172,7 +224,10 @@ export function LimitLab() {
           </div>
         </div>
         <div className={styles.controls}>
-          <fieldset className={styles.choices}>
+          <fieldset
+            className={styles.choices}
+            disabled={videoProgress !== null}
+          >
             <legend>选择一个例子</legend>
             <div>
               <button
@@ -202,6 +257,7 @@ export function LimitLab() {
             max="100"
             step="0.1"
             value={progress}
+            disabled={videoProgress !== null}
             onChange={(event) => {
               stop();
               const next = Number(event.target.value);
@@ -214,17 +270,52 @@ export function LimitLab() {
               type="button"
               className={styles.primary}
               onClick={play}
-              disabled={reducedMotion}
+              disabled={reducedMotion || videoProgress !== null}
             >
               {playing ? '暂停动画' : progress >= 100 ? '重新播放' : '播放动画'}
             </button>
-            <button type="button" onClick={reset}>
+            <button
+              type="button"
+              onClick={reset}
+              disabled={videoProgress !== null}
+            >
               重置
             </button>
-            <button type="button" onClick={exportSvg} disabled={!ready}>
+            <button
+              type="button"
+              onClick={exportSvg}
+              disabled={!ready || videoProgress !== null}
+            >
               导出当前画面 SVG
             </button>
+            {videoProgress === null ? (
+              <button type="button" onClick={exportVideo} disabled={!ready}>
+                导出 WebM 视频
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => videoController.current?.abort()}
+              >
+                取消导出
+              </button>
+            )}
           </div>
+          {videoProgress !== null && (
+            <p className={styles.muted}>
+              正在本地录制视频，请保持页面打开。
+              <progress
+                aria-label="视频导出进度"
+                value={videoProgress}
+                max={100}
+              />
+            </p>
+          )}
+          {videoMessage && (
+            <p className={styles.muted} role="status">
+              {videoMessage}
+            </p>
+          )}
           {reducedMotion && (
             <p className={styles.muted}>
               设备已启用减少动态效果，请用滑块手动观察。
@@ -259,7 +350,7 @@ export function LimitLab() {
       <p className={styles.note}>
         动画最小距离为
         0.01，不会让点到达目标。有限观察和图像不能替代极限证明。SVG
-        导出的是当前静态画面，不包含动画。
+        导出的是当前静态画面，不包含动画。WebM 视频在本地生成，不上传数据。
       </p>
       <div className={styles.links}>
         <Link to="/mistakes?topic=limit&practice=1">开始极限练习</Link>

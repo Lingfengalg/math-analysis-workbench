@@ -59,7 +59,7 @@ npm run preview               # 预览生产包
 
 知识导航的「导数」主题提供差商互动实验：可选择二次函数或绝对值函数，通过滑块或拖动图上的点调整观察点和增量，观察割线、切线与斜率，并完成一道概念自测。实验使用 [JSXGraph](https://github.com/jsxgraph/jsxgraph)；图像和有限次数值观察不是证明，实验仅使用两个固定例子的解析导数，不是通用符号计算器。
 
-「极限」主题新增左右逼近互动动画：以 x² 在 1 附近和 x/|x| 在 0 附近为两个固定场景，对照左右函数值。可播放、暂停、手动调节及重置；离开页面或切到后台会停止播放，系统启用减少动态效果时可改用滑块。动画不会让点真正到达目标，SVG 按钮导出当前的静态画面而非视频。图像与有限次观察不能代替极限证明。场景使用 JSXGraph 绘图及 [Tween.js](https://github.com/tweenjs/tween.js) 控制插值。
+「极限」主题新增左右逼近互动动画：以 x² 在 1 附近和 x/|x| 在 0 附近为两个固定场景，对照左右函数值。可播放、暂停、手动调节及重置；离开页面或切到后台会停止播放，系统启用减少动态效果时可改用滑块。动画不会让点真正到达目标，SVG 按钮导出当前静态画面；支持 WebM 录制的浏览器还可在本地导出约 6 秒动画视频。导出期间请保持页面打开，切换后台会取消录制。图像与有限次观察不能代替极限证明。场景使用 JSXGraph 绘图及 [Tween.js](https://github.com/tweenjs/tween.js) 控制插值。
 
 绘图主表达式和练习中的数字题可选用 [MathLive](https://github.com/arnog/mathlive) 数学编辑器输入分数、幂等公式；点击「打开数学编辑器」开始，原文本输入仍可使用。编辑器从空白开始，预览转换结果后需主动点击「替换原输入」；绘图表达式会先通过原有 Worker 计算白名单校验。只支持明确允许的一部分数学记号，积分、下标等不能转写；练习答案仍限定为整数、小数或整数分数。未知或不完整的公式不会覆盖原输入，取消也不会改变原输入。编辑器和字体由本地构建提供，不依赖 CDN；当前并非通用 LaTeX 或符号求解器。
 
@@ -136,3 +136,4 @@ JSXGraph 采用 MIT 或 LGPL-3.0-or-later 双许可，本项目选择 MIT；上�
 数学输入使用 [MathLive](https://github.com/arnog/mathlive)（MIT），许可文本见 [MathLive 许可](public/third-party-notices/mathlive-MIT.txt)。
 公式字体与 KaTeX 组件的许可分别见 [KaTeX 字体许可](public/third-party-notices/KaTeX-fonts-MIT.txt) 和 [KaTeX 许可](public/third-party-notices/KaTeX-MIT.txt)。
 Tween.js 采用 MIT 许可，许可文本见 [Tween.js 许可](public/third-party-notices/tweenjs-MIT.txt)。
+视频时长元数据修复使用 [fix-webm-duration](https://github.com/yusitnikov/fix-webm-duration) 的 MIT 许可代码（`@fix-webm-duration/fix` 与 `@fix-webm-duration/parser`），许可文本见 [fix-webm-duration 许可](public/third-party-notices/fix-webm-duration-MIT.txt)。
