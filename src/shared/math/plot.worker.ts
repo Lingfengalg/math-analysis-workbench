@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 import { compileExpression, sampleFunction, sampleSequence } from './sample';
+import { verifyEditorRoundtrip } from './editorRoundtrip';
 import { detectIntersections } from './intersections';
 import { calculateTangent } from './tangent';
 import { calculateTaylorPolynomial } from './taylor';
@@ -19,7 +20,10 @@ function validated(request: PlotRequest): PlotRequest {
 self.onmessage = (event: MessageEvent<PlotWorkerMessage>) => {
   let response: PlotWorkerResponse;
   try {
-    if (event.data.type === 'taylor') {
+    if (event.data.type === 'editor-roundtrip') {
+      verifyEditorRoundtrip(event.data);
+      response = { ok: true, type: 'editor-roundtrip' };
+    } else if (event.data.type === 'taylor') {
       response = {
         ok: true,
         type: 'taylor',

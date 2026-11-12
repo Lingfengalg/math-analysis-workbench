@@ -28,7 +28,7 @@
 
 ## 计算协议
 
-- 请求：`PlotRequest`（函数）或 `SequenceRequest`（数列：`expression` 用 n 表示项序号，`terms` 为 2–1000 的整数）。Worker 消息用 `type: 'plot' | 'sequence' | 'intersections' | 'tangent' | 'taylor'` 区分，成功响应携带对应的 `type`。
+- 请求：`PlotRequest`（函数）或 `SequenceRequest`（数列：`expression` 用 n 表示项序号，`terms` 为 2–1000 的整数）。Worker 消息用 `type: 'plot' | 'sequence' | 'intersections' | 'tangent' | 'taylor' | 'editor-roundtrip'` 区分，成功响应携带对应的 `type`。
 - 响应：`{ ok: true, type: 'plot' | 'sequence', data: { points, gaps, asymptotes? } }` 或 `{ ok: false, error }`。
 - 函数模式 `points` 为 `[x, y | null][]`，null 表示不可显示的值或启发式断点，图表不得跨 null 连线；数列模式为 `[n, y | null][]`，n 从 1 到 terms 每项一个点，null 表示该项没有有限实数值（数列模式不做启发式断点探测）。
 - 数值量级 > 10⁶、复数、非有限值留空。此规则是可视化限制，不等于数学上无定义。
@@ -58,7 +58,11 @@
 
 ## 可选数学输入
 
-绘图主表达式与练习数字答案可打开按需加载的 MathLive 编辑器；原有文本输入始终保留。编辑器从空白开始，不尝试把旧表达式自动转成 LaTeX。输出仅接受约定的命令和字符子集，再用 MathLive 的 ASCIIMath 输出转换；显示结果后由用户明确替换。积分、下标、不完整占位符和未知命令被拒绝；绘图结果还必须通过原有 Worker 白名单校验，校验期间原文本变更则放弃覆盖。编辑器不执行用户代码。数列模式变量为 `n`，函数模式为 `x`，数值答案仅允许整数、小数和整数分数并继续交给 Perseus 评分。资源本地打包；不加载 CDN 字体或键盘声音。不能据此声称支持任意 LaTeX、证明或通用符号求解。
+绘图主表达式与练习数字答案可打开按需加载的 MathLive 0.111.4 编辑器；原有纯文本输入始终保留。编辑器为空时可主动载入原输入：MathLive 转为公式后，计算 Worker 分别按既有 mathjs 白名单解析原文与转换结果，忽略纯括号节点并比较语法树；结构不同时拒绝载入，不靠采样猜测等价。校验期间原文发生变化时拒绝载入；编辑器中已有草稿时按钮禁用，避免覆盖草稿。原输入只在用户明确点击替换且校验成功后改变。数值答案仅接受原样往返一致的整数、小数或整数分数，并继续交给 Perseus 评分。
+
+可双向转换的子集为数字、x（函数）或 n（数列）、π、括号、显式 `+ - * /`、现有白名单允许的常数指数幂、平方根、一元 sin/cos/tan 及 asin/acos/atan、自然对数。mathjs 的单参数 `log(x)` 是自然对数，载入时显示为 ln；编辑器明确接受 `\ln`，拒绝底数不明确的 `\log`、带底数对数及 `abs` 竖线。科学计数法、隐式乘法（如 `2x`）、不完整占位符、积分、下标及不支持的命令均拒绝或不能回填；应使用 `2*x` 或编辑器乘号。表达式替换前重新由 Worker 拒绝隐式乘法并进行原有采样校验，函数与数列变量不能混用。支持范围不代表任意 LaTeX 转换、通用符号等价判断或数学证明。资源本地打包，不加载 CDN 字体或键盘声音。
+
+`editor-roundtrip` Worker 请求含 `original`、`converted` 和 `variable: 'x' | 'n'`，经 Zod 长度/类型约束与原有语法白名单验证；成功仅返回类型标记，不返回表达式计算结果。单次任务复用原有取消、超时、终止 Worker 生命周期。
 
 ## 存储协议
 

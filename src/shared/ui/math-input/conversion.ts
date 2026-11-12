@@ -6,6 +6,10 @@ const supportedCommands = new Set([
   'sin',
   'cos',
   'tan',
+  'arcsin',
+  'arccos',
+  'arctan',
+  'ln',
   'pi',
   'cdot',
   'times',
@@ -28,7 +32,12 @@ export function convertMathInput(
   });
   if (!/^[\d.xn+\-*/^(){}\s]*$/.test(text))
     throw new Error('公式含有暂不支持的符号或不完整的占位符。');
-  const candidate = ascii.replace(/\s+/g, '');
+  const candidate = ascii
+    .replace(/\s+/g, '')
+    .replace(/arcsin/g, 'asin')
+    .replace(/arccos/g, 'acos')
+    .replace(/arctan/g, 'atan')
+    .replace(/ln/g, 'log');
   if (!candidate || !/^[a-z0-9.+\-*/^()]+$/i.test(candidate))
     throw new Error('公式无法转换为支持的表达式。');
   if (mode === 'numeric') {
@@ -51,4 +60,26 @@ export function convertMathInput(
   }
   if (candidate.length > 160) throw new Error('表达式最多 160 个字符。');
   return candidate;
+}
+
+/** MathLive 的 ASCIIMath 函数名与 mathjs 不同；只替换一元函数调用名。 */
+export function toEditorAscii(input: string): string {
+  const value = input.trim();
+  if (
+    !value ||
+    value.length > 160 ||
+    !/^[a-z0-9.+\-*/^()\s]+$/i.test(value) ||
+    /\d[eE][+-]?\d/.test(value)
+  )
+    throw new Error('原输入包含暂不支持载入的字符或科学计数法。');
+  const names: Record<string, string> = {
+    asin: 'arcsin',
+    acos: 'arccos',
+    atan: 'arctan',
+    log: 'ln',
+  };
+  return value.replace(
+    /\b(asin|acos|atan|log)(?=\s*\()/g,
+    (name) => names[name],
+  );
 }
