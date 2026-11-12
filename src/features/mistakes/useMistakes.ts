@@ -6,6 +6,7 @@ import {
   MISTAKE_STORAGE_KEY,
   markReviewed,
   mistakeDraftSchema,
+  mistakeListSchema,
   mistakeStorage,
   sortMistakes,
   updateMistake,
@@ -322,24 +323,40 @@ export function useMistakes(): MistakesController {
       incoming: readonly Mistake[],
       mode: ImportMode,
     ): Promise<boolean> => {
+      const parsed = mistakeListSchema.safeParse({ items: incoming });
+      if (!parsed.success) {
+        setSaveError('导入记录格式不正确或存在重复 ID，未写入数据。');
+        return false;
+      }
       let overflow = 0;
       let scheduleConflict = false;
+      let recordConflict = false;
       const saved = await commit((current) => {
-        if (
-          mode === 'merge' &&
-          incoming.some((item) => {
-            const existing = current.find((old) => old.id === item.id);
-            return (
-              existing?.schedule &&
-              !item.schedule &&
-              item.updatedAt >= existing.updatedAt
-            );
-          })
-        ) {
-          scheduleConflict = true;
-          return null;
+        if (mode === 'merge') {
+          const existingById = new Map(current.map((item) => [item.id, item]));
+          for (const item of parsed.data.items) {
+            const existing = existingById.get(item.id);
+            if (!existing || item.updatedAt < existing.updatedAt) continue;
+            // 没有复习历史无法证明两个不同状态存在祖先关系，不能以更新时间推断可覆盖。
+            if (
+              existing.schedule &&
+              JSON.stringify(existing.schedule) !==
+                JSON.stringify(item.schedule)
+            ) {
+              scheduleConflict = true;
+              return null;
+            }
+            if (
+              item.createdAt !== existing.createdAt ||
+              (item.updatedAt === existing.updatedAt &&
+                JSON.stringify(item) !== JSON.stringify(existing))
+            ) {
+              recordConflict = true;
+              return null;
+            }
+          }
         }
-        const next = resolveImport(current, incoming, mode);
+        const next = resolveImport(current, parsed.data.items, mode);
         if (next.length > MISTAKE_LIMITS.items) {
           overflow = next.length;
           return null;
@@ -354,7 +371,13 @@ export function useMistakes(): MistakesController {
       }
       if (scheduleConflict) {
         setSaveError(
-          '导入文件中的旧记录会覆盖已有复习计划，已取消合并；请先导出备份并检查。',
+          '导入记录会覆盖已有复习计划或存在不同的计划，已取消合并；请先分别备份并检查。',
+        );
+        return false;
+      }
+      if (recordConflict) {
+        setSaveError(
+          '同一错题 ID 的记录存在冲突，已取消合并；请先分别备份并检查。',
         );
         return false;
       }
