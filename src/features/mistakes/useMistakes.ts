@@ -13,6 +13,8 @@ import {
   type MistakeDraft,
 } from './model';
 import { resolveImport, type ImportMode } from './transfer';
+import { practiceMistakeId } from './practice/questions';
+import { nextReview, Rating, type ReviewRating } from './schedule';
 
 interface BootState {
   items: Mistake[];
@@ -49,6 +51,12 @@ export interface MistakesController {
   edit: (original: Mistake, draft: MistakeDraft) => Promise<boolean>;
   remove: (original: Mistake) => Promise<boolean>;
   setReviewed: (id: string, reviewed: boolean) => Promise<boolean>;
+  completeRedo: (original: Mistake, rating: ReviewRating) => Promise<boolean>;
+  syncPracticeResult: (
+    questionId: string,
+    draft: MistakeDraft,
+    correct: boolean,
+  ) => Promise<boolean>;
   importMistakes: (
     items: readonly Mistake[],
     mode: ImportMode,
@@ -226,13 +234,111 @@ export function useMistakes(): MistakesController {
     [commit],
   );
 
+  /** 练习错题使用稳定 id，在同一把锁内去重并同步复习状态；不覆盖用户编辑的内容。 */
+  const syncPracticeResult = useCallback(
+    async (
+      questionId: string,
+      draft: MistakeDraft,
+      correct: boolean,
+    ): Promise<boolean> => {
+      if (!/^[a-z][a-z0-9-]{0,99}$/.test(questionId)) {
+        setSaveError('练习题标识不合法，未同步错题。');
+        return false;
+      }
+      const parsed = mistakeDraftSchema.safeParse(draft);
+      if (!parsed.success) {
+        setSaveError('练习题内容不符合错题格式，未同步错题。');
+        return false;
+      }
+      const id = practiceMistakeId(questionId);
+      let changedQuestion = false;
+      const saved = await commit((current) => {
+        const existing = current.find((item) => item.id === id);
+        if (!existing) {
+          if (correct) return [...current];
+          return [{ ...createMistake(parsed.data), id }, ...current];
+        }
+        if (
+          existing.problem !== parsed.data.problem ||
+          existing.topic !== parsed.data.topic
+        ) {
+          changedQuestion = true;
+          return null;
+        }
+        const reviewed = correct;
+        if ((existing.reviewedAt !== null) === reviewed) return [...current];
+        return current.map((item) =>
+          item.id === id ? markReviewed(item, reviewed) : item,
+        );
+      });
+      if (changedQuestion)
+        setSaveError(
+          '对应错题的题目或主题已修改，未自动改变复习状态；请自行检查。',
+        );
+      return saved;
+    },
+    [commit],
+  );
+
+  const completeRedo = useCallback(
+    async (original: Mistake, rating: ReviewRating): Promise<boolean> => {
+      let conflict = false;
+      let scheduleError = false;
+      const saved = await commit((current) => {
+        const latest = current.find((item) => item.id === original.id);
+        if (!latest || JSON.stringify(latest) !== JSON.stringify(original)) {
+          conflict = true;
+          return null;
+        }
+        const now = Date.now();
+        try {
+          const schedule = nextReview(latest.schedule, rating, now);
+          return current.map((item) =>
+            item.id === original.id
+              ? {
+                  ...markReviewed(item, rating !== Rating.Again, now),
+                  schedule,
+                }
+              : item,
+          );
+        } catch {
+          scheduleError = true;
+          return null;
+        }
+      });
+      if (conflict)
+        setSaveError(
+          '这条错题已在其他标签页修改或删除，请重新打开重做，当前作答不会自动保存。',
+        );
+      if (scheduleError)
+        setSaveError('无法计算下次复习时间，请检查系统时间与记录后重试。');
+      return saved;
+    },
+    [commit],
+  );
+
   const importMistakes = useCallback(
     async (
       incoming: readonly Mistake[],
       mode: ImportMode,
     ): Promise<boolean> => {
       let overflow = 0;
+      let scheduleConflict = false;
       const saved = await commit((current) => {
+        if (
+          mode === 'merge' &&
+          incoming.some((item) => {
+            const existing = current.find((old) => old.id === item.id);
+            return (
+              existing?.schedule &&
+              !item.schedule &&
+              item.updatedAt >= existing.updatedAt
+            );
+          })
+        ) {
+          scheduleConflict = true;
+          return null;
+        }
         const next = resolveImport(current, incoming, mode);
         if (next.length > MISTAKE_LIMITS.items) {
           overflow = next.length;
@@ -243,6 +349,12 @@ export function useMistakes(): MistakesController {
       if (overflow > 0) {
         setSaveError(
           `导入后共 ${overflow} 条，超过本地 ${MISTAKE_LIMITS.items} 条上限，未导入任何数据。`,
+        );
+        return false;
+      }
+      if (scheduleConflict) {
+        setSaveError(
+          '导入文件中的旧记录会覆盖已有复习计划，已取消合并；请先导出备份并检查。',
         );
         return false;
       }
@@ -276,6 +388,8 @@ export function useMistakes(): MistakesController {
     edit,
     remove,
     setReviewed,
+    completeRedo,
+    syncPracticeResult,
     importMistakes,
     reset,
   };

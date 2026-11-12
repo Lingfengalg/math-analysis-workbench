@@ -45,6 +45,119 @@ beforeEach(() => {
 });
 
 describe('错题本跨标签页一致性', () => {
+  it('无计划的旧版本错题原样读取，写入时升级且不虚构评分', async () => {
+    const old = {
+      id: 'old',
+      ...draft('旧错题'),
+      createdAt: 1,
+      updatedAt: 1,
+      reviewedAt: 1,
+    };
+    localStorage.setItem(
+      MISTAKE_STORAGE_KEY,
+      JSON.stringify({ schemaVersion: 1, data: { items: [old] } }),
+    );
+    const a = renderHook(() => useMistakes());
+    expect(a.result.current.items[0].schedule).toBeUndefined();
+    await act(async () => {
+      expect(await a.result.current.setReviewed('old', false)).toBe(true);
+    });
+    const stored = JSON.parse(localStorage.getItem(MISTAKE_STORAGE_KEY)!);
+    expect(stored.schemaVersion).toBe(2);
+    expect(stored.data.items[0].schedule).toBeUndefined();
+  });
+  it('练习错题去重、正确后复习、再次答错后重新待复习，不覆盖用户编辑', async () => {
+    const a = renderHook(() => useMistakes());
+    const exercise = draft('练习题');
+    await act(async () => {
+      expect(
+        await a.result.current.syncPracticeResult('test-one', exercise, false),
+      ).toBe(true);
+      expect(
+        await a.result.current.syncPracticeResult('test-one', exercise, false),
+      ).toBe(true);
+    });
+    expect(storedItems()).toHaveLength(1);
+    const original = storedItems()[0];
+    await act(async () => {
+      expect(await a.result.current.edit(original, draft('用户编辑'))).toBe(
+        true,
+      );
+    });
+    await act(async () => {
+      expect(
+        await a.result.current.syncPracticeResult('test-one', exercise, true),
+      ).toBe(true);
+    });
+    expect(storedItems()[0].title).toBe('用户编辑');
+    expect(storedItems()[0].reviewedAt).not.toBeNull();
+    await act(async () => {
+      expect(
+        await a.result.current.syncPracticeResult('test-one', exercise, false),
+      ).toBe(true);
+    });
+    expect(storedItems()[0].reviewedAt).toBeNull();
+  });
+  it('重做期间记录被更改时拒绝保存旧快照的复习状态', async () => {
+    const a = renderHook(() => useMistakes());
+    await act(async () => {
+      await a.result.current.add(draft('原题'));
+    });
+    const original = storedItems()[0];
+    await act(async () => {
+      await a.result.current.edit(original, draft('更新后'));
+    });
+    await act(async () => {
+      expect(await a.result.current.completeRedo(original, 3)).toBe(false);
+    });
+    expect(storedItems()[0].reviewedAt).toBeNull();
+    expect(a.result.current.saveError).toContain('其他标签页修改');
+  });
+  it('完成重做时原子保存 FSRS 计划，并拒绝旧备份覆盖', async () => {
+    const a = renderHook(() => useMistakes());
+    await act(async () => {
+      await a.result.current.add(draft('待复习'));
+    });
+    const old = storedItems()[0];
+    await act(async () => {
+      expect(await a.result.current.completeRedo(old, 3)).toBe(true);
+    });
+    const scheduled = storedItems()[0];
+    expect(scheduled.schedule?.reps).toBe(1);
+    expect(scheduled.schedule?.lastRating).toBe(3);
+    expect(scheduled.reviewedAt).not.toBeNull();
+    await act(async () => {
+      expect(
+        await a.result.current.importMistakes(
+          [{ ...old, updatedAt: scheduled.updatedAt + 1 }],
+          'merge',
+        ),
+      ).toBe(false);
+    });
+    expect(storedItems()[0].schedule).toEqual(scheduled.schedule);
+    expect(a.result.current.saveError).toContain('覆盖已有复习计划');
+  });
+  it('练习关联错题的题目被用户更改时，不自动标记复习', async () => {
+    const a = renderHook(() => useMistakes());
+    const exercise = { ...draft('练习题'), problem: '原题' };
+    await act(async () => {
+      await a.result.current.syncPracticeResult('test-one', exercise, false);
+    });
+    const original = storedItems()[0];
+    await act(async () => {
+      await a.result.current.edit(original, {
+        ...exercise,
+        problem: '修改后的题目',
+      });
+    });
+    await act(async () => {
+      expect(
+        await a.result.current.syncPracticeResult('test-one', exercise, true),
+      ).toBe(false);
+    });
+    expect(storedItems()[0].reviewedAt).toBeNull();
+    expect(a.result.current.saveError).toContain('题目或主题已修改');
+  });
   it('两个标签页同时新增都不会丢失', async () => {
     const a = renderHook(() => useMistakes());
     const b = renderHook(() => useMistakes());

@@ -20,4 +20,16 @@ describe('知识内容契约', () => {
             compileExpression(example.plot!.expression),
           ).not.toThrow();
   });
+  it('连续性卡片区分定义域聚点与孤立点', () => {
+    const card = knowledgeCards.find(
+      (item) => item.id === 'continuity-reciprocal',
+    );
+    expect(card).toBeDefined();
+    expect(card!.definition).toContain('定义域内');
+    expect(card!.conditions.join(' ')).toContain('定义域的聚点');
+    expect(card!.conditions.join(' ')).toContain('孤立点');
+    expect(
+      card!.examples.some((example) => example.explanation.includes('孤立点')),
+    ).toBe(true);
+  });
 });

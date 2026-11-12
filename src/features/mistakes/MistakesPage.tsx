@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import {
   Alert,
@@ -24,7 +24,9 @@ import { PageHeader } from '@/shared/ui/PageHeader';
 import { createKnowledgeTopicLink } from '@/shared/navigation/knowledge-link';
 import { MistakeFormModal } from './MistakeFormModal';
 import { MistakeImportModal } from './MistakeImportModal';
+import { MistakeRedoModal } from './MistakeRedoModal';
 import { useMistakes } from './useMistakes';
+import { isReviewDue } from './schedule';
 import {
   formatMistakeTime,
   MISTAKE_TOPICS,
@@ -44,6 +46,11 @@ import styles from './MistakesPage.module.css';
 
 type TopicFilter = 'all' | MistakeTopic;
 type ReviewFilter = 'all' | 'reviewed' | 'due';
+const PracticeView = lazy(() =>
+  import('./practice/PracticeView').then((module) => ({
+    default: module.PracticeView,
+  })),
+);
 
 export default function MistakesPage() {
   const {
@@ -55,6 +62,8 @@ export default function MistakesPage() {
     edit,
     remove,
     setReviewed,
+    completeRedo,
+    syncPracticeResult,
     importMistakes,
     reset,
   } = useMistakes();
@@ -68,9 +77,16 @@ export default function MistakesPage() {
     : 'all';
   const [draftTopic, setDraftTopic] = useState<MistakeTopic>('limit');
   const [review, setReview] = useState<ReviewFilter>('all');
+  const [onlyDue, setOnlyDue] = useState(false);
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
   const [formOpen, setFormOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<Mistake | null>(null);
+  const [redoing, setRedoing] = useState<Mistake | null>(null);
   // 打开删除确认时记录快照：期间若被其他标签页修改，确认时要能发现
   const [pendingDelete, setPendingDelete] = useState<Mistake | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -89,9 +105,46 @@ export default function MistakesPage() {
         `${item.title} ${item.problem} ${item.mistakeReason} ${item.correction}`.includes(
           keyword,
         );
-      return matchesTopic && matchesReview && matchesKeyword;
+      return (
+        matchesTopic &&
+        matchesReview &&
+        matchesKeyword &&
+        (!onlyDue || isReviewDue(item.schedule, now))
+      );
     });
-  }, [items, query, topic, review]);
+  }, [items, query, topic, review, onlyDue, now]);
+
+  const dueItems = items
+    .filter((item) => isReviewDue(item.schedule, now))
+    .sort(
+      (left, right) =>
+        (left.schedule?.due ?? left.createdAt) -
+        (right.schedule?.due ?? right.createdAt),
+    );
+  const nextDue = items
+    .filter((item) => item.schedule && item.schedule.due > now)
+    .reduce<number | null>(
+      (next, item) =>
+        next === null || item.schedule!.due < next ? item.schedule!.due : next,
+      null,
+    );
+
+  if (searchParams.get('practice') === '1') {
+    return (
+      <Suspense fallback={<div role="status">正在加载练习…</div>}>
+        <PracticeView
+          initialTopic={topic}
+          syncMistake={syncPracticeResult}
+          mistakeError={saveError}
+          onBack={() => {
+            const next = new URLSearchParams(searchParams);
+            next.delete('practice');
+            setSearchParams(next);
+          }}
+        />
+      </Suspense>
+    );
+  }
 
   const openCreate = () => {
     setDraftTopic(topic === 'all' ? 'limit' : topic);
@@ -165,6 +218,15 @@ export default function MistakesPage() {
         description="记录题目、错误原因与订正，标注知识主题与复习状态。数据只保存在当前浏览器，可导出备份。"
         extra={
           <div className={styles.toolbar}>
+            <Button
+              onClick={() => {
+                const next = new URLSearchParams(searchParams);
+                next.set('practice', '1');
+                setSearchParams(next);
+              }}
+            >
+              开始练习
+            </Button>
             <Button
               icon={<DownloadOutlined />}
               onClick={exportAll}
@@ -240,6 +302,40 @@ export default function MistakesPage() {
         />
       )}
       {items.length > 0 && (
+        <section className={styles.reviewPlan} aria-label="错题复习计划">
+          <div>
+            <h2>复习节奏</h2>
+            <p>
+              现在有 <strong>{dueItems.length}</strong>{' '}
+              道待复习。未安排过的错题从首次自评开始；旧复习标记不会冒充 FSRS
+              评分。
+            </p>
+            {nextDue !== null && (
+              <p>最近下次复习：{formatMistakeTime(nextDue)}</p>
+            )}
+          </div>
+          <div className={styles.planActions}>
+            <Button
+              type="primary"
+              disabled={!canWrite || dueItems.length === 0}
+              onClick={() =>
+                setRedoing(dueItems.find((item) => item.problem) ?? dueItems[0])
+              }
+            >
+              开始复习
+            </Button>
+            <Button
+              onClick={() => {
+                setOnlyDue(!onlyDue);
+                if (!onlyDue) setReview('all');
+              }}
+            >
+              {onlyDue ? '显示全部错题' : '查看待复习'}
+            </Button>
+          </div>
+        </section>
+      )}
+      {items.length > 0 && (
         <div className="filter-bar">
           <div className={styles.filters}>
             <Segmented
@@ -302,6 +398,9 @@ export default function MistakesPage() {
               </Space>
             }
             actions={[
+              <Button key="redo" type="link" onClick={() => setRedoing(item)}>
+                重做
+              </Button>,
               <Button
                 key="review"
                 type="link"
@@ -355,19 +454,24 @@ export default function MistakesPage() {
               {item.reviewedAt !== null &&
                 ` · 最近复习：${formatMistakeTime(item.reviewedAt)}`}
             </p>
+            <p className={styles.schedule}>
+              {item.schedule
+                ? `下次复习：${formatMistakeTime(item.schedule.due)}${isReviewDue(item.schedule, now) ? '（已到期）' : ''}`
+                : '尚未安排复习 · 完成一次重做自评后开始安排'}
+            </p>
             {item.problem && (
               <>
                 <h4 className={styles.heading}>题目</h4>
                 <p className={styles.text}>{item.problem}</p>
               </>
             )}
-            {item.mistakeReason && (
+            {item.mistakeReason && redoing?.id !== item.id && (
               <>
                 <h4 className={styles.heading}>错误原因</h4>
                 <p className={styles.text}>{item.mistakeReason}</p>
               </>
             )}
-            {item.correction && (
+            {item.correction && redoing?.id !== item.id && (
               <>
                 <h4 className={styles.heading}>订正与正确思路</h4>
                 <p className={styles.text}>{item.correction}</p>
@@ -403,8 +507,18 @@ export default function MistakesPage() {
       {importOpen && (
         <MistakeImportModal
           open
+          saveError={saveError}
           onCancel={() => setImportOpen(false)}
           onConfirm={handleImport}
+        />
+      )}
+      {redoing && (
+        <MistakeRedoModal
+          item={redoing}
+          canWrite={canWrite}
+          error={saveError}
+          onClose={() => setRedoing(null)}
+          onComplete={completeRedo}
         />
       )}
     </>

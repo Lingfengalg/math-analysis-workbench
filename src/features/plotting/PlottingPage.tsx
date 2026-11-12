@@ -55,6 +55,7 @@ import {
   type FunctionChartHandle,
 } from '@/shared/ui/FunctionChart';
 import { PageHeader } from '@/shared/ui/PageHeader';
+import { MathInputLauncher } from '@/shared/ui/math-input/MathInputLauncher';
 import {
   buildPlotExportName,
   buildSequenceExportName,
@@ -317,6 +318,7 @@ function PlottingWorkspace({
   initialStorageError?: string;
 }) {
   const [form] = Form.useForm<WorkspaceFormValues>();
+  const expressionValue = Form.useWatch('expression', form) ?? '';
   const { state: plot, draw: drawPlot } = usePlotCalculation(initial);
   const { state: sequence, draw: drawSequence } = useSequenceCalculation();
   const [mode, setMode] = useState<PlotMode>('function');
@@ -748,6 +750,14 @@ function PlottingWorkspace({
                 autoComplete="off"
               />
             </Form.Item>
+            <MathInputLauncher
+              key={mode}
+              mode={mode}
+              value={expressionValue}
+              onApply={(expression) =>
+                form.setFieldValue('expression', expression)
+              }
+            />
             {mode === 'function' && (
               <div className="range-fields">
                 <Form.Item

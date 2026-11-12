@@ -9,6 +9,7 @@ interface Props {
   open: boolean;
   onCancel: () => void;
   onConfirm: (items: Mistake[], mode: ImportMode) => void;
+  saveError: string | null;
 }
 
 function readText(file: File): Promise<string> {
@@ -20,14 +21,21 @@ function readText(file: File): Promise<string> {
   });
 }
 
-export function MistakeImportModal({ open, onCancel, onConfirm }: Props) {
+export function MistakeImportModal({
+  open,
+  onCancel,
+  onConfirm,
+  saveError,
+}: Props) {
   const [mode, setMode] = useState<ImportMode>('merge');
   const [fileName, setFileName] = useState('');
   const [items, setItems] = useState<Mistake[] | null>(null);
   const [error, setError] = useState('');
+  const [attempted, setAttempted] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const select = async (event: ChangeEvent<HTMLInputElement>) => {
+    setAttempted(false);
     const file = event.target.files?.[0];
     // 清空 value，允许重复选择同一个文件。
     event.target.value = '';
@@ -57,7 +65,10 @@ export function MistakeImportModal({ open, onCancel, onConfirm }: Props) {
       width={560}
       okButtonProps={{ disabled: items === null }}
       onOk={() => {
-        if (items) onConfirm(items, mode);
+        if (items) {
+          setAttempted(true);
+          onConfirm(items, mode);
+        }
       }}
       onCancel={onCancel}
     >
@@ -86,7 +97,10 @@ export function MistakeImportModal({ open, onCancel, onConfirm }: Props) {
           <p className={styles.hint}>导入方式</p>
           <Radio.Group
             value={mode}
-            onChange={(event) => setMode(event.target.value as ImportMode)}
+            onChange={(event) => {
+              setAttempted(false);
+              setMode(event.target.value as ImportMode);
+            }}
           >
             <Space direction="vertical">
               <Radio value="merge">
@@ -98,6 +112,14 @@ export function MistakeImportModal({ open, onCancel, onConfirm }: Props) {
         </div>
         {error && (
           <Alert type="error" showIcon title="导入失败" description={error} />
+        )}
+        {attempted && saveError && (
+          <Alert
+            type="error"
+            showIcon
+            title="导入未完成"
+            description={saveError}
+          />
         )}
       </Space>
     </Modal>

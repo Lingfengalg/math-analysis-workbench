@@ -1,0 +1,56 @@
+.editor {
+  margin: 10px 0 14px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+  color: var(--text);
+}
+.heading span,
+.description {
+  color: var(--muted);
+  font-size: 12px;
+}
+.tools,
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0;
+}
+.mathfield {
+  display: block;
+  width: 100%;
+  min-height: 54px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 20px;
+  background: var(--surface);
+  color: var(--text);
+}
+.mathfield:focus-within {
+  border-color: var(--accent);
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.description,
+.preview,
+.error {
+  margin: 8px 0;
+  line-height: 1.6;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.preview {
+  color: var(--text);
+}
+.error {
+  color: #b42318;
+}
