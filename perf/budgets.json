@@ -1,7 +1,25 @@
 {
-  "updated": "2026-10-30",
-  "note": "预算按 2026-10-30 的实测值留约 10% 余量；调整前先看 docs/performance.md 的测量方法。",
+  "updated": "2026-11-11",
+  "note": "JSXGraph、Perseus 和 MathLive 带来的预算调整及实测见 docs/performance.md。",
   "chunks": [
+    {
+      "label": "math-editor",
+      "pattern": "^MathEditor-.*\\.js$",
+      "rawKb": 840,
+      "gzipKb": 230
+    },
+    {
+      "label": "practice-view",
+      "pattern": "^PracticeView-.*\\.js$",
+      "rawKb": 205,
+      "gzipKb": 65
+    },
+    {
+      "label": "jsxgraph-experiments",
+      "pattern": "^(DerivativeChart|LimitChart|src)-.*\\.js$",
+      "rawKb": 1080,
+      "gzipKb": 270
+    },
     {
       "label": "plotting",
       "pattern": "^plotting-.*\\.js$",
@@ -23,13 +41,13 @@
     {
       "label": "index",
       "pattern": "^index-.*\\.js$",
-      "rawKb": 180,
-      "gzipKb": 63
+      "rawKb": 270,
+      "gzipKb": 90
     }
   ],
   "totalJs": {
-    "rawKb": 2800,
-    "gzipKb": 880
+    "rawKb": 5000,
+    "gzipKb": 1450
   },
   "samplingMs": {
     "typical": 150,

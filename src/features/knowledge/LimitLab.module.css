@@ -1,0 +1,243 @@
+.lab {
+  grid-column: 1 / -1;
+  padding: 30px 34px 32px;
+  border-top: 1px solid #dfe4ed;
+  background: #f5f7fb;
+}
+.intro {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+.intro h3 {
+  margin: 8px 0 4px;
+  color: #1b2943;
+  font-size: 23px;
+  line-height: 1.35;
+}
+.intro p {
+  margin: 0;
+  color: #5b687e;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.kicker {
+  color: #5266a7;
+  font-size: 12px;
+  font-weight: 700;
+}
+.symbol {
+  color: #a8b4d0;
+  font:
+    italic 24px Georgia,
+    serif;
+  white-space: nowrap;
+}
+.workbench {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(240px, 0.75fr);
+  background: #fff;
+  border: 1px solid #dce3ef;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.figure {
+  min-width: 0;
+  padding: 20px 22px 16px;
+}
+.figureTitle {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: #34415a;
+  font-size: 13px;
+}
+.figureTitle span {
+  color: #5967a0;
+  font-family: Georgia, serif;
+  font-weight: 700;
+}
+.graph,
+.graphLoading {
+  width: 100%;
+  height: 300px;
+  margin-top: 4px;
+}
+.graph {
+  position: relative;
+  overflow: hidden;
+  touch-action: none;
+}
+.graphLoading {
+  display: grid;
+  place-items: center;
+  color: #718097;
+  font-size: 12px;
+}
+.legend {
+  display: flex;
+  gap: 8px 18px;
+  flex-wrap: wrap;
+  color: #647189;
+  font-size: 11px;
+}
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.legend i {
+  width: 15px;
+  border-top: 3px solid;
+}
+.leftKey {
+  color: #b65e42;
+}
+.rightKey {
+  color: #328278;
+}
+.controls {
+  min-width: 0;
+  padding: 21px 22px;
+  border-left: 1px solid #e5e9f1;
+}
+.choices {
+  border: 0;
+  padding: 0;
+  margin: 0 0 20px;
+  min-width: 0;
+}
+.choices legend,
+.label {
+  color: #3b4961;
+  font-size: 12px;
+  font-weight: 650;
+}
+.choices legend {
+  margin-bottom: 9px;
+}
+.choices > div,
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.choices button,
+.actions button {
+  border: 1px solid #dce2ee;
+  border-radius: 6px;
+  background: #fff;
+  color: #48566f;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.choices button[aria-pressed='true'] {
+  border-color: #667bc1;
+  background: #eef1fb;
+  color: #354b9c;
+}
+.actions .primary {
+  background: #4358af;
+  border-color: #4358af;
+  color: #fff;
+}
+.actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 16px 0 6px;
+}
+.label strong {
+  color: #4256a2;
+  font-variant-numeric: tabular-nums;
+}
+.controls input[type='range'] {
+  width: 100%;
+  margin: 3px 0 12px;
+  accent-color: #5266b3;
+}
+.readouts {
+  margin-top: 18px;
+  border-top: 1px solid #e9edf4;
+}
+.readouts div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 10px;
+  font-size: 12px;
+}
+.readouts span,
+.muted {
+  color: #69768c;
+}
+.readouts strong {
+  color: #2b3952;
+  font-variant-numeric: tabular-nums;
+}
+.explanation,
+.muted,
+.error {
+  margin: 15px 0 0;
+  color: #5b687f;
+  font-size: 12px;
+  line-height: 1.65;
+}
+.error {
+  color: #b42318;
+}
+.note {
+  margin: 12px 0 0;
+  color: #718097;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  margin-top: 18px;
+}
+.links a {
+  color: #4056a9;
+  font-size: 12px;
+  font-weight: 650;
+}
+.lab button:focus-visible,
+.lab input:focus-visible,
+.lab a:focus-visible {
+  outline: 2px solid #4358af;
+  outline-offset: 3px;
+}
+@media (max-width: 750px) {
+  .lab {
+    padding: 25px 20px;
+  }
+  .workbench {
+    grid-template-columns: 1fr;
+  }
+  .controls {
+    border-left: 0;
+    border-top: 1px solid #e5e9f1;
+  }
+  .figure {
+    padding: 18px 15px 15px;
+  }
+}
+@media (max-width: 400px) {
+  .symbol {
+    display: none;
+  }
+  .intro h3 {
+    font-size: 20px;
+  }
+}

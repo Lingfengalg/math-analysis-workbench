@@ -2,12 +2,12 @@ import { z } from 'zod';
 import { MISTAKE_LIMITS, mistakeSchema, type Mistake } from './model';
 
 export const MISTAKE_EXPORT_FORMAT = 'math-analysis-workbench/mistakes';
-export const MISTAKE_EXPORT_VERSION = 1;
+export const MISTAKE_EXPORT_VERSION = 2;
 
 /** 导出文件格式。与存储信封分开，便于以后单独升级导入格式。 */
 export const exportFileSchema = z.object({
   format: z.literal(MISTAKE_EXPORT_FORMAT),
-  version: z.literal(MISTAKE_EXPORT_VERSION),
+  version: z.union([z.literal(1), z.literal(MISTAKE_EXPORT_VERSION)]),
   exportedAt: z.string().min(1),
   items: z
     .array(mistakeSchema)
@@ -68,10 +68,13 @@ export function parseExport(text: string): ImportResult {
           error: '文件不是本工作台导出的错题文件（格式标识不符）。',
         };
       }
-      if (candidate.version !== MISTAKE_EXPORT_VERSION) {
+      if (
+        candidate.version !== 1 &&
+        candidate.version !== MISTAKE_EXPORT_VERSION
+      ) {
         return {
           ok: false,
-          error: `文件版本不支持，当前仅支持版本 ${MISTAKE_EXPORT_VERSION}。`,
+          error: `文件版本不支持，当前支持版本 1 和 ${MISTAKE_EXPORT_VERSION}。`,
         };
       }
     }

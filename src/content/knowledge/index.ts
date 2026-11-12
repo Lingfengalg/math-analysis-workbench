@@ -38,11 +38,12 @@ export const knowledgeCards = z.array(knowledgeCardSchema).parse([
     topic: 'continuity',
     title: '连续性：先检查定义域',
     definition:
-      '函数在定义域内的一点连续，是指该点的函数极限等于该点的函数值。讨论内部点的通常双侧连续性时，须满足相应邻域条件。',
-    formula: '\\lim_{x\\to a}f(x)=f(a)',
+      '设 D 是函数定义域，a ∈ D。若对任意 ε > 0，都存在 δ > 0，使定义域内满足 |x − a| < δ 的 x 均有 |f(x) − f(a)| < ε，则称函数在 a 处连续。',
+    formula: 'x\\in D,\\quad |x-a|<\\delta\\implies |f(x)-f(a)|<\\varepsilon',
     conditions: [
       'a 是函数定义域中的点。',
-      '极限按定义域取值趋近 a；区间端点通常使用对应的单侧极限。',
+      '当 a 是定义域的聚点时，连续等价于按定义域取值趋近 a 的函数极限等于 f(a)。',
+      '区间端点通常使用对应的单侧极限；定义域的孤立点按上述相对定义域的定义连续，不使用去心极限刻画。',
     ],
     examples: [
       {
@@ -55,9 +56,14 @@ export const knowledgeCards = z.array(knowledgeCardSchema).parse([
           sourceKnowledgeId: 'continuity-reciprocal',
         },
       },
+      {
+        explanation:
+          '例如函数 f(x) = x 的定义域为 {0} ∪ [1, 2]，0 是定义域的孤立点；按相对定义域的 ε-δ 定义，f 在 0 处连续。',
+      },
     ],
     pitfalls: [
       '图中看起来平滑不代表已证明连续。',
+      '不能不加条件地用去心极限刻画孤立点处的连续性。',
       '绘图不得把 1/x 在 0 两侧的分支直接相连。',
     ],
     references: [

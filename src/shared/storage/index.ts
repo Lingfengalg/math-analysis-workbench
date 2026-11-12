@@ -2,14 +2,21 @@ import { z } from 'zod';
 
 const PREFIX = 'math-workbench:';
 const envelopeSchema = z.object({
-  schemaVersion: z.literal(1),
+  schemaVersion: z.number().int().positive(),
   data: z.unknown(),
 });
 export type StorageResult<T> =
   { ok: true; data: T } | { ok: false; error: string };
 
 // Store data behind a versioned envelope. Never silently replace corrupt data.
-export function createStorage<T>(key: string, schema: z.ZodType<T>) {
+export function createStorage<T>(
+  key: string,
+  schema: z.ZodType<T>,
+  options: { version: number; readVersions: readonly number[] } = {
+    version: 1,
+    readVersions: [1],
+  },
+) {
   const name = `${PREFIX}${key}`;
   return {
     read(fallback: T): StorageResult<T> {
@@ -17,6 +24,8 @@ export function createStorage<T>(key: string, schema: z.ZodType<T>) {
         const raw = window.localStorage.getItem(name);
         if (raw === null) return { ok: true, data: fallback };
         const envelope = envelopeSchema.parse(JSON.parse(raw));
+        if (!options.readVersions.includes(envelope.schemaVersion))
+          throw new Error('Unsupported storage version');
         return { ok: true, data: schema.parse(envelope.data) };
       } catch {
         return {
@@ -32,7 +41,7 @@ export function createStorage<T>(key: string, schema: z.ZodType<T>) {
       try {
         window.localStorage.setItem(
           name,
-          JSON.stringify({ schemaVersion: 1, data: result.data }),
+          JSON.stringify({ schemaVersion: options.version, data: result.data }),
         );
         return { ok: true, data: result.data };
       } catch {

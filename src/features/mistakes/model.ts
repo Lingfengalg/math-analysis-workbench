@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { createStorage } from '@/shared/storage';
+import { reviewScheduleSchema } from './schedule';
 
 /** 知识主题与知识导航保持同一套英文标识，另加“其他”兜底。 */
 export const MISTAKE_TOPICS = [
@@ -60,6 +61,7 @@ export const mistakeSchema = z.object({
   updatedAt: z.number().int().nonnegative(),
   /** 最近一次复习时间；null 表示未复习。旧数据缺少该字段时按未复习处理。 */
   reviewedAt: z.number().int().nonnegative().nullable().default(null),
+  schedule: reviewScheduleSchema.optional(),
 });
 
 export type Mistake = z.infer<typeof mistakeSchema>;
@@ -88,7 +90,10 @@ export const EMPTY_MISTAKES: MistakeList = { items: [] };
 /** 跨标签页 storage 事件按这个键筛选，需与 createStorage 的键前缀拼接结果一致。 */
 export const MISTAKE_STORAGE_KEY = 'math-workbench:mistakes';
 
-export const mistakeStorage = createStorage('mistakes', mistakeListSchema);
+export const mistakeStorage = createStorage('mistakes', mistakeListSchema, {
+  version: 2,
+  readVersions: [1, 2],
+});
 
 function createMistakeId(): string {
   const cryptoApi = globalThis.crypto;

@@ -7,6 +7,8 @@ import { matchesKnowledgeQuery } from './search';
 import { createPlotLink } from '@/shared/navigation/plot-link';
 import { createMistakeTopicLink } from '@/shared/navigation/knowledge-link';
 import { Formula } from '@/shared/ui/Formula';
+import { DerivativeLab } from './DerivativeLab';
+import { LimitLab } from './LimitLab';
 import styles from './KnowledgePage.module.css';
 
 const labels = { limit: '极限', continuity: '连续', derivative: '导数' };
@@ -105,7 +107,7 @@ export default function KnowledgePage() {
               aria-label={`${card.title}的例子与提醒`}
             >
               <section className={styles.example}>
-                <h3>一个具体例子</h3>
+                <h3>具体例子</h3>
                 {card.examples.map((example) => (
                   <div key={example.explanation}>
                     <p>{example.explanation}</p>
@@ -121,6 +123,27 @@ export default function KnowledgePage() {
                 ))}
               </section>
               <div className="section-gap">
+                {card.id === 'derivative-absolute' &&
+                  topic !== 'derivative' && (
+                    <p>
+                      <Link
+                        className={styles.plotLink}
+                        to="/knowledge?topic=derivative"
+                      >
+                        打开导数互动实验
+                      </Link>
+                    </p>
+                  )}
+                {card.id === 'limit-square' && topic !== 'limit' && (
+                  <p>
+                    <Link
+                      className={styles.plotLink}
+                      to="/knowledge?topic=limit"
+                    >
+                      打开极限互动动画
+                    </Link>
+                  </p>
+                )}
                 <Link
                   className={styles.plotLink}
                   to={createMistakeTopicLink(card.topic)}
@@ -138,6 +161,10 @@ export default function KnowledgePage() {
                 </ul>
               </section>
             </aside>
+            {card.id === 'derivative-absolute' && topic === 'derivative' && (
+              <DerivativeLab />
+            )}
+            {card.id === 'limit-square' && topic === 'limit' && <LimitLab />}
           </article>
         ))}
       </div>

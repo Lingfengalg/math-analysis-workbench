@@ -1,0 +1,270 @@
+.layout {
+  display: grid;
+  grid-template-columns: minmax(200px, 250px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+  margin-top: 26px;
+}
+.questionList,
+.question,
+.backup {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.questionList {
+  padding: 19px 12px 12px;
+}
+.listHeader {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 8px 13px;
+  color: #26344e;
+  font-size: 13px;
+}
+.listHeader span,
+.listNote {
+  color: #738097;
+  font-size: 12px;
+}
+.questionLink {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  text-align: left;
+  padding: 11px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #617088;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.questionLink strong {
+  color: #34415b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.questionLink[aria-current='step'] {
+  background: #edf1fb;
+  color: #435ba4;
+}
+.questionLink[aria-current='step'] strong {
+  color: #263b80;
+}
+.questionTopic {
+  color: #596ca9;
+  font-weight: 650;
+}
+.listNote {
+  margin: 16px 8px 3px;
+  line-height: 1.6;
+}
+.question {
+  padding: 30px 34px;
+  min-height: 410px;
+}
+.meta {
+  display: flex;
+  justify-content: space-between;
+  color: #65769f;
+  font-size: 12px;
+  font-weight: 650;
+}
+.question h2 {
+  margin: 18px 0 14px;
+  color: #202e49;
+  font-size: 22px;
+  line-height: 1.4;
+}
+.prompt {
+  margin: 0;
+  color: #33415a;
+  font-size: 16px;
+  line-height: 1.8;
+}
+.answerArea {
+  margin-top: 28px;
+}
+.options {
+  display: grid;
+  gap: 13px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.options legend {
+  margin-bottom: 10px;
+  color: #46546c;
+  font-size: 13px;
+  font-weight: 600;
+}
+.options label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: #33415a;
+  line-height: 1.7;
+  cursor: pointer;
+}
+.options input {
+  accent-color: #485bb2;
+}
+.inputLabel {
+  display: grid;
+  gap: 8px;
+  max-width: 330px;
+  color: #46546c;
+  font-size: 13px;
+  font-weight: 600;
+}
+.controls {
+  display: flex;
+  gap: 10px;
+  margin-top: 22px;
+  flex-wrap: wrap;
+}
+.hint {
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  background: #f2f5fb;
+  color: #50617e;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.result {
+  margin-top: 20px;
+  padding: 17px;
+  border-left: 3px solid #6983b8;
+  background: #f3f6fb;
+  color: #40516b;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.result strong {
+  color: #2c456b;
+  font-size: 14px;
+}
+.result p {
+  margin: 8px 0 12px;
+}
+.result details {
+  margin: 9px 0 13px;
+}
+.result summary {
+  cursor: pointer;
+  color: #405ba8;
+}
+.message,
+.error {
+  margin: 14px 0 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #54647d;
+}
+.error {
+  color: #a14c3d;
+}
+.history {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  border-top: 1px solid #e7ebf2;
+  margin-top: 30px;
+  padding-top: 18px;
+  color: #6d7b91;
+  font-size: 12px;
+}
+.history strong {
+  color: #42516a;
+}
+.history button {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: #465da7;
+  font: inherit;
+  cursor: pointer;
+}
+.backup {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+  padding: 18px 22px;
+}
+.backup strong {
+  color: #35445e;
+  font-size: 13px;
+}
+.backup p {
+  margin: 6px 0 0;
+  color: #708097;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.backupActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.fileButton {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 4px 14px;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  color: #26344e;
+  background: white;
+  font-size: 14px;
+  cursor: pointer;
+}
+.fileButton input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.fileButton:focus-within {
+  outline: 2px solid #5268b0;
+  outline-offset: 2px;
+}
+.questionLink:focus-visible,
+.history button:focus-visible {
+  outline: 2px solid #5268b0;
+  outline-offset: 2px;
+}
+@media (max-width: 700px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+  .questionList {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 10px;
+  }
+  .listHeader,
+  .listNote {
+    display: none;
+  }
+  .questionLink {
+    min-width: 150px;
+    width: auto;
+  }
+  .question {
+    padding: 24px 20px;
+    min-height: 0;
+  }
+  .question h2 {
+    font-size: 19px;
+  }
+}

@@ -1,10 +1,27 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import KnowledgePage from './KnowledgePage';
 
+vi.mock('./DerivativeChart', () => ({ default: () => null }));
+
 describe('知识导航', () => {
+  it('连续性卡片展示孤立点示例并保留绘图入口', () => {
+    render(
+      <MemoryRouter initialEntries={['/knowledge?topic=continuity']}>
+        <KnowledgePage />
+      </MemoryRouter>,
+    );
+    const article = screen.getByRole('article');
+    expect(within(article).getByText(/0 是定义域的孤立点/)).toBeInTheDocument();
+    expect(
+      within(article).getByRole('heading', { name: '具体例子' }),
+    ).toBeInTheDocument();
+    expect(
+      within(article).getByRole('link', { name: /去绘图中观察/ }),
+    ).toBeInTheDocument();
+  });
   it('能搜索知识卡片并展示空状态', async () => {
     const user = userEvent.setup();
     render(

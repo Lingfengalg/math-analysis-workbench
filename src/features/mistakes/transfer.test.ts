@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createMistake, type MistakeDraft } from './model';
+import { nextReview, Rating } from './schedule';
 import {
   createExportFile,
   exportFileName,
@@ -34,7 +35,7 @@ describe('错题导出文件', () => {
   it('包含格式标识、版本、导出时间与条目', () => {
     const file = createExportFile([sample], new Date('2026-10-29T02:00:00Z'));
     expect(file.format).toBe(MISTAKE_EXPORT_FORMAT);
-    expect(file.version).toBe(1);
+    expect(file.version).toBe(2);
     expect(file.exportedAt).toBe('2026-10-29T02:00:00.000Z');
     expect(file.items).toHaveLength(1);
     expect(file.items[0].title).toBe('极限存在的条件');
@@ -51,6 +52,17 @@ describe('错题导出文件', () => {
     const result = parseExport(text);
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.items[0].id).toBe(sample.id);
+  });
+
+  it('版本 2 完整保留 FSRS 状态，版本 1 仍可导入', () => {
+    const scheduled = {
+      ...sample,
+      schedule: nextReview(undefined, Rating.Good, 2000),
+    };
+    const parsed = parseExport(serializeExport(createExportFile([scheduled])));
+    expect(parsed.ok && parsed.items[0].schedule).toEqual(scheduled.schedule);
+    const legacy = parseExport(fileWith([sample]));
+    expect(legacy.ok && legacy.items[0].schedule).toBeUndefined();
   });
 });
 
@@ -69,7 +81,7 @@ describe('导入校验', () => {
   });
 
   it('版本不支持时拒绝', () => {
-    const result = parseExport(fileWith([sample], { version: 2 }));
+    const result = parseExport(fileWith([sample], { version: 3 }));
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toContain('版本不支持');
   });

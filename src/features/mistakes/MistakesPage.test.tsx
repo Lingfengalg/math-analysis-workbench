@@ -51,7 +51,7 @@ describe('错题本', () => {
     const raw = localStorage.getItem(STORAGE_KEY);
     expect(raw).not.toBeNull();
     const parsed = JSON.parse(raw!);
-    expect(parsed.schemaVersion).toBe(1);
+    expect(parsed.schemaVersion).toBe(2);
     expect(parsed.data.items).toHaveLength(1);
     expect(parsed.data.items[0].title).toBe('判断 1/x 在 0 处是否连续');
     expect(screen.getByText('已记录一条错题。')).toBeInTheDocument();
