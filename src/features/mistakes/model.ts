@@ -27,6 +27,9 @@ export const MISTAKE_LIMITS = {
   items: 200,
 } as const;
 
+// JavaScript Date 的可表示范围；防止损坏备份导致日期格式化异常。
+const timestamp = z.number().int().nonnegative().max(8_640_000_000_000_000);
+
 /** 单条错题。时间使用 epoch 毫秒，避免时区字符串带来的解析歧义。 */
 export const mistakeSchema = z.object({
   id: z.string().min(1),
@@ -57,10 +60,10 @@ export const mistakeSchema = z.object({
       MISTAKE_LIMITS.correction,
       `订正最多 ${MISTAKE_LIMITS.correction} 个字符`,
     ),
-  createdAt: z.number().int().nonnegative(),
-  updatedAt: z.number().int().nonnegative(),
+  createdAt: timestamp,
+  updatedAt: timestamp,
   /** 最近一次复习时间；null 表示未复习。旧数据缺少该字段时按未复习处理。 */
-  reviewedAt: z.number().int().nonnegative().nullable().default(null),
+  reviewedAt: timestamp.nullable().default(null),
   schedule: reviewScheduleSchema.optional(),
 });
 
@@ -77,11 +80,17 @@ export const mistakeDraftSchema = mistakeSchema.pick({
 
 export type MistakeDraft = z.infer<typeof mistakeDraftSchema>;
 
-export const mistakeListSchema = z.object({
-  items: z
-    .array(mistakeSchema)
-    .max(MISTAKE_LIMITS.items, `本地最多保存 ${MISTAKE_LIMITS.items} 条错题`),
-});
+export const mistakeListSchema = z
+  .object({
+    items: z
+      .array(mistakeSchema)
+      .max(MISTAKE_LIMITS.items, `本地最多保存 ${MISTAKE_LIMITS.items} 条错题`),
+  })
+  .refine(
+    (data) =>
+      new Set(data.items.map((item) => item.id)).size === data.items.length,
+    { message: '错题 ID 不可重复。' },
+  );
 
 export type MistakeList = z.infer<typeof mistakeListSchema>;
 

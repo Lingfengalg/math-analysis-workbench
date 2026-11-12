@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { Alert, Button, Modal, Radio, Space } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import type { Mistake } from './model';
@@ -33,26 +33,43 @@ export function MistakeImportModal({
   const [error, setError] = useState('');
   const [attempted, setAttempted] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const selectionVersion = useRef(0);
+  useEffect(
+    () => () => {
+      selectionVersion.current += 1;
+    },
+    [],
+  );
 
   const select = async (event: ChangeEvent<HTMLInputElement>) => {
+    const version = ++selectionVersion.current;
     setAttempted(false);
+    setItems(null);
+    setError('');
     const file = event.target.files?.[0];
     // 清空 value，允许重复选择同一个文件。
     event.target.value = '';
-    if (!file) return;
+    if (!file) {
+      setFileName('');
+      return;
+    }
     setFileName(file.name);
+    if (file.size > 12 * 1024 * 1024) {
+      setError('备份文件超过 12 MiB，未导入。');
+      return;
+    }
     try {
-      const result = parseExport(await readText(file));
+      const text = await readText(file);
+      if (version !== selectionVersion.current) return;
+      const result = parseExport(text);
       if (!result.ok) {
-        setItems(null);
         setError(result.error);
         return;
       }
       setItems(result.items);
-      setError('');
     } catch {
-      setItems(null);
-      setError('读取文件失败，请重新选择。');
+      if (version === selectionVersion.current)
+        setError('读取文件失败，请重新选择。');
     }
   };
 

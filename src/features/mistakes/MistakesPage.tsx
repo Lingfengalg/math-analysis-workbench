@@ -21,6 +21,7 @@ import {
   UploadOutlined,
 } from '@ant-design/icons';
 import { PageHeader } from '@/shared/ui/PageHeader';
+import { downloadBlob } from '@/shared/ui/plot-export';
 import { createKnowledgeTopicLink } from '@/shared/navigation/knowledge-link';
 import { MistakeFormModal } from './MistakeFormModal';
 import { MistakeImportModal } from './MistakeImportModal';
@@ -31,6 +32,7 @@ import {
   formatMistakeTime,
   MISTAKE_TOPICS,
   mistakeSchema,
+  mistakeStorage,
   topicLabels,
   type Mistake,
   type MistakeDraft,
@@ -90,6 +92,7 @@ export default function MistakesPage() {
   // 打开删除确认时记录快照：期间若被其他标签页修改，确认时要能发现
   const [pendingDelete, setPendingDelete] = useState<Mistake | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [backupError, setBackupError] = useState<string | null>(null);
 
   const visible = useMemo(() => {
     const keyword = query.trim();
@@ -200,6 +203,25 @@ export default function MistakesPage() {
     setNotice(`已导出 ${items.length} 条错题。`);
   };
 
+  const exportRaw = () => {
+    const raw = mistakeStorage.readRaw();
+    if (!raw.ok || raw.data === null) {
+      setBackupError('无法读取原始错题数据，未导出；数据没有被修改。');
+      return;
+    }
+    if (
+      !downloadBlob(
+        new Blob([raw.data], { type: 'text/plain;charset=utf-8' }),
+        'mistakes-raw-backup.txt',
+      )
+    ) {
+      setBackupError('原始数据下载未能启动；数据没有被修改。');
+      return;
+    }
+    setBackupError(null);
+    setNotice('已开始下载原始错题数据。');
+  };
+
   const handleImport = async (incoming: Mistake[], mode: ImportMode) => {
     if (!(await importMistakes(incoming, mode))) return;
     setNotice(
@@ -267,20 +289,25 @@ export default function MistakesPage() {
           type="warning"
           showIcon
           title="本地错题数据无法读取"
-          description={`${loadError} 原始数据仍保留在浏览器中，未被自动覆盖。`}
+          description={`${loadError} 原始数据仍保留在浏览器中，未被自动覆盖。${backupError ? ` ${backupError}` : ''}`}
           action={
-            <Popconfirm
-              title="清空本地错题数据？"
-              description="清除后无法恢复，仅在已确认数据无用或已备份时继续。"
-              okText="确认清除"
-              cancelText="取消"
-              okButtonProps={{ danger: true }}
-              onConfirm={() => void clearAll()}
-            >
-              <Button danger size="small" disabled={!canWrite}>
-                清空并重新开始
+            <Space wrap>
+              <Button size="small" onClick={exportRaw}>
+                下载原始数据
               </Button>
-            </Popconfirm>
+              <Popconfirm
+                title="清空本地错题数据？"
+                description="清除后无法恢复，仅在已确认数据无用或已备份时继续。"
+                okText="确认清除"
+                cancelText="取消"
+                okButtonProps={{ danger: true }}
+                onConfirm={() => void clearAll()}
+              >
+                <Button danger size="small" disabled={!canWrite}>
+                  清空并重新开始
+                </Button>
+              </Popconfirm>
+            </Space>
           }
         />
       )}

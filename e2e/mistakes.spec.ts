@@ -390,3 +390,212 @@ test('可以导出备份、导入文件并标记复习', async ({ page }) => {
   await expect(page.getByText('导入进来的错题')).toBeVisible();
   await expect(page.getByText('导出测试的错题')).toBeVisible();
 });
+
+test('快速切换导入文件不会显示或导入先前文件', async ({ page }) => {
+  await page.addInitScript(() => {
+    const original = FileReader.prototype.readAsText;
+    FileReader.prototype.readAsText = function (file, encoding) {
+      const delay =
+        file instanceof File && file.name === 'slow.json' ? 900 : 30;
+      window.setTimeout(() => original.call(this, file, encoding), delay);
+    };
+  });
+  await page.goto('/#/mistakes');
+  await page.getByRole('button', { name: /导入/ }).click();
+  const dialog = page.getByRole('dialog');
+  const backup = (id: string, title: string) =>
+    Buffer.from(
+      JSON.stringify({
+        format: 'math-analysis-workbench/mistakes',
+        version: 2,
+        exportedAt: '2026-11-12',
+        items: [
+          {
+            id,
+            title,
+            topic: 'limit',
+            problem: '',
+            mistakeReason: '',
+            correction: '',
+            createdAt: 1,
+            updatedAt: 1,
+            reviewedAt: null,
+          },
+        ],
+      }),
+    );
+  await dialog.locator('input[type="file"]').setInputFiles({
+    name: 'slow.json',
+    mimeType: 'application/json',
+    buffer: backup('slow', '旧文件题目'),
+  });
+  await dialog.locator('input[type="file"]').setInputFiles({
+    name: 'fast.json',
+    mimeType: 'application/json',
+    buffer: backup('fast', '新文件题目'),
+  });
+  await expect(dialog.getByText(/已选择：fast.json/)).toBeVisible();
+  await expect(dialog.getByText(/1 条错题/)).toBeVisible();
+  await page.waitForTimeout(1100);
+  await dialog.getByRole('button', { name: /导\s*入/ }).click();
+  await expect(page.getByText('新文件题目')).toBeVisible();
+  await expect(page.getByText('旧文件题目')).toHaveCount(0);
+});
+
+test('损坏的重复 ID 数据可原样备份，且不会被新写入覆盖', async ({ page }) => {
+  const item = {
+    id: 'same',
+    title: '第一条',
+    topic: 'limit',
+    problem: '',
+    mistakeReason: '',
+    correction: '',
+    createdAt: 1,
+    updatedAt: 1,
+    reviewedAt: null,
+  };
+  const raw = JSON.stringify({
+    schemaVersion: 2,
+    data: { items: [item, { ...item, title: '第二条' }] },
+  });
+  await page.addInitScript(
+    (data) => localStorage.setItem('math-workbench:mistakes', data),
+    raw,
+  );
+  await page.goto('/#/mistakes');
+  await expect(page.getByText('本地错题数据无法读取')).toBeVisible();
+  await expect(page.getByRole('button', { name: '记录错题' })).toBeDisabled();
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: '下载原始数据' }).click(),
+  ]);
+  expect(download.suggestedFilename()).toBe('mistakes-raw-backup.txt');
+  const stream = await download.createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+  expect(Buffer.concat(chunks).toString('utf8')).toBe(raw);
+  expect(
+    await page.evaluate(() => localStorage.getItem('math-workbench:mistakes')),
+  ).toBe(raw);
+});
+
+test('导入时旧 FSRS 备份不会回滚已有复习计划', async ({ page }) => {
+  const schedule = {
+    version: 1,
+    algorithm: 'FSRS-6',
+    due: 9000,
+    lastReview: 5000,
+    stability: 1,
+    difficulty: 5,
+    elapsedDays: 0,
+    scheduledDays: 1,
+    learningSteps: 0,
+    reps: 2,
+    lapses: 0,
+    state: 2,
+    lastRating: 3,
+  };
+  const item = {
+    id: 'one',
+    title: '有计划的错题',
+    topic: 'limit',
+    problem: '',
+    mistakeReason: '',
+    correction: '',
+    createdAt: 1000,
+    updatedAt: 5000,
+    reviewedAt: 5000,
+    schedule,
+  };
+  const raw = JSON.stringify({ schemaVersion: 2, data: { items: [item] } });
+  await page.addInitScript(
+    (data) => localStorage.setItem('math-workbench:mistakes', data),
+    raw,
+  );
+  await page.goto('/#/mistakes');
+  await page.getByRole('button', { name: /导入/ }).click();
+  const dialog = page.getByRole('dialog');
+  const backup = {
+    format: 'math-analysis-workbench/mistakes',
+    version: 2,
+    exportedAt: '2026-11-12',
+    items: [
+      {
+        ...item,
+        updatedAt: 6000,
+        schedule: { ...schedule, lastReview: 2000, reps: 1 },
+      },
+    ],
+  };
+  await dialog.locator('input[type="file"]').setInputFiles({
+    name: 'old.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(backup)),
+  });
+  await expect(dialog.getByText(/1 条错题/)).toBeVisible();
+  await dialog.getByRole('button', { name: /导\s*入/ }).click();
+  await expect(dialog.getByText(/覆盖已有复习计划/)).toBeVisible();
+  expect(
+    await page.evaluate(() => localStorage.getItem('math-workbench:mistakes')),
+  ).toBe(raw);
+});
+
+test('读取新文件期间禁止提交之前已选中的备份', async ({ page }) => {
+  await page.addInitScript(() => {
+    const original = FileReader.prototype.readAsText;
+    FileReader.prototype.readAsText = function (file, encoding) {
+      window.setTimeout(
+        () => original.call(this, file, encoding),
+        file instanceof File && file.name === 'slow.json' ? 1000 : 10,
+      );
+    };
+  });
+  await page.goto('/#/mistakes');
+  await page.getByRole('button', { name: /导入/ }).click();
+  const dialog = page.getByRole('dialog');
+  const buffer = Buffer.from(
+    JSON.stringify({
+      format: 'math-analysis-workbench/mistakes',
+      version: 2,
+      exportedAt: '2026-11-12',
+      items: [],
+    }),
+  );
+  const select = dialog.locator('input[type="file"]');
+  const confirm = dialog.getByRole('button', { name: /导\s*入/ });
+  await select.setInputFiles({
+    name: 'fast.json',
+    mimeType: 'application/json',
+    buffer,
+  });
+  await expect(confirm).toBeEnabled();
+  await select.setInputFiles({
+    name: 'slow.json',
+    mimeType: 'application/json',
+    buffer,
+  });
+  await expect(confirm).toBeDisabled();
+  await expect(confirm).toBeEnabled({ timeout: 5000 });
+});
+
+test('超大备份在读取前被拒绝且不改变本地错题', async ({ page }) => {
+  await page.goto('/#/mistakes');
+  await page.getByRole('button', { name: /导入/ }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.locator('input[type="file"]').evaluate((input) => {
+    const transfer = new DataTransfer();
+    transfer.items.add(
+      new File([new Uint8Array(12 * 1024 * 1024 + 1)], 'huge.json', {
+        type: 'application/json',
+      }),
+    );
+    const element = input as HTMLInputElement;
+    element.files = transfer.files;
+    element.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await expect(dialog.getByText(/超过 12 MiB/)).toBeVisible();
+  await expect(dialog.getByRole('button', { name: /导\s*入/ })).toBeDisabled();
+  expect(
+    await page.evaluate(() => localStorage.getItem('math-workbench:mistakes')),
+  ).toBeNull();
+});

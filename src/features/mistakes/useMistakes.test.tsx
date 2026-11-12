@@ -371,3 +371,124 @@ describe('不支持 Web Locks 时的只读模式 (#23)', () => {
     expect(a.result.current.canWrite).toBe(true);
   });
 });
+
+describe('导入数据完整性', () => {
+  it('拒绝较新更新时间的备份回滚已经存在的 FSRS 计划', async () => {
+    const { nextReview, Rating } = await import('./schedule');
+    const first = nextReview(undefined, Rating.Good, 1000);
+    const second = nextReview(first, Rating.Good, 2000);
+    const item = {
+      id: 'same',
+      ...draft('当前'),
+      createdAt: 100,
+      updatedAt: 2000,
+      reviewedAt: 2000,
+      schedule: second,
+    };
+    expect(mistakeStorage.write({ items: [item] }).ok).toBe(true);
+    const raw = localStorage.getItem(MISTAKE_STORAGE_KEY);
+    const controller = renderHook(() => useMistakes());
+    await act(async () => {
+      expect(
+        await controller.result.current.importMistakes(
+          [{ ...item, title: '旧备份修改', updatedAt: 3000, schedule: first }],
+          'merge',
+        ),
+      ).toBe(false);
+    });
+    expect(localStorage.getItem(MISTAKE_STORAGE_KEY)).toBe(raw);
+    expect(controller.result.current.saveError).toContain('复习计划');
+  });
+  it('同一 ID 与更新时间但内容不同，不静默覆盖', async () => {
+    const item = {
+      id: 'same',
+      ...draft('当前版本'),
+      createdAt: 100,
+      updatedAt: 2000,
+      reviewedAt: null,
+    };
+    expect(mistakeStorage.write({ items: [item] }).ok).toBe(true);
+    const raw = localStorage.getItem(MISTAKE_STORAGE_KEY);
+    const controller = renderHook(() => useMistakes());
+    await act(async () => {
+      expect(
+        await controller.result.current.importMistakes(
+          [{ ...item, title: '冲突版本' }],
+          'merge',
+        ),
+      ).toBe(false);
+    });
+    expect(localStorage.getItem(MISTAKE_STORAGE_KEY)).toBe(raw);
+    expect(controller.result.current.saveError).toContain('冲突');
+    await act(async () => {
+      expect(
+        await controller.result.current.importMistakes([item], 'merge'),
+      ).toBe(true);
+    });
+  });
+  it('存储中出现重复 ID 时只读保护并保留原始数据', async () => {
+    const item = {
+      id: 'same',
+      ...draft('记录'),
+      createdAt: 100,
+      updatedAt: 2000,
+      reviewedAt: null,
+    };
+    const raw = JSON.stringify({
+      schemaVersion: 2,
+      data: { items: [item, { ...item, title: '冲突记录' }] },
+    });
+    localStorage.setItem(MISTAKE_STORAGE_KEY, raw);
+    const controller = renderHook(() => useMistakes());
+    expect(controller.result.current.loadError).toBeTruthy();
+    await act(async () => {
+      expect(await controller.result.current.add(draft('不得覆盖'))).toBe(
+        false,
+      );
+    });
+    expect(localStorage.getItem(MISTAKE_STORAGE_KEY)).toBe(raw);
+  });
+});
+
+it('合并时接受相同计划的后续编辑，忽略较旧备份并拒绝不同计划', async () => {
+  const { nextReview, Rating } = await import('./schedule');
+  const schedule = nextReview(undefined, Rating.Good, 1000);
+  const item = {
+    id: 'same',
+    ...draft('当前'),
+    createdAt: 100,
+    updatedAt: 2000,
+    reviewedAt: 1000,
+    schedule,
+  };
+  expect(mistakeStorage.write({ items: [item] }).ok).toBe(true);
+  const controller = renderHook(() => useMistakes());
+  await act(async () => {
+    expect(
+      await controller.result.current.importMistakes(
+        [{ ...item, title: '更新文本', updatedAt: 3000 }],
+        'merge',
+      ),
+    ).toBe(true);
+  });
+  expect(storedItems()[0].title).toBe('更新文本');
+  await act(async () => {
+    expect(
+      await controller.result.current.importMistakes(
+        [{ ...item, schedule: undefined, title: '较旧', updatedAt: 1500 }],
+        'merge',
+      ),
+    ).toBe(true);
+  });
+  expect(storedItems()[0].title).toBe('更新文本');
+  const advanced = nextReview(schedule, Rating.Good, 4000);
+  await act(async () => {
+    expect(
+      await controller.result.current.importMistakes(
+        [{ ...item, updatedAt: 4000, schedule: advanced }],
+        'merge',
+      ),
+    ).toBe(false);
+  });
+  expect(storedItems()[0].schedule).toEqual(schedule);
+});

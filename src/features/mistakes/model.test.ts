@@ -76,3 +76,11 @@ describe('错题数据结构', () => {
     expect(formatMistakeTime(1000).length).toBeGreaterThan(0);
   });
 });
+
+it('拒绝超出 JavaScript 日期范围的时间戳', () => {
+  const item = createMistake(draft, 1000);
+  for (const field of ['createdAt', 'updatedAt', 'reviewedAt'] as const)
+    expect(
+      mistakeSchema.safeParse({ ...item, [field]: 8640000000000001 }).success,
+    ).toBe(false);
+});
