@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@ant-design/icons": "6.3.4",
+    "@fix-webm-duration/fix": "1.0.1",
     "@khanacademy/perseus-score": "9.0.14",
     "@tweenjs/tween.js": "25.0.0",
     "antd": "6.6.7",

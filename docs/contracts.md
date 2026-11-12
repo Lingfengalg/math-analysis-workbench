@@ -48,7 +48,13 @@
 
 - 知识导航 `topic=limit` 下的固定教学场景分别为 x² 在 1 附近和 x/|x| 在 0 附近；由 JSXGraph 绘制、Tween.js 插值，不解析用户表达式。滑块范围为 0–100%，左右点到目标的距离从 1 缩小至 0.01，始终不等于零。
 - 播放为单次动画，支持暂停、继续、手动调整和重置；离开页面、页面转入后台或启用减少动态效果时停止。动画不自动触发，不记录到本地存储。
-- JSXGraph 原生 SVG 渲染器导出当前静态画面，不导出动画视频。观察值与图像不是数学证明；例题内容仍需课程团队审核。
+- JSXGraph 原生 SVG 渲染器导出当前静态画面。支持 VP8 WebM 录制的浏览器可将固定场景在本地另行录制为视频；该流程不上传数据，切至后台或离开页面会取消录制并释放资源。浏览器不支持时显示提示，仍可导出 SVG。观察值与图像不是数学证明；例题内容仍需课程团队审核。
+
+### 极限动画视频导出方案
+
+- 使用浏览器原生 [MediaRecorder 和 canvas.captureStream](https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder)，通过 [isTypeSupported](https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder/isTypeSupported_static) 检测 VP8 WebM；无法编码时保留 SVG 静态导出，不承诺所有浏览器或设备均支持视频。已在 Chromium 自动测试，其他浏览器和移动设备仍需实测。
+- 离屏画面采用 640 × 400、捕获上限 15 帧/秒、约 5.5 秒动画加结尾停留，目标码率 1.5 Mbps；接收的编码数据超过 8 MiB 时停止。编码和逐帧 SVG 栅格化仍可能占用主线程和内存，较慢设备可能跳帧；不上传画面。页面进入后台、离开或用户取消时终止并释放媒体轨道及画布。减少动态效果设置不自动播放页面，但用户主动请求时仍可生成视频。
+- [fix-webm-duration](https://github.com/yusitnikov/fix-webm-duration)（MIT）用于补写时长元数据。曾评估 [gif.js](https://github.com/jnordberg/gif.js)（MIT）：提供浏览器 GIF 和 worker 编码，但 GIF 不是请求的可播放视频格式且需要另行维护 worker 资源，因此本阶段不引入；也未引入大型 FFmpeg/WASM。
 
 ## 可选数学输入
 

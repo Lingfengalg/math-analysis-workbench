@@ -84,9 +84,188 @@ test('减少动态效果时支持手动观察，窄屏不溢出', async ({ page 
   await page.goto('/#/knowledge?topic=limit');
   const lab = page.getByRole('region', { name: '向同一个点靠近' });
   await expect(lab.getByRole('button', { name: '播放动画' })).toBeDisabled();
+  await lab.getByRole('button', { name: '导出 WebM 视频' }).click();
+  await expect(
+    lab.getByRole('progressbar', { name: '视频导出进度' }),
+  ).toBeVisible();
+  await lab.getByRole('button', { name: '取消导出' }).click();
+  await expect(lab.getByRole('status')).toContainText('已取消');
   await lab.getByRole('slider', { name: '逼近进度' }).fill('70');
   await expect(lab.getByRole('slider', { name: '逼近进度' })).toHaveValue('70');
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(390);
+});
+
+test('导出的视频可解码、可定位且首尾画面不同', async ({ page }) => {
+  test.setTimeout(45000);
+  await page.goto('/#/knowledge?topic=limit');
+  const lab = page.getByRole('region', { name: '向同一个点靠近' });
+  await expect(
+    lab.getByRole('button', { name: '导出 WebM 视频' }),
+  ).toBeEnabled();
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    lab.getByRole('button', { name: '导出 WebM 视频' }).click(),
+  ]);
+  expect(download.suggestedFilename()).toBe('limit-square-animation.webm');
+  const stream = await download.createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+  const bytes = Array.from(Buffer.concat(chunks));
+  expect(bytes.length).toBeGreaterThan(10000);
+  const result = await page.evaluate(async (data) => {
+    const url = URL.createObjectURL(
+      new Blob([new Uint8Array(data)], { type: 'video/webm' }),
+    );
+    const video = document.createElement('video');
+    video.muted = true;
+    video.src = url;
+    const event = (name: string) =>
+      new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(
+          () => reject(new Error(`Timed out: ${name}`)),
+          10000,
+        );
+        video.addEventListener(
+          name,
+          () => {
+            clearTimeout(timer);
+            resolve();
+          },
+          { once: true },
+        );
+        video.addEventListener(
+          'error',
+          () => {
+            clearTimeout(timer);
+            reject(new Error('Video decode failed'));
+          },
+          { once: true },
+        );
+      });
+    try {
+      await event('loadedmetadata');
+      const duration = video.duration;
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('No canvas');
+      const frame = async (time: number) => {
+        const seeked = event('seeked');
+        video.currentTime = time;
+        await seeked;
+        context.drawImage(video, 0, 0);
+        return context.getImageData(0, 0, canvas.width, canvas.height).data;
+      };
+      const first = await frame(0.1);
+      const last = await frame(duration - 0.3);
+      let different = 0;
+      for (let i = 0; i < first.length; i += 4) {
+        if (
+          Math.abs(first[i] - last[i]) +
+            Math.abs(first[i + 1] - last[i + 1]) +
+            Math.abs(first[i + 2] - last[i + 2]) >
+          60
+        )
+          different++;
+      }
+      return {
+        duration,
+        width: canvas.width,
+        height: canvas.height,
+        different,
+      };
+    } finally {
+      video.removeAttribute('src');
+      video.load();
+      URL.revokeObjectURL(url);
+    }
+  }, bytes);
+  expect(result.duration).toBeGreaterThan(5.4);
+  expect(result.duration).toBeLessThan(10);
+  expect(result.width).toBe(640);
+  expect(result.height).toBe(400);
+  expect(result.different).toBeGreaterThan(100);
+  await expect(page.locator('[data-limit-video-host]')).toHaveCount(0);
+});
+
+test('取消视频导出时释放离屏图形并恢复控件', async ({ page }) => {
+  await page.goto('/#/knowledge?topic=limit');
+  const lab = page.getByRole('region', { name: '向同一个点靠近' });
+  await lab.getByRole('button', { name: '导出 WebM 视频' }).click();
+  await expect(
+    lab.getByRole('progressbar', { name: '视频导出进度' }),
+  ).toBeVisible();
+  await lab.getByRole('button', { name: '取消导出' }).click();
+  await expect(
+    lab.getByRole('button', { name: '导出 WebM 视频' }),
+  ).toBeEnabled();
+  await expect(page.locator('[data-limit-video-host]')).toHaveCount(0);
+});
+
+test('浏览器不支持录制时给出清晰提示', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, 'MediaRecorder', { value: undefined });
+  });
+  await page.goto('/#/knowledge?topic=limit');
+  const lab = page.getByRole('region', { name: '向同一个点靠近' });
+  await lab.getByRole('button', { name: '导出 WebM 视频' }).click();
+  await expect(lab.getByRole('alert')).toContainText('不支持 WebM 视频导出');
+  await expect(
+    lab.getByRole('button', { name: '导出 WebM 视频' }),
+  ).toBeEnabled();
+});
+
+test('跳跃函数视频可在严格 CSP 下导出', async ({ page }) => {
+  test.setTimeout(45000);
+  await page.route('**/', async (route) => {
+    if (route.request().resourceType() !== 'document') return route.continue();
+    const response = await route.fetch();
+    await route.fulfill({
+      response,
+      headers: {
+        ...response.headers(),
+        'content-security-policy':
+          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; worker-src 'self' blob:",
+      },
+    });
+  });
+  const response = await page.goto('/#/knowledge?topic=limit');
+  expect(response?.headers()['content-security-policy']).toContain(
+    "script-src 'self'",
+  );
+  const lab = page.getByRole('region', { name: '向同一个点靠近' });
+  await lab.getByRole('button', { name: 'x / |x|：左右不同' }).click();
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    lab.getByRole('button', { name: '导出 WebM 视频' }).click(),
+  ]);
+  expect(download.suggestedFilename()).toBe('limit-jump-animation.webm');
+  const stream = await download.createReadStream();
+  let size = 0;
+  for await (const chunk of stream) size += chunk.length;
+  expect(size).toBeGreaterThan(10000);
+});
+
+test('导出中切换到后台会取消并释放资源', async ({ page }) => {
+  await page.goto('/#/knowledge?topic=limit');
+  const lab = page.getByRole('region', { name: '向同一个点靠近' });
+  await lab.getByRole('button', { name: '导出 WebM 视频' }).click();
+  await expect(
+    lab.getByRole('progressbar', { name: '视频导出进度' }),
+  ).toBeVisible();
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', {
+      value: true,
+      configurable: true,
+    });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await expect(lab.getByRole('status')).toContainText('已取消');
+  await expect(
+    lab.getByRole('button', { name: '导出 WebM 视频' }),
+  ).toBeEnabled();
+  await expect(page.locator('[data-limit-video-host]')).toHaveCount(0);
 });
