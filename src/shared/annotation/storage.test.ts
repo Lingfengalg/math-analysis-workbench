@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   clearAllAnnotations,
   clearAnnotation,
+  listAnnotationPages,
   loadAnnotation,
+  markCleared,
+  readClearedAt,
   saveAnnotation,
 } from './storage';
 import type { AnnotationItem } from './model';
@@ -93,5 +96,32 @@ describe('clearAllAnnotations', () => {
     expect(
       window.localStorage.getItem('math-workbench:preferences'),
     ).not.toBeNull();
+  });
+});
+
+describe('清空标记（#45）', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('写入后可读回，未清空时为 0', () => {
+    expect(readClearedAt('/knowledge')).toBe(0);
+    expect(markCleared('/knowledge', 1234)).toBeNull();
+    expect(readClearedAt('/knowledge')).toBe(1234);
+  });
+
+  it('清空文档不会清除标记，便于识别清空发生在草稿之后', () => {
+    saveAnnotation({ pageId: '/knowledge', items: [] });
+    markCleared('/knowledge', 999);
+    expect(clearAnnotation('/knowledge')).toBeNull();
+    expect(readClearedAt('/knowledge')).toBe(999);
+  });
+
+  it('列出仍有批注文档的页面', () => {
+    saveAnnotation({ pageId: '/knowledge', items: [] });
+    saveAnnotation({ pageId: '/plotting', items: [] });
+    expect(listAnnotationPages().sort()).toEqual(['/knowledge', '/plotting']);
+    clearAnnotation('/plotting');
+    expect(listAnnotationPages()).toEqual(['/knowledge']);
   });
 });

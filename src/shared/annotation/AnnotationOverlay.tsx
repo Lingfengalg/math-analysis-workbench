@@ -29,13 +29,16 @@ import {
 import {
   clearAllAnnotations,
   clearAnnotation,
+  listAnnotationPages,
   loadAnnotation,
+  markCleared,
+  readClearedAt,
   saveAnnotation,
 } from './storage';
 import {
-  applyChanges,
   diffItems,
   isEmptyChanges,
+  reconcileChanges,
   type AnnotationChanges,
 } from './sync';
 import styles from './AnnotationOverlay.module.css';
@@ -99,8 +102,17 @@ export function AnnotationOverlay({ pageId, children }: Props) {
   /** 每页独立保存基线与草稿，切页或等待锁期间不能互相覆盖。 */
   const syncedRef = useRef(new Map<string, AnnotationItem[]>());
   const pendingRef = useRef(
-    new Map<string, { changes: AnnotationChanges; items: AnnotationItem[] }>(),
+    new Map<
+      string,
+      {
+        changes: AnnotationChanges;
+        items: AnnotationItem[];
+        baseClearedAt: number;
+      }
+    >(),
   );
+  /** 每页草稿的「清空基准」：加载或上次写入时的清空时间戳。 */
+  const baseClearedRef = useRef(new Map<string, number>());
   const [canWrite] = useState(() => supportsAnnotationLock());
 
   const cancelPending = useCallback((all = false) => {
@@ -122,19 +134,25 @@ export function AnnotationOverlay({ pageId, children }: Props) {
       }
 
       try {
-        const outcome = await withAnnotationLock(targetPage, () => {
+        const outcome = await withAnnotationLock(() => {
           // 取得锁后重新读取草稿，而不是使用排队时的旧快照。
           // 读取、写入和移除草稿均为同步操作，不会与本标签页的新输入交错。
           const pending = pendingRef.current.get(targetPage);
           if (!pending) return { skipped: true } as const;
           const latest = loadAnnotation(targetPage);
           if (latest.error) return { error: latest.error } as const;
-          const merged = applyChanges(latest.doc.items, pending.changes);
+          const clearedAt = readClearedAt(targetPage);
+          const { items: merged, dropped } = reconcileChanges(
+            latest.doc.items,
+            pending.changes,
+            { clearedAt, baseClearedAt: pending.baseClearedAt },
+          );
           const error = saveAnnotation({ pageId: targetPage, items: merged });
           if (error) return { error } as const;
           pendingRef.current.delete(targetPage);
           syncedRef.current.set(targetPage, merged);
-          return { items: merged, changes: pending.changes } as const;
+          baseClearedRef.current.set(targetPage, clearedAt);
+          return { items: merged, changes: pending.changes, dropped } as const;
         });
 
         if ('skipped' in outcome) return;
@@ -146,6 +164,9 @@ export function AnnotationOverlay({ pageId, children }: Props) {
           return;
         }
         setSaveFailed((failed) => pendingRef.current.size > 0 && failed);
+        if (outcome.dropped > 0) {
+          setNotice('检测到其他标签页清空了批注，已丢弃清空之前的未保存内容。');
+        }
         // 老页面的保存完成不能修改当前页面，也不能覆盖保存完成后产生的新草稿。
         const layer = layerRef.current;
         if (
@@ -182,7 +203,12 @@ export function AnnotationOverlay({ pageId, children }: Props) {
         setSaveFailed(true);
         continue;
       }
-      const merged = applyChanges(latest.doc.items, pending.changes);
+      const clearedAt = readClearedAt(targetPage);
+      const { items: merged } = reconcileChanges(
+        latest.doc.items,
+        pending.changes,
+        { clearedAt, baseClearedAt: pending.baseClearedAt },
+      );
       const error = saveAnnotation({ pageId: targetPage, items: merged });
       if (error) {
         setSaveFailed(true);
@@ -190,6 +216,7 @@ export function AnnotationOverlay({ pageId, children }: Props) {
       }
       pendingRef.current.delete(targetPage);
       syncedRef.current.set(targetPage, merged);
+      baseClearedRef.current.set(targetPage, clearedAt);
     }
   }, []);
 
@@ -200,6 +227,8 @@ export function AnnotationOverlay({ pageId, children }: Props) {
       pendingRef.current.set(targetPage, {
         changes: diffItems(syncedRef.current.get(targetPage) ?? [], items),
         items,
+        baseClearedAt:
+          baseClearedRef.current.get(targetPage) ?? readClearedAt(targetPage),
       });
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(() => {
@@ -253,6 +282,7 @@ export function AnnotationOverlay({ pageId, children }: Props) {
     if (!layer) return;
 
     const { doc, error } = loadAnnotation(pageId);
+    baseClearedRef.current.set(pageId, readClearedAt(pageId));
     const pending = pendingRef.current.get(pageId);
     if (!pending) syncedRef.current.set(pageId, doc.items);
     layer.setItems(pending?.items ?? doc.items);
@@ -310,34 +340,57 @@ export function AnnotationOverlay({ pageId, children }: Props) {
     persist(next);
   }, [persist]);
 
-  const clearPage = useCallback(() => {
+  const clearPage = useCallback(async () => {
     cancelPending();
     const layer = layerRef.current;
     if (!layer) return;
     // 数据损坏被暂停保存时，「清空本页」是用户显式的重置操作，允许覆盖
     if (!blockedRef.current && layer.isEmpty()) return;
+    const targetPage = pageIdRef.current;
+    const now = Date.now();
+    // 清空与写入共用一把全局锁：先落清空标记，再删文档，排队中的旧草稿不会复活内容
+    const outcome = await withAnnotationLock(
+      () =>
+        ({
+          error: markCleared(targetPage, now) ?? clearAnnotation(targetPage),
+        }) as const,
+    );
+    if (outcome.error) {
+      setNotice(outcome.error);
+      return;
+    }
+    baseClearedRef.current.set(targetPage, now);
     layer.setItems([]);
-    syncedRef.current.set(pageIdRef.current, []);
+    syncedRef.current.set(targetPage, []);
     setItems([]);
     historyRef.current.record([]);
     setCanUndo(historyRef.current.canUndo());
     setCanRedo(historyRef.current.canRedo());
-    const error = clearAnnotation(pageIdRef.current);
-    if (error) {
-      setNotice(error);
-      return;
-    }
     blockedRef.current = false;
     setNotice(null);
   }, [cancelPending]);
 
-  const clearAll = useCallback(() => {
+  const clearAll = useCallback(async () => {
     cancelPending(true);
-    const error = clearAllAnnotations();
-    if (error) {
-      setNotice(error);
+    const now = Date.now();
+    const outcome = await withAnnotationLock(
+      () =>
+        ({
+          error: (() => {
+            for (const page of listAnnotationPages()) {
+              const markError = markCleared(page, now);
+              if (markError) return markError;
+            }
+            return clearAllAnnotations();
+          })(),
+        }) as const,
+    );
+    if (outcome.error) {
+      setNotice(outcome.error);
       return;
     }
+    baseClearedRef.current.clear();
+    baseClearedRef.current.set(pageIdRef.current, now);
     const layer = layerRef.current;
     layer?.setItems([]);
     syncedRef.current.clear();
@@ -459,7 +512,7 @@ export function AnnotationOverlay({ pageId, children }: Props) {
                   danger
                   icon={<ClearOutlined />}
                   aria-label="清空本页批注"
-                  onClick={clearPage}
+                  onClick={() => void clearPage()}
                 />
               </Tooltip>
             </div>
@@ -469,7 +522,7 @@ export function AnnotationOverlay({ pageId, children }: Props) {
               okText="全部清空"
               cancelText="取消"
               okButtonProps={{ danger: true }}
-              onConfirm={clearAll}
+              onConfirm={() => void clearAll()}
             >
               <Button block danger icon={<DeleteOutlined />}>
                 清空全部

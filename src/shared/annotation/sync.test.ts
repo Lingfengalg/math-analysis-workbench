@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { AnnotationItem } from './model';
-import { applyChanges, diffItems, isEmptyChanges } from './sync';
+import {
+  applyChanges,
+  diffItems,
+  isEmptyChanges,
+  reconcileChanges,
+} from './sync';
 
 const stroke = (id: string, x = 0.1): AnnotationItem => ({
   kind: 'stroke',
@@ -81,5 +86,40 @@ describe('applyChanges', () => {
     });
     expect(merged).toHaveLength(1);
     expect((merged[0] as { text: string }).text).toBe('新');
+  });
+});
+
+describe('reconcileChanges 与清空标记（#45）', () => {
+  const changes = {
+    added: [stroke('new')],
+    removed: ['old'],
+    updated: [] as AnnotationItem[],
+  };
+
+  it('清空发生在草稿基准之后时丢弃新增，只保留删除', () => {
+    const result = reconcileChanges([stroke('old')], changes, {
+      clearedAt: 2000,
+      baseClearedAt: 1000,
+    });
+    expect(result.dropped).toBe(1);
+    expect(result.items.map((item) => item.id)).toEqual([]);
+  });
+
+  it('清空不晚于基准时按原增量合并', () => {
+    const result = reconcileChanges([stroke('old')], changes, {
+      clearedAt: 1000,
+      baseClearedAt: 1000,
+    });
+    expect(result.dropped).toBe(0);
+    expect(result.items.map((item) => item.id)).toEqual(['new']);
+  });
+
+  it('从未清空时（0/0）正常合并', () => {
+    const result = reconcileChanges([], changes, {
+      clearedAt: 0,
+      baseClearedAt: 0,
+    });
+    expect(result.dropped).toBe(0);
+    expect(result.items.map((item) => item.id)).toEqual(['new']);
   });
 });

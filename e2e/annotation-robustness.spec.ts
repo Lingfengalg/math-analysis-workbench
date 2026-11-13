@@ -187,7 +187,10 @@ test('两个标签页在同一页画批注不会互相覆盖 (#32)', async ({
   await second.close();
 });
 
-test('已清空的页面继续写入不会复活旧批注 (#32)', async ({ page, context }) => {
+test('已清空的页面不会被旧标签页写回，并提示草稿已丢弃 (#32 #45)', async ({
+  page,
+  context,
+}) => {
   await page.goto('/#/knowledge');
   const second = await context.newPage();
   await second.goto('/#/knowledge');
@@ -204,10 +207,14 @@ test('已清空的页面继续写入不会复活旧批注 (#32)', async ({ page,
   await page.waitForTimeout(500);
   expect(await storedCount(page)).toBe(0);
 
-  // 第二个标签页仍停留在旧视图，画一笔后只能新增这一笔
+  // #45 起：旧标签页在清空后的写入会被识别为过期草稿并丢弃，同时给出提示
   await draw(second);
-  await page.waitForTimeout(600);
-  expect(await storedCount(page)).toBe(1);
+  await expect
+    .poll(() => second.getByText(/检测到其他标签页清空了批注/).count(), {
+      timeout: 5000,
+    })
+    .toBe(1);
+  expect(await storedCount(page)).toBe(0);
   await second.close();
 });
 
@@ -301,4 +308,68 @@ test('清空时取消排队写入，不会重新出现已删除的批注', async
   await releaseAnnotationLock(page);
   await page.waitForTimeout(500);
   expect(await storedCount(page)).toBe(0);
+});
+
+test('清空本页与排队中的保存不会复活内容（#45）', async ({ page }) => {
+  await page.goto('/#/knowledge');
+  await enable(page);
+  await holdAnnotationLock(page, '/knowledge');
+  await draw(page);
+  await page.waitForTimeout(400);
+  // 清空与写入共用全局锁，这里排队在写入之后
+  await page.locator('button[aria-label="清空本页批注"]').click();
+  await page.waitForTimeout(300);
+  await releaseAnnotationLock(page);
+  await page.waitForTimeout(800);
+  expect(await storedCount(page)).toBe(0);
+
+  await page.reload();
+  await page.waitForTimeout(500);
+  expect(await storedCount(page)).toBe(0);
+});
+
+test('其他标签页清空后，旧草稿不会写回并给出提示（#45）', async ({ page }) => {
+  await page.goto('/#/knowledge');
+  await enable(page);
+  await draw(page);
+  // 模拟另一个标签页在本页草稿产生后完成清空
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'math-workbench:annotation-cleared:/knowledge',
+      String(Date.now() + 1000),
+    );
+  });
+  await page.waitForTimeout(800);
+  await expect(page.getByText(/检测到其他标签页清空了批注/)).toBeVisible();
+  expect(await storedCount(page)).toBe(0);
+});
+
+test('清空全部后，其它页面新画的批注保留（#45）', async ({ page }) => {
+  await page.goto('/#/knowledge');
+  await enable(page);
+  await draw(page);
+  await page.waitForTimeout(500);
+  expect(await storedCount(page)).toBe(1);
+
+  await page.getByRole('button', { name: /清空全部/ }).click();
+  await page.getByRole('button', { name: '全部清空' }).click();
+  await page.waitForTimeout(600);
+  expect(await storedCount(page)).toBe(0);
+
+  await page.goto('/#/plotting');
+  await page.waitForTimeout(1200);
+  await enable(page);
+  await draw(page);
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const raw = localStorage.getItem(
+            'math-workbench:annotation:/plotting',
+          );
+          return raw ? JSON.parse(raw).data.items.length : 0;
+        }),
+      { timeout: 5000 },
+    )
+    .toBe(1);
 });
