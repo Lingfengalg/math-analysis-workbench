@@ -112,3 +112,28 @@ describe('错因归类字段（#68）', () => {
     expect(item.cause).toBe('calculation');
   });
 });
+
+describe('关联知识卡片字段（#70）', () => {
+  it('旧数据缺少关联字段时仍可解析', () => {
+    const legacy = { ...createMistake(draft, 1000) };
+    delete (legacy as { knowledgeIds?: string[] }).knowledgeIds;
+    expect(mistakeSchema.safeParse(legacy).success).toBe(true);
+  });
+
+  it('接受 1–5 个卡片 id，拒绝超过 5 个或空字符串', () => {
+    const base = createMistake(draft, 1000);
+    expect(
+      mistakeSchema.safeParse({ ...base, knowledgeIds: ['limit-square'] })
+        .success,
+    ).toBe(true);
+    expect(
+      mistakeSchema.safeParse({
+        ...base,
+        knowledgeIds: ['a', 'b', 'c', 'd', 'e', 'f'],
+      }).success,
+    ).toBe(false);
+    expect(
+      mistakeSchema.safeParse({ ...base, knowledgeIds: [''] }).success,
+    ).toBe(false);
+  });
+});

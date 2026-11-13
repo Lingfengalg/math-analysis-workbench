@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Form, Input, Modal, Select } from 'antd';
+import { knowledgeCards } from '@/content/knowledge';
 import {
   MISTAKE_CAUSES,
   MISTAKE_LIMITS,
@@ -15,6 +16,7 @@ const EMPTY_DRAFT: MistakeDraft = {
   title: '',
   topic: 'limit',
   cause: undefined,
+  knowledgeIds: undefined,
   problem: '',
   mistakeReason: '',
   correction: '',
@@ -49,6 +51,7 @@ export function MistakeFormModal({
         title: initial.title,
         topic: initial.topic,
         cause: initial.cause,
+        knowledgeIds: initial.knowledgeIds,
         problem: initial.problem,
         mistakeReason: initial.mistakeReason,
         correction: initial.correction,
@@ -138,6 +141,22 @@ export function MistakeFormModal({
           ]}
         >
           <Input.TextArea rows={3} placeholder="原题、条件或自己的复述" />
+        </Form.Item>
+        <Form.Item
+          name="knowledgeIds"
+          label="关联知识卡片（可选）"
+          extra="手动选择相关知识卡片，最多 5 张；不会自动推断。"
+        >
+          <Select
+            mode="multiple"
+            allowClear
+            placeholder="例如：可导与连续：逆命题不成立"
+            options={knowledgeCards.map((card) => ({
+              value: card.id,
+              label: card.title,
+            }))}
+            maxCount={5}
+          />
         </Form.Item>
         <Form.Item
           name="mistakeReason"

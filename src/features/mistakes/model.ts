@@ -58,6 +58,11 @@ export const mistakeSchema = z.object({
   topic: z.enum(MISTAKE_TOPICS),
   /** 错因归类；旧数据没有该字段时保持 undefined（未分类）。 */
   cause: z.enum(MISTAKE_CAUSES).optional(),
+  /** 手动关联的知识卡片 id（最多 5 个）；旧数据缺省表示未关联。 */
+  knowledgeIds: z
+    .array(z.string().trim().min(1).max(64))
+    .max(5, '最多关联 5 张知识卡片')
+    .optional(),
   problem: z
     .string()
     .trim()
@@ -93,6 +98,7 @@ export const mistakeDraftSchema = mistakeSchema.pick({
   title: true,
   topic: true,
   cause: true,
+  knowledgeIds: true,
   problem: true,
   mistakeReason: true,
   correction: true,

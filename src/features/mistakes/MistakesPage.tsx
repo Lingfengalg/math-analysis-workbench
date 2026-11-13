@@ -23,7 +23,11 @@ import {
 } from '@ant-design/icons';
 import { PageHeader } from '@/shared/ui/PageHeader';
 import { downloadBlob } from '@/shared/ui/plot-export';
-import { createKnowledgeTopicLink } from '@/shared/navigation/knowledge-link';
+import {
+  createKnowledgeCardLink,
+  createKnowledgeTopicLink,
+} from '@/shared/navigation/knowledge-link';
+import { knowledgeCards } from '@/content/knowledge';
 import { MistakeFormModal } from './MistakeFormModal';
 import { MistakeImportModal } from './MistakeImportModal';
 import { MistakeRedoModal } from './MistakeRedoModal';
@@ -559,6 +563,27 @@ export default function MistakesPage() {
             )}
             {!item.problem && !item.mistakeReason && !item.correction && (
               <p className={styles.text}>这条记录还没有补充详细内容。</p>
+            )}
+            {(item.knowledgeIds?.length ?? 0) > 0 && (
+              <div className={styles.knowledgeCards}>
+                <h4 className={styles.heading}>关联知识卡片</h4>
+                <Space size={8} wrap>
+                  {item.knowledgeIds?.map((id) => {
+                    const card = knowledgeCards.find(
+                      (entry) => entry.id === id,
+                    );
+                    return (
+                      <Link
+                        key={id}
+                        className={styles.knowledgeLink}
+                        to={createKnowledgeCardLink(id)}
+                      >
+                        {card ? card.title : `未知卡片（${id}）`}
+                      </Link>
+                    );
+                  })}
+                </Space>
+              </div>
             )}
             {createKnowledgeTopicLink(item.topic) && (
               <Link

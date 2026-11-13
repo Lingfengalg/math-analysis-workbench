@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Input, Segmented } from 'antd';
 import { ArrowRightOutlined, SearchOutlined } from '@ant-design/icons';
@@ -20,10 +20,27 @@ export default function KnowledgePage() {
   const topic = Object.keys(labels).includes(requestedTopic)
     ? requestedTopic
     : 'all';
+  const focus = params.get('focus');
+  const focusCard = knowledgeCards.find((card) => card.id === focus) ?? null;
+  const listRef = useRef<HTMLDivElement>(null);
+
+  // 从错题跳转过来时，把关联卡片滚到视野内（筛选条件不影响定位目标）
+  useEffect(() => {
+    if (!focusCard) return;
+    const node = listRef.current?.querySelector(
+      `[data-card-id="${focusCard.id}"]`,
+    );
+    // jsdom 没有 scrollIntoView，只在真实浏览器里滚动
+    if (node && typeof node.scrollIntoView === 'function') {
+      node.scrollIntoView({ block: 'center' });
+    }
+  }, [focusCard]);
+
   const cards = knowledgeCards.filter(
     (card) =>
-      (topic === 'all' || card.topic === topic) &&
-      matchesKnowledgeQuery(card, search),
+      card.id === focusCard?.id ||
+      ((topic === 'all' || card.topic === topic) &&
+        matchesKnowledgeQuery(card, search)),
   );
   return (
     <div className={styles.page}>
@@ -67,15 +84,25 @@ export default function KnowledgePage() {
           allowClear
         />
       </div>
+      {focusCard && (
+        <p className={styles.focusNotice} role="status">
+          已定位到错题关联的卡片：{focusCard.title}
+        </p>
+      )}
       <div className={styles.resultsHeader}>
         <h2>知识卡片</h2>
         <span aria-live="polite">{cards.length} 个知识点</span>
       </div>
-      <div className={styles.knowledgeList}>
+      <div className={styles.knowledgeList} ref={listRef}>
         {cards.map((card) => (
           <article
             key={card.id}
-            className={styles.card}
+            className={
+              card.id === focusCard?.id
+                ? `${styles.card} ${styles.cardFocused}`
+                : styles.card
+            }
+            data-card-id={card.id}
             data-annotation-anchor={`knowledge:${card.id}`}
           >
             <div className={styles.cardMain}>

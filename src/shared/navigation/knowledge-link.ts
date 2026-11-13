@@ -13,3 +13,9 @@ export function createMistakeTopicLink(topic: KnowledgeCard['topic']): string {
   const search = new URLSearchParams({ topic });
   return `/mistakes?${search.toString()}`;
 }
+
+/** 只携带知识卡片 id（如 `limit-square`），用于从错题定位到具体卡片。 */
+export function createKnowledgeCardLink(cardId: string): string {
+  const search = new URLSearchParams({ focus: cardId });
+  return `/knowledge?${search.toString()}`;
+}
