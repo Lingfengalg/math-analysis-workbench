@@ -641,3 +641,35 @@ test('错题可以标注错因、按错因筛选并查看分布（#68）', async
   await expect(stats).toContainText('概念不清 1');
   await expect(page.getByText('错因-概念题')).toBeVisible();
 });
+
+test('错题可关联知识卡片并跳转定位（#70）', async ({ page }) => {
+  await page.goto('/#/mistakes');
+  await page.getByRole('button', { name: /记录错题/ }).click();
+  await page.getByLabel('题目', { exact: true }).fill('关联卡片：|x| 可导性');
+  await page.getByLabel('关联知识卡片（可选）').click();
+  await page
+    .locator('.ant-select-dropdown:visible .ant-select-item-option')
+    .filter({ hasText: '可导与连续：逆命题不成立' })
+    .click();
+  await page.getByRole('button', { name: /保\s*存/ }).click();
+  await expect(page.getByText('关联卡片：|x| 可导性')).toBeVisible();
+
+  // 卡片上出现关联链接
+  const link = page.getByRole('link', { name: '可导与连续：逆命题不成立' });
+  await expect(link).toBeVisible();
+  await expect(link).toHaveAttribute('href', /focus=derivative-absolute$/);
+
+  // 点击直达知识导航卡片
+  await link.click();
+  await expect(page).toHaveURL(/#\/knowledge\?focus=derivative-absolute$/);
+  await expect(page.getByText(/已定位到错题关联的卡片/)).toBeVisible();
+  const card = page.locator('[data-card-id="derivative-absolute"]');
+  await expect(card).toHaveClass(/cardFocused/);
+  await expect(card).toContainText('可导与连续：逆命题不成立');
+
+  // 刷新后关联仍在
+  await page.goto('/#/mistakes');
+  await expect(
+    page.getByRole('link', { name: '可导与连续：逆命题不成立' }),
+  ).toBeVisible();
+});

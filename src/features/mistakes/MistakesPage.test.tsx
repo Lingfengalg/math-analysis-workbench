@@ -419,3 +419,63 @@ describe('错因标签与统计（#68）', () => {
     expect(within(stats).getByText(/未分类\s*1/)).toBeInTheDocument();
   });
 });
+
+describe('关联知识卡片（#70）', () => {
+  it('表单可选择知识卡片并写入存储', async () => {
+    const user = userEvent.setup();
+    render(<MistakesPage />);
+    await user.click(screen.getByRole('button', { name: /记录错题/ }));
+    await user.type(screen.getByLabelText('题目'), '关联卡片测试');
+    await user.click(screen.getByLabelText('关联知识卡片（可选）'));
+    const option = await waitFor(() => {
+      const items = document.querySelectorAll(
+        '.ant-select-dropdown .ant-select-item-option',
+      );
+      const target = [...items].find((item) =>
+        item.textContent?.includes('可导与连续'),
+      );
+      expect(target).toBeTruthy();
+      return target as HTMLElement;
+    });
+    fireEvent.click(option);
+    await user.click(screen.getByRole('button', { name: /保\s*存/ }));
+
+    await waitFor(() => {
+      const raw = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+      expect(raw.data.items[0].knowledgeIds).toEqual(['derivative-absolute']);
+    });
+  });
+
+  it('卡片显示关联链接，指向知识导航的具体卡片', () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        schemaVersion: 2,
+        data: {
+          items: [
+            {
+              id: 'a',
+              title: '可导性错题',
+              topic: 'derivative',
+              problem: '',
+              mistakeReason: '',
+              correction: '',
+              createdAt: 1,
+              updatedAt: 1,
+              reviewedAt: null,
+              knowledgeIds: ['derivative-absolute'],
+            },
+          ],
+        },
+      }),
+    );
+    render(<MistakesPage />);
+    const link = screen.getByRole('link', {
+      name: /可导与连续：逆命题不成立/,
+    });
+    expect(link).toHaveAttribute(
+      'href',
+      '/knowledge?focus=derivative-absolute',
+    );
+  });
+});

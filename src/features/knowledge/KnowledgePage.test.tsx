@@ -171,3 +171,20 @@ describe('知识搜索覆盖其他字段', () => {
     );
   });
 });
+
+describe('按卡片 id 定位（#70）', () => {
+  it('focus 参数会提示并高亮对应卡片，其他卡片不受影响', () => {
+    render(
+      <MemoryRouter initialEntries={['/knowledge?focus=derivative-absolute']}>
+        <KnowledgePage />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText(/已定位到错题关联的卡片/)).toBeInTheDocument();
+    const card = screen
+      .getByText('可导与连续：逆命题不成立')
+      .closest('article');
+    expect(card).not.toBeNull();
+    expect(card?.getAttribute('data-card-id')).toBe('derivative-absolute');
+    expect(card?.className).toMatch(/cardFocused/);
+  });
+});

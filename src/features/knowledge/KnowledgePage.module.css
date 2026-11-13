@@ -261,3 +261,16 @@
     padding: 24px 20px;
   }
 }
+
+.focusNotice {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--color-accent-soft, #eef6f1);
+  color: var(--color-accent-strong, #1f5f43);
+}
+
+.cardFocused {
+  outline: 2px solid var(--color-accent, #2f7a56);
+  outline-offset: 2px;
+}
