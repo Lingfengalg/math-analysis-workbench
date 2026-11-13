@@ -57,3 +57,46 @@ export function clearAllAnnotations(): string | null {
     return '清除全部批注失败：浏览器存储不可用。';
   }
 }
+
+/** 清空标记：键名独立于文档键，清空后仍然保留，用来识别「清空发生在某次快照之后」。 */
+export const ANNOTATION_CLEARED_PREFIX = 'math-workbench:annotation-cleared:';
+
+function clearedKey(pageId: string): string {
+  return `${ANNOTATION_CLEARED_PREFIX}${pageId}`;
+}
+
+/** 读取某页最近一次清空时间；没有清空过返回 0。 */
+export function readClearedAt(pageId: string): number {
+  try {
+    const raw = window.localStorage.getItem(clearedKey(pageId));
+    const value = raw ? Number(raw) : 0;
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** 记录一次清空（单页或全部清空时对各页调用）。失败时返回错误文案。 */
+export function markCleared(pageId: string, at: number): string | null {
+  try {
+    window.localStorage.setItem(clearedKey(pageId), String(at));
+    return null;
+  } catch {
+    return '记录清空时间失败：浏览器存储不可用。';
+  }
+}
+
+/** 列出当前存在批注文档的页面 id，供「清空全部」逐个打清空标记。 */
+export function listAnnotationPages(): string[] {
+  try {
+    const pages: string[] = [];
+    for (let index = 0; index < window.localStorage.length; index += 1) {
+      const key = window.localStorage.key(index);
+      if (!key || !key.startsWith(ANNOTATION_KEY_PREFIX)) continue;
+      pages.push(key.slice(ANNOTATION_KEY_PREFIX.length));
+    }
+    return pages;
+  } catch {
+    return [];
+  }
+}

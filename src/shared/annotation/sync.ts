@@ -70,3 +70,33 @@ export function isEmptyChanges(changes: AnnotationChanges): boolean {
     changes.updated.length === 0
   );
 }
+
+/**
+ * 合并一次待保存的增量，并处理「其他标签页已经清空」的情况。
+ *
+ * 清空会在文档之外留下时间戳（见 storage 的 readClearedAt）。若清空时间晚于
+ * 本次草稿的基准时间，说明草稿是在清空之前画的：此时只保留删除操作，丢弃
+ * 新增与修改，避免已清除的内容被旧标签页写回。
+ */
+export type ReconcileResult = {
+  items: AnnotationItem[];
+  /** 因检测到其他标签页清空而丢弃的新增/修改条数 */
+  dropped: number;
+};
+
+export function reconcileChanges(
+  latest: readonly AnnotationItem[],
+  changes: AnnotationChanges,
+  cleared: { clearedAt: number; baseClearedAt: number },
+): ReconcileResult {
+  const clearedAfterBase = cleared.clearedAt > cleared.baseClearedAt;
+  const effective: AnnotationChanges = clearedAfterBase
+    ? { added: [], updated: [], removed: changes.removed }
+    : changes;
+  return {
+    items: applyChanges(latest, effective),
+    dropped: clearedAfterBase
+      ? changes.added.length + changes.updated.length
+      : 0,
+  };
+}
