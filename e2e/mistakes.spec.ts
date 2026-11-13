@@ -599,3 +599,45 @@ test('超大备份在读取前被拒绝且不改变本地错题', async ({ page 
     await page.evaluate(() => localStorage.getItem('math-workbench:mistakes')),
   ).toBeNull();
 });
+
+test('错题可以标注错因、按错因筛选并查看分布（#68）', async ({ page }) => {
+  await page.goto('/#/mistakes');
+
+  const pickOption = async (text: string) => {
+    await page
+      .locator('.ant-select-dropdown:visible .ant-select-item-option')
+      .filter({ hasText: text })
+      .first()
+      .click();
+  };
+
+  const addWithCause = async (title: string, cause: string) => {
+    await page.getByRole('button', { name: /记录错题/ }).click();
+    await page.getByLabel('题目', { exact: true }).fill(title);
+    await page.getByLabel('错因归类（可选）').click();
+    await pickOption(cause);
+    await page.getByRole('button', { name: /保\s*存/ }).click();
+    await expect(page.getByText(title)).toBeVisible();
+  };
+
+  await addWithCause('错因-概念题', '概念不清');
+  await addWithCause('错因-计算题', '计算错误');
+
+  // 分布统计按全部记录计算
+  const stats = page.getByRole('group', { name: '错因分布' });
+  await expect(stats).toBeVisible();
+  await expect(stats).toContainText('概念不清 1');
+  await expect(stats).toContainText('计算错误 1');
+  await expect(stats.getByText(/未分类/)).toHaveCount(0);
+
+  // 按错因筛选
+  await page.getByLabel('按错因筛选').click();
+  await pickOption('概念不清');
+  await expect(page.getByText('错因-概念题')).toBeVisible();
+  await expect(page.getByText('错因-计算题')).toBeHidden();
+
+  // 刷新后错因仍在
+  await page.reload();
+  await expect(stats).toContainText('概念不清 1');
+  await expect(page.getByText('错因-概念题')).toBeVisible();
+});

@@ -338,3 +338,84 @@ describe('错题本复习标记', () => {
     expect(screen.getByText(/没有匹配的错题/)).toBeInTheDocument();
   });
 });
+
+describe('错因标签与统计（#68）', () => {
+  const seed = (items: Array<Record<string, unknown>>) => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ schemaVersion: 2, data: { items } }),
+    );
+  };
+  const base = (id: string, title: string, extra: Record<string, unknown>) => ({
+    id,
+    title,
+    topic: 'limit',
+    problem: '',
+    mistakeReason: '',
+    correction: '',
+    createdAt: 1,
+    updatedAt: 1,
+    reviewedAt: null,
+    ...extra,
+  });
+
+  it('表单可选错因并写入存储', async () => {
+    const user = userEvent.setup();
+    render(<MistakesPage />);
+    await user.click(screen.getByRole('button', { name: /记录错题/ }));
+    await user.type(screen.getByLabelText('题目'), '错因测试题');
+    await user.click(screen.getByLabelText('错因归类（可选）'));
+    await user.click(await screen.findByText('计算错误'));
+    await user.click(screen.getByRole('button', { name: /保\s*存/ }));
+
+    await waitFor(() => {
+      const raw = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+      expect(raw.data.items[0].cause).toBe('calculation');
+    });
+  });
+
+  it('按错因筛选只显示对应记录', async () => {
+    seed([
+      base('a', '概念题', { cause: 'concept' }),
+      base('b', '计算题', { cause: 'calculation' }),
+      base('c', '未分类题', {}),
+    ]);
+    render(<MistakesPage />);
+    expect(screen.getByText('概念题')).toBeInTheDocument();
+    expect(screen.getByText('计算题')).toBeInTheDocument();
+
+    const select = screen.getByLabelText('按错因筛选');
+    fireEvent.mouseDown(select);
+    const concept = await waitFor(() => {
+      const options = document.querySelectorAll(
+        '.ant-select-dropdown .ant-select-item-option',
+      );
+      const target = [...options].find((option) =>
+        option.textContent?.includes('概念不清'),
+      );
+      expect(target).toBeTruthy();
+      return target as HTMLElement;
+    });
+    fireEvent.click(concept);
+
+    await waitFor(() => {
+      expect(screen.getByText('概念题')).toBeInTheDocument();
+      expect(screen.queryByText('计算题')).not.toBeInTheDocument();
+      expect(screen.queryByText('未分类题')).not.toBeInTheDocument();
+    });
+  });
+
+  it('顶部统计给出各错因数量与未分类数量', () => {
+    seed([
+      base('a', '概念题', { cause: 'concept' }),
+      base('b', '计算题 A', { cause: 'calculation' }),
+      base('c', '计算题 B', { cause: 'calculation' }),
+      base('d', '未分类题', {}),
+    ]);
+    render(<MistakesPage />);
+    const stats = screen.getByRole('group', { name: '错因分布' });
+    expect(within(stats).getByText(/概念不清\s*1/)).toBeInTheDocument();
+    expect(within(stats).getByText(/计算错误\s*2/)).toBeInTheDocument();
+    expect(within(stats).getByText(/未分类\s*1/)).toBeInTheDocument();
+  });
+});

@@ -7,6 +7,7 @@ import {
   Input,
   Popconfirm,
   Segmented,
+  Select,
   Space,
   Tag,
 } from 'antd';
@@ -29,8 +30,11 @@ import { MistakeRedoModal } from './MistakeRedoModal';
 import { useMistakes } from './useMistakes';
 import { isReviewDue } from './schedule';
 import {
+  causeLabels,
   formatMistakeTime,
+  MISTAKE_CAUSES,
   MISTAKE_TOPICS,
+  type MistakeCause,
   mistakeSchema,
   mistakeStorage,
   topicLabels,
@@ -48,6 +52,7 @@ import styles from './MistakesPage.module.css';
 
 type TopicFilter = 'all' | MistakeTopic;
 type ReviewFilter = 'all' | 'reviewed' | 'due';
+type CauseFilter = 'all' | MistakeCause;
 const PracticeView = lazy(() =>
   import('./practice/PracticeView').then((module) => ({
     default: module.PracticeView,
@@ -79,6 +84,7 @@ export default function MistakesPage() {
     : 'all';
   const [draftTopic, setDraftTopic] = useState<MistakeTopic>('limit');
   const [review, setReview] = useState<ReviewFilter>('all');
+  const [causeFilter, setCauseFilter] = useState<CauseFilter>('all');
   const [onlyDue, setOnlyDue] = useState(false);
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
@@ -98,6 +104,7 @@ export default function MistakesPage() {
     const keyword = query.trim();
     return items.filter((item) => {
       const matchesTopic = topic === 'all' || item.topic === topic;
+      const matchesCause = causeFilter === 'all' || item.cause === causeFilter;
       const matchesReview =
         review === 'all' ||
         (review === 'reviewed'
@@ -105,17 +112,34 @@ export default function MistakesPage() {
           : item.reviewedAt === null);
       const matchesKeyword =
         keyword === '' ||
-        `${item.title} ${item.problem} ${item.mistakeReason} ${item.correction}`.includes(
-          keyword,
-        );
+        `${item.title} ${item.problem} ${item.mistakeReason} ${item.correction} ${
+          item.cause ? causeLabels[item.cause] : ''
+        }`.includes(keyword);
       return (
         matchesTopic &&
+        matchesCause &&
         matchesReview &&
         matchesKeyword &&
         (!onlyDue || isReviewDue(item.schedule, now))
       );
     });
-  }, [items, query, topic, review, onlyDue, now]);
+  }, [items, query, topic, causeFilter, review, onlyDue, now]);
+
+  /** 错因分布：按全部记录统计，不受主题/关键词筛选影响。 */
+  const causeStats = useMemo(() => {
+    const counts: Record<MistakeCause, number> = {
+      concept: 0,
+      calculation: 0,
+      reading: 0,
+      other: 0,
+    };
+    let uncategorized = 0;
+    for (const item of items) {
+      if (item.cause) counts[item.cause] += 1;
+      else uncategorized += 1;
+    }
+    return { counts, uncategorized };
+  }, [items]);
 
   const dueItems = items
     .filter((item) => isReviewDue(item.schedule, now))
@@ -392,6 +416,19 @@ export default function MistakesPage() {
                 { label: '已复习', value: 'reviewed' },
               ]}
             />
+            <Select
+              aria-label="按错因筛选"
+              value={causeFilter}
+              onChange={(value) => setCauseFilter(value as CauseFilter)}
+              className={styles.causeFilter}
+              options={[
+                { label: '全部错因', value: 'all' },
+                ...MISTAKE_CAUSES.map((cause) => ({
+                  value: cause,
+                  label: causeLabels[cause],
+                })),
+              ]}
+            />
           </div>
           <Input
             aria-label="搜索错题"
@@ -413,6 +450,19 @@ export default function MistakesPage() {
           共 {items.length} 条错题，当前显示 {visible.length} 条。
         </p>
       )}
+      {items.length > 0 && (
+        <div className={styles.causeStats} role="group" aria-label="错因分布">
+          <span className={styles.meta}>错因分布（按全部记录统计）：</span>
+          {MISTAKE_CAUSES.map((cause) => (
+            <Tag key={cause}>
+              {causeLabels[cause]} {causeStats.counts[cause]}
+            </Tag>
+          ))}
+          {causeStats.uncategorized > 0 && (
+            <Tag>未分类 {causeStats.uncategorized}</Tag>
+          )}
+        </div>
+      )}
       <div className={styles.grid}>
         {visible.map((item) => (
           <Card
@@ -421,6 +471,9 @@ export default function MistakesPage() {
             extra={
               <Space size={4}>
                 <Tag>{topicLabels[item.topic]}</Tag>
+                {item.cause && (
+                  <Tag color="orange">{causeLabels[item.cause]}</Tag>
+                )}
                 {item.reviewedAt !== null && <Tag color="green">已复习</Tag>}
               </Space>
             }

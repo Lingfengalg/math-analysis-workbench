@@ -84,3 +84,31 @@ it('拒绝超出 JavaScript 日期范围的时间戳', () => {
       mistakeSchema.safeParse({ ...item, [field]: 8640000000000001 }).success,
     ).toBe(false);
 });
+
+describe('错因归类字段（#68）', () => {
+  it('旧数据缺少错因字段时仍可解析', () => {
+    const legacy = { ...createMistake(draft, 1000) };
+    delete (legacy as { cause?: string }).cause;
+    const parsed = mistakeSchema.safeParse(legacy);
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.cause).toBeUndefined();
+  });
+
+  it('接受合法错因并拒绝未知取值', () => {
+    expect(
+      mistakeSchema.safeParse({
+        ...createMistake(draft, 1000),
+        cause: 'concept',
+      }).success,
+    ).toBe(true);
+    expect(
+      mistakeSchema.safeParse({ ...createMistake(draft, 1000), cause: 'guess' })
+        .success,
+    ).toBe(false);
+  });
+
+  it('新增时保留传入的错因', () => {
+    const item = createMistake({ ...draft, cause: 'calculation' }, 1000);
+    expect(item.cause).toBe('calculation');
+  });
+});
