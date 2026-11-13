@@ -125,3 +125,15 @@
 .knowledgeLink:hover {
   text-decoration: underline;
 }
+
+.causeFilter {
+  min-width: 140px;
+}
+
+.causeStats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}

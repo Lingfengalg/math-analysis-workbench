@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Form, Input, Modal, Select } from 'antd';
 import {
+  MISTAKE_CAUSES,
   MISTAKE_LIMITS,
   MISTAKE_TOPICS,
+  causeLabels,
   topicLabels,
   type Mistake,
   type MistakeDraft,
@@ -12,6 +14,7 @@ import {
 const EMPTY_DRAFT: MistakeDraft = {
   title: '',
   topic: 'limit',
+  cause: undefined,
   problem: '',
   mistakeReason: '',
   correction: '',
@@ -45,6 +48,7 @@ export function MistakeFormModal({
       form.setFieldsValue({
         title: initial.title,
         topic: initial.topic,
+        cause: initial.cause,
         problem: initial.problem,
         mistakeReason: initial.mistakeReason,
         correction: initial.correction,
@@ -110,6 +114,16 @@ export function MistakeFormModal({
             options={MISTAKE_TOPICS.map((topic) => ({
               value: topic,
               label: topicLabels[topic],
+            }))}
+          />
+        </Form.Item>
+        <Form.Item name="cause" label="错因归类（可选）">
+          <Select
+            allowClear
+            placeholder="例如：概念不清 / 计算错误"
+            options={MISTAKE_CAUSES.map((cause) => ({
+              value: cause,
+              label: causeLabels[cause],
             }))}
           />
         </Form.Item>

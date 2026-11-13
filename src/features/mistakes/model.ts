@@ -19,6 +19,23 @@ export const topicLabels: Record<MistakeTopic, string> = {
   other: '其他',
 };
 
+/** 错因归类：可选字段，旧数据缺省按「未分类」展示。 */
+export const MISTAKE_CAUSES = [
+  'concept',
+  'calculation',
+  'reading',
+  'other',
+] as const;
+
+export type MistakeCause = (typeof MISTAKE_CAUSES)[number];
+
+export const causeLabels: Record<MistakeCause, string> = {
+  concept: '概念不清',
+  calculation: '计算错误',
+  reading: '审题失误',
+  other: '其他',
+};
+
 export const MISTAKE_LIMITS = {
   title: 120,
   problem: 2000,
@@ -39,6 +56,8 @@ export const mistakeSchema = z.object({
     .min(1, '请输入题目')
     .max(MISTAKE_LIMITS.title, `题目最多 ${MISTAKE_LIMITS.title} 个字符`),
   topic: z.enum(MISTAKE_TOPICS),
+  /** 错因归类；旧数据没有该字段时保持 undefined（未分类）。 */
+  cause: z.enum(MISTAKE_CAUSES).optional(),
   problem: z
     .string()
     .trim()
@@ -73,6 +92,7 @@ export type Mistake = z.infer<typeof mistakeSchema>;
 export const mistakeDraftSchema = mistakeSchema.pick({
   title: true,
   topic: true,
+  cause: true,
   problem: true,
   mistakeReason: true,
   correction: true,

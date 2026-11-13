@@ -150,3 +150,21 @@ describe('导入策略', () => {
     expect(current).toHaveLength(1);
   });
 });
+
+describe('错因字段的导入导出兼容（#68）', () => {
+  it('导出版本号保持 2，并保留错因', () => {
+    const item = { ...createMistake(draft, 1000), cause: 'reading' as const };
+    const file = createExportFile([item]);
+    expect(file.version).toBe(2);
+    expect(JSON.parse(serializeExport(file)).items[0].cause).toBe('reading');
+  });
+
+  it('缺少错因的旧文件仍可导入', () => {
+    const item = createMistake(draft, 1000);
+    const legacy = JSON.parse(serializeExport(createExportFile([item])));
+    delete legacy.items[0].cause;
+    const result = parseExport(JSON.stringify(legacy));
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.items[0].cause).toBeUndefined();
+  });
+});
