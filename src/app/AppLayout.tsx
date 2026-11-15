@@ -30,10 +30,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <NavLink to="/" className="brand" aria-label="析知 首页">
           <span className="brand-symbol">∂</span>
           <span>
-            析知<small>ANALYSIS WORKSPACE</small>
+            析知<small>数学分析学习工作台</small>
           </span>
         </NavLink>
-        <div className="nav-label">学习空间 / WORKSPACE</div>
+        <div className="nav-label">学习工具</div>
         <nav aria-label="主导航">
           {modules.map((module) => {
             const Icon = module.Icon;
@@ -42,6 +42,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 key={module.id}
                 to={module.path}
                 end
+                aria-label={
+                  module.status === 'planned'
+                    ? `${module.title}（待开发）`
+                    : undefined
+                }
                 className={({ isActive }) =>
                   `nav-item${isActive ? ' active' : ''}`
                 }
@@ -55,8 +60,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </nav>
         <div className="sidebar-bottom">
           <div className="project-note">
-            <span className="status-dot" /> C4 课程协作项目
-            <p>先理解条件，再得出结论。</p>
+            <span className="status-dot" /> 课程示例
+            <p>知识、绘图与错题复习</p>
           </div>
           <a
             href="https://github.com/Lingfengalg/math-analysis-workbench"
@@ -73,7 +78,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             数学分析 <span className="separator">/</span>{' '}
             {active?.title ?? '页面未找到'}
           </span>
-          <span className="version-label">v0.1 · 基础框架</span>
+          <span className="version-label">课程示例</span>
         </header>
         <main
           id="main-content"
@@ -86,7 +91,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </AnnotationOverlay>
         </main>
         <footer className="footer">
-          <span>析知 · 把知识连接起来</span>
+          <span>析知 · 数学分析</span>
           <span>数值观察 ≠ 数学证明</span>
         </footer>
       </div>

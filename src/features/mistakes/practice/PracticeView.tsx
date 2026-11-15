@@ -256,8 +256,8 @@ export function PracticeView({
   return (
     <>
       <PageHeader
-        eyebrow="PRACTICE"
-        title="做一题，再把思路走通。"
+        eyebrow="巩固练习"
+        title="示例练习"
         description="先独立作答，再看提示和解析。示例题的作答记录保存在当前浏览器。"
         extra={
           <Button onClick={onBack} disabled={saving}>

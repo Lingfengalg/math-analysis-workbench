@@ -15,7 +15,7 @@ async function addMistake(page: Page, title: string) {
 test('导航与路由在三个引擎下都可用', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1 })).toContainText(
-    '让每一次探索',
+    '数学分析学习工作台',
   );
 
   await page

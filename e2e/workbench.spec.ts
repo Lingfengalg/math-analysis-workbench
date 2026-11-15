@@ -4,7 +4,7 @@ import { expect, test } from '@playwright/test';
 test('知识导航可以将示例传给绘图模块', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1 })).toContainText(
-    '让每一次探索',
+    '数学分析学习工作台',
   );
   await page.getByRole('link', { name: /探索这个问题/ }).click();
   await expect(page.getByText('可导与连续：逆命题不成立')).toBeVisible();
@@ -20,7 +20,7 @@ test('知识导航可以将示例传给绘图模块', async ({ page }) => {
 
 test('首页示例可直接带入绝对值函数绘图', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('region', { name: '探索路径' })).toBeVisible();
+  await expect(page.getByRole('region', { name: '学习工具' })).toBeVisible();
   await expect(page.getByText('连续，但不可导', { exact: true })).toBeVisible();
   await expect(page.getByText('−1', { exact: true })).toBeVisible();
   await expect(page.getByText('+1', { exact: true })).toBeVisible();
@@ -380,6 +380,15 @@ test('移动端导航与内容不横向溢出', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  const nav = page.getByRole('navigation', { name: '主导航' });
+  for (const name of [
+    /工作台概览/,
+    /知识导航/,
+    /绘图计算/,
+    /错题本/,
+    /AI 助教（待开发）/,
+  ])
+    await expect(nav.getByRole('link', { name })).toBeVisible();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,

@@ -1244,8 +1244,8 @@ export default function PlottingPage() {
   return (
     <>
       <PageHeader
-        eyebrow="FUNCTION LAB"
-        title="让抽象的变化，变得看得见。"
+        eyebrow="函数与数列"
+        title="绘图计算"
         description="输入一个函数，调整观察范围，探索图像背后的数学条件。"
       />
       <PlottingEntry key={search.toString()} search={search} />

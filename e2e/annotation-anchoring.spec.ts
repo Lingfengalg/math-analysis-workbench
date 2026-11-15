@@ -23,7 +23,7 @@ test('批注锚定到知识卡片：卡片被筛掉时隐藏并提示，恢复�
   page,
 }) => {
   await page.goto('/#/knowledge');
-  await expect(page.getByText('把条件看清，把概念串起来。')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '知识导航' })).toBeVisible();
 
   const firstCard = page
     .locator('[data-annotation-anchor^="knowledge:"]')

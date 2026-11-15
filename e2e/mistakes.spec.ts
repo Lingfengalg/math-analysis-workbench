@@ -3,9 +3,7 @@ import { expect, test } from '@playwright/test';
 
 test('错题本可以新增、刷新后保留、编辑并删除', async ({ page }) => {
   await page.goto('/#/mistakes');
-  await expect(page.getByRole('heading', { level: 1 })).toContainText(
-    '把一次错误',
-  );
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('错题本');
   await expect(page.getByText(/还没有错题记录/)).toBeVisible();
 
   await page.getByRole('button', { name: /记录错题/ }).click();

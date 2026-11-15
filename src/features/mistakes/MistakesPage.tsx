@@ -263,8 +263,8 @@ export default function MistakesPage() {
   return (
     <>
       <PageHeader
-        eyebrow="MISTAKE NOTEBOOK"
-        title="把一次错误，变成下一次理解的起点。"
+        eyebrow="记录与复习"
+        title="错题本"
         description="记录题目、错误原因与订正，标注知识主题与复习状态。数据只保存在当前浏览器，可导出备份。"
         extra={
           <div className={styles.toolbar}>
