@@ -63,7 +63,7 @@ input {
 .brand small {
   display: block;
   font-size: 8px;
-  letter-spacing: 1.2px;
+  letter-spacing: 0;
   font-weight: 500;
   margin-top: 5px;
 }
@@ -516,16 +516,19 @@ code {
     display: none;
   }
   .sidebar nav {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 3px;
-    overflow-x: auto;
     margin-top: 14px;
   }
   .nav-item {
-    gap: 7px;
+    gap: 5px;
     font-size: 12px;
-    flex-shrink: 0;
-    padding: 10px;
+    min-width: 0;
+    padding: 9px 7px;
+  }
+  .nav-item > .anticon {
+    font-size: 14px;
   }
   .nav-item small,
   .nav-label,

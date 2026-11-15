@@ -64,7 +64,7 @@ export const modules = defineModuleRegistry([
     id: 'plotting',
     path: '/plotting',
     title: '绘图计算',
-    caption: '让抽象函数可视化',
+    caption: '绘制函数与数列',
     status: 'available',
     Icon: LineChartOutlined,
     Page: lazy(() => import('@/features/plotting')),

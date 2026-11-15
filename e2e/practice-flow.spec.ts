@@ -28,7 +28,7 @@ test('导数练习错答进入错题本，重做答对后保留记录并更新�
   await expect(page.getByText('已作答 2 次，最近一次正确。')).toBeVisible();
   await page.getByRole('button', { name: '返回错题本' }).click();
   await expect(page).toHaveURL(/#\/mistakes\?topic=derivative$/);
-  await expect(page.getByRole('heading', { name: /把一次错误/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /错题本/ })).toBeVisible();
   await expect(page.getByText('求二次函数在一点的导数')).toBeVisible();
   await expect(page.getByText('已复习', { exact: true }).first()).toBeVisible();
 });
@@ -53,7 +53,7 @@ test('练习记录可导出、清除和重新导入，不删除错题', async ({
   await expect(page.getByText('已作答 1 次，最近一次未答对。')).toBeVisible();
   await page.getByRole('button', { name: '返回错题本' }).click();
   await expect(page).toHaveURL(/#\/mistakes\?topic=derivative$/);
-  await expect(page.getByRole('heading', { name: /把一次错误/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /错题本/ })).toBeVisible();
   await expect(page.getByText('求二次函数在一点的导数')).toBeVisible();
 });
 

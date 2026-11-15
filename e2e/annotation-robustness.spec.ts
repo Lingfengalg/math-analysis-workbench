@@ -273,9 +273,7 @@ test('等待旧页写入时切页，旧页结果不会覆盖新页草稿', async
     location.hash = '#/plotting';
   });
   await expect(page).toHaveURL(/plotting/);
-  await expect(
-    page.getByRole('heading', { name: /让抽象的变化/ }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: /绘图计算/ })).toBeVisible();
   await draw(page);
   await releaseAnnotationLock(page);
   await expect.poll(() => storedCount(page)).toBe(1);

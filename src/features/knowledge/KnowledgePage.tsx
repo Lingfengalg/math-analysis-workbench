@@ -46,7 +46,7 @@ export default function KnowledgePage() {
     <div className={styles.page}>
       <header className={styles.heading}>
         <p>数学分析 / 知识导航</p>
-        <h1>把条件看清，把概念串起来。</h1>
+        <h1>知识导航</h1>
         <span>先读定义，再检查条件，用例子和反例检验自己的理解。</span>
       </header>
       <div className={styles.notice} role="note">
