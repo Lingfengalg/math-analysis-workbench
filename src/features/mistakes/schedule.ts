@@ -90,3 +90,16 @@ export function isReviewDue(
 ): boolean {
   return !schedule || schedule.due <= now;
 }
+
+/** 基于同一时刻计算四个评分的预览，不修改或保存现有卡片。 */
+export function previewReviews(
+  schedule: ReviewSchedule | undefined,
+  now: number,
+): Record<ReviewRating, ReviewSchedule> {
+  return {
+    [Rating.Again]: nextReview(schedule, Rating.Again, now),
+    [Rating.Hard]: nextReview(schedule, Rating.Hard, now),
+    [Rating.Good]: nextReview(schedule, Rating.Good, now),
+    [Rating.Easy]: nextReview(schedule, Rating.Easy, now),
+  };
+}

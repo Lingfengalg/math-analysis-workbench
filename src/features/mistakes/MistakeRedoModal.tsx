@@ -1,7 +1,12 @@
 import { useRef, useState } from 'react';
 import { Alert, Button, Input, Modal, Space } from 'antd';
-import type { Mistake } from './model';
-import { Rating, type ReviewRating } from './schedule';
+import { formatMistakeTime, type Mistake } from './model';
+import {
+  previewReviews,
+  Rating,
+  type ReviewRating,
+  type ReviewSchedule,
+} from './schedule';
 import styles from './MistakeRedoModal.module.css';
 
 type Props = {
@@ -23,6 +28,11 @@ export function MistakeRedoModal({
   const [answer, setAnswer] = useState('');
   const [revealed, setRevealed] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [preview, setPreview] = useState<Record<
+    ReviewRating,
+    ReviewSchedule
+  > | null>(null);
+  const [previewError, setPreviewError] = useState(false);
   const pending = useRef(false);
   const finish = async (rating: ReviewRating) => {
     if (pending.current) return;
@@ -74,7 +84,16 @@ export function MistakeRedoModal({
               <Button
                 type="primary"
                 disabled={!answer.trim()}
-                onClick={() => setRevealed(true)}
+                onClick={() => {
+                  try {
+                    setPreview(previewReviews(item.schedule, Date.now()));
+                    setPreviewError(false);
+                  } catch {
+                    setPreview(null);
+                    setPreviewError(true);
+                  }
+                  setRevealed(true);
+                }}
               >
                 查看订正
               </Button>
@@ -94,6 +113,39 @@ export function MistakeRedoModal({
               <p>
                 仍需复习：未能独立完成；有困难：勉强想起；已掌握：正确完成；很轻松：迅速且有把握。
               </p>
+              {preview ? (
+                <div
+                  className={styles.preview}
+                  role="group"
+                  aria-label="预计下次复习时间"
+                >
+                  <strong>预计下次复习时间</strong>
+                  <p>
+                    按查看订正时的本机时间估算；实际保存时重新计算，不会提前写入。
+                  </p>
+                  <ul>
+                    <li>
+                      仍需复习：{formatMistakeTime(preview[Rating.Again].due)}
+                    </li>
+                    <li>
+                      有困难：{formatMistakeTime(preview[Rating.Hard].due)}
+                    </li>
+                    <li>
+                      已掌握：{formatMistakeTime(preview[Rating.Good].due)}
+                    </li>
+                    <li>
+                      很轻松：{formatMistakeTime(preview[Rating.Easy].due)}
+                    </li>
+                  </ul>
+                </div>
+              ) : previewError ? (
+                <Alert
+                  type="warning"
+                  showIcon
+                  title="无法预览复习时间"
+                  description="请检查系统时间与复习记录；预览未更改任何数据。"
+                />
+              ) : null}
               {error && (
                 <Alert
                   type="error"

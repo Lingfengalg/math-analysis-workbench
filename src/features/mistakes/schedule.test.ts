@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { createEmptyCard, fsrs, Rating } from 'ts-fsrs';
-import { isReviewDue, nextReview, reviewScheduleSchema } from './schedule';
+import {
+  isReviewDue,
+  nextReview,
+  previewReviews,
+  reviewScheduleSchema,
+} from './schedule';
 
 describe('FSRS 错题复习计划', () => {
   const now = Date.UTC(2026, 10, 11, 12);
@@ -31,4 +36,21 @@ describe('FSRS 错题复习计划', () => {
     ).toBe(false);
     expect(() => nextReview(schedule, Rating.Good, now - 1)).toThrow();
   });
+});
+
+it('四个评分预览使用同一时间和现有算法，不修改计划', () => {
+  const now = Date.UTC(2026, 10, 11, 12);
+  const original = nextReview(undefined, Rating.Good, now);
+  const saved = structuredClone(original);
+  const time = original.due;
+  const choices = previewReviews(original, time);
+  for (const rating of [
+    Rating.Again,
+    Rating.Hard,
+    Rating.Good,
+    Rating.Easy,
+  ] as const)
+    expect(choices[rating]).toEqual(nextReview(original, rating, time));
+  expect(original).toEqual(saved);
+  expect(() => previewReviews(original, now - 1)).toThrow();
 });
