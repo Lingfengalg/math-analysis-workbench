@@ -1,0 +1,247 @@
+.chartRoot {
+  position: relative;
+  width: 100%;
+  height: 390px;
+  border-radius: 16px;
+  overflow: hidden;
+  user-select: none;
+  background: linear-gradient(
+    165deg,
+    rgba(255, 255, 255, 0.56) 0%,
+    rgba(241, 248, 245, 0.36) 100%
+  );
+  backdrop-filter: blur(18px) saturate(175%);
+  -webkit-backdrop-filter: blur(18px) saturate(175%);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.94),
+    0 10px 28px -14px rgba(14, 44, 37, 0.1);
+}
+
+.svgCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.dragging {
+  cursor: grabbing;
+}
+
+.legendBar {
+  position: absolute;
+  top: 10px;
+  left: 14px;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  max-width: calc(100% - 196px);
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.62);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.88);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 4px 12px -4px rgba(14, 44, 37, 0.08);
+  pointer-events: none;
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 550;
+  color: #17382f;
+  white-space: nowrap;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.swatchSolid {
+  width: 16px;
+  height: 2.5px;
+  border-radius: 999px;
+  background: #0f6a58;
+  flex-shrink: 0;
+}
+
+.swatchDashed {
+  width: 16px;
+  height: 0;
+  border-top: 2px dashed #c26a27;
+  flex-shrink: 0;
+}
+
+.swatchSecant {
+  width: 16px;
+  height: 0;
+  border-top: 2px dotted #3b5bdb;
+  flex-shrink: 0;
+}
+
+.hudToolbar {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.64);
+  backdrop-filter: blur(16px) saturate(185%);
+  -webkit-backdrop-filter: blur(16px) saturate(185%);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.96),
+    0 6px 16px -6px rgba(14, 44, 37, 0.12);
+}
+
+.hudBtn {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #1c4439;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 5px 9px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease,
+    border-color 0.16s ease,
+    transform 0.14s ease;
+}
+
+.hudBtn:hover {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(255, 255, 255, 0.95);
+  color: var(--accent);
+}
+
+.hudBtn:active {
+  transform: scale(0.97);
+}
+
+.hudBtnActive {
+  background: rgba(15, 106, 88, 0.12);
+  border-color: rgba(15, 106, 88, 0.24);
+  color: var(--accent-strong);
+}
+
+.hudDivider {
+  width: 1px;
+  height: 13px;
+  background: rgba(20, 58, 48, 0.14);
+}
+
+.tooltipBubble {
+  position: absolute;
+  z-index: 4;
+  min-width: 132px;
+  max-width: 240px;
+  padding: 8px 11px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(16px) saturate(190%);
+  -webkit-backdrop-filter: blur(16px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow:
+    0 12px 28px -8px rgba(12, 42, 35, 0.18),
+    inset 0 1px 0 #ffffff;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.tooltipHeader {
+  font-size: 11px;
+  font-weight: 650;
+  color: #3f5c53;
+  margin-bottom: 4px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid rgba(20, 58, 48, 0.08);
+}
+
+.tooltipRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: #132d26;
+}
+
+.tooltipLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #456158;
+  font-weight: 500;
+}
+
+.dotPrimary {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #0f6a58;
+}
+
+.dotCompare {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #c26a27;
+}
+
+.tooltipVal {
+  font-weight: 650;
+  color: #0f2922;
+}
+
+.hintBadge {
+  position: absolute;
+  right: 14px;
+  bottom: 8px;
+  z-index: 2;
+  font-size: 10.5px;
+  color: rgba(31, 68, 57, 0.68);
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  pointer-events: none;
+}
+
+@media (max-width: 640px) {
+  .chartRoot {
+    height: 300px;
+  }
+
+  .legendBar {
+    max-width: calc(100% - 148px);
+    padding: 4px 9px;
+  }
+
+  .legendItem {
+    max-width: 140px;
+    font-size: 10.5px;
+  }
+
+  .hintBadge {
+    display: none;
+  }
+}
