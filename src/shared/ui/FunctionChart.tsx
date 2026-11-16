@@ -162,14 +162,15 @@ export function FunctionChart({
       },
       legend: {
         show: showLegend,
-        top: 2,
+        top: 0,
+        right: 24,
         itemWidth: 18,
         itemHeight: 8,
       },
       grid: {
         left: 58,
         right: 28,
-        top: showLegend ? 42 : 28,
+        top: showLegend ? 52 : 30,
         bottom: 65,
       },
       tooltip: { trigger: 'axis', renderMode: 'richText' },
