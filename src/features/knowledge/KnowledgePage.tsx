@@ -19,7 +19,10 @@ import {
   parseKnowledgeSearch,
 } from '@/shared/navigation/knowledge-link';
 import { createMistakeDraftLink } from '@/shared/navigation/mistake-link';
-import { createPlotLink } from '@/shared/navigation/plot-link';
+import {
+  createPlotLink,
+  createSurfacePlotLink,
+} from '@/shared/navigation/plot-link';
 import { Formula } from '@/shared/ui/Formula';
 import { PageHeader } from '@/shared/ui/PageHeader';
 import styles from './KnowledgePage.module.css';
@@ -44,6 +47,7 @@ function matchesCardSearch(card: KnowledgeCard, rawQuery: string): boolean {
       example.explanation,
       example.plot?.expression ?? '',
       example.plot?.compareExpression ?? '',
+      example.surfacePlot?.expression ?? '',
     ]),
   ]
     .join(' ')
@@ -97,11 +101,11 @@ export default function KnowledgePage() {
       />
       <div className={styles.metaRibbon}>
         <span className={styles.metaBadge}>
-          12 张核心知识卡片 · 5 大数分板块
+          14 张核心知识卡片 · 5 大数分板块
         </span>
         <span className={styles.metaHint}>
-          覆盖数列极限、函数极限、连续性、导数与微分、积分学 ·
-          图像与数值观察不能替代严格数学证明
+          覆盖数列极限、函数极限、连续性、导数与微分、积分学（含多元极限与二重积分）
+          · 图像与数值观察不能替代严格数学证明
         </span>
       </div>
 
@@ -166,12 +170,14 @@ export default function KnowledgePage() {
             .map((id) => cardById.get(id))
             .filter((item): item is KnowledgeCard => Boolean(item));
           const primaryPlot = card.examples[0]?.plot;
+          const primarySurfacePlot = card.examples[0]?.surfacePlot;
           const mistakeDraftUrl = createMistakeDraftLink({
             topic: card.topic,
             relatedKnowledgeId: card.id,
-            expression: primaryPlot?.expression,
-            xMin: primaryPlot?.xMin,
-            xMax: primaryPlot?.xMax,
+            expression:
+              primaryPlot?.expression ?? primarySurfacePlot?.expression,
+            xMin: primaryPlot?.xMin ?? primarySurfacePlot?.xMin,
+            xMax: primaryPlot?.xMax ?? primarySurfacePlot?.xMax,
           });
 
           return (
@@ -220,6 +226,11 @@ export default function KnowledgePage() {
                               : ''}
                           </code>
                         )}
+                        {example.surfacePlot && (
+                          <code className={styles.expressionCode}>
+                            z = f(x, y) = {example.surfacePlot.expression}
+                          </code>
+                        )}
                       </div>
                       <p className={styles.bodyText}>{example.explanation}</p>
                       {example.plot && (
@@ -228,6 +239,14 @@ export default function KnowledgePage() {
                           to={createPlotLink(example.plot)}
                         >
                           去绘图中观察 <ArrowRightOutlined />
+                        </Link>
+                      )}
+                      {example.surfacePlot && (
+                        <Link
+                          className={styles.plotAction}
+                          to={createSurfacePlotLink(example.surfacePlot)}
+                        >
+                          去三维绘图中仿真 <ArrowRightOutlined />
                         </Link>
                       )}
                     </div>

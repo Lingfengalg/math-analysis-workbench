@@ -1,3 +1,32 @@
+.modeBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  margin-bottom: 18px;
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.44);
+  backdrop-filter: blur(22px) saturate(185%);
+  -webkit-backdrop-filter: blur(22px) saturate(185%);
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  box-shadow: var(--glass-shadow), var(--glass-rim);
+}
+
+.modeSegmentedWrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.modeHint {
+  font-size: 11.5px;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .alertGap {
   margin-bottom: 16px;
   border-radius: 14px;
@@ -28,7 +57,7 @@
 
 .plotLayout {
   display: grid;
-  grid-template-columns: 364px minmax(0, 1fr);
+  grid-template-columns: 382px minmax(0, 1fr);
   gap: 20px;
   align-items: start;
 }
@@ -54,7 +83,38 @@
 }
 
 .compactItem {
+  margin-bottom: 10px;
+}
+
+.compactItemLast {
   margin-bottom: 0;
+}
+
+.precisionBlock {
+  margin-bottom: 14px;
+}
+
+.precisionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+.precisionLabel {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.precisionBadge {
+  font-size: 11px;
+  color: var(--accent);
+  background: rgba(15, 106, 88, 0.1);
+  border: 1px solid rgba(15, 106, 88, 0.18);
+  padding: 1px 8px;
+  border-radius: 999px;
 }
 
 .optionPanel {
@@ -95,6 +155,40 @@
   border-top: 1px solid var(--border-subtle);
 }
 
+.subSectionRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin: 10px 0 6px;
+}
+
+.subSectionTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1c3f35;
+}
+
+.syncBtn {
+  padding: 0 4px !important;
+  height: auto !important;
+  font-size: 11.5px !important;
+}
+
+.regionFormulaBox {
+  margin-top: 8px;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(15, 106, 88, 0.08);
+  border: 1px solid rgba(15, 106, 88, 0.16);
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: #124034;
+  word-break: break-word;
+}
+
 .quickStepBar {
   margin-top: 10px;
 }
@@ -121,6 +215,7 @@
   margin: 0 0 8px;
   font-size: 11px;
   color: var(--muted);
+  line-height: 1.55;
 }
 
 .smallNote {
@@ -220,6 +315,12 @@
   color: var(--muted);
 }
 
+.integralMetrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .secantMetrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -250,7 +351,7 @@
   font-weight: 650;
   color: var(--text);
   font-variant-numeric: tabular-nums;
-  word-break: break-all;
+  word-break: break-word;
 }
 
 .metricSub {
@@ -258,6 +359,19 @@
   font-size: 11px;
   color: var(--muted);
   margin-top: 2px;
+  line-height: 1.45;
+}
+
+.tangentEquationBar {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.88);
+  font-size: 12px;
+  color: #143d32;
+  line-height: 1.65;
+  word-break: break-word;
 }
 
 .secantAlert {
@@ -289,11 +403,20 @@
   white-space: nowrap;
 }
 
+@media (max-width: 1360px) {
+  .integralMetrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 1200px) {
   .plotLayout {
-    grid-template-columns: 316px minmax(0, 1fr);
+    grid-template-columns: 332px minmax(0, 1fr);
   }
   .secantMetrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .integralMetrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -305,10 +428,14 @@
 }
 
 @media (max-width: 640px) {
+  .modeHint {
+    display: none;
+  }
   .rangeFields {
     grid-template-columns: 1fr;
   }
-  .secantMetrics {
+  .secantMetrics,
+  .integralMetrics {
     grid-template-columns: 1fr;
   }
 }

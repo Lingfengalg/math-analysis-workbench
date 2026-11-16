@@ -479,6 +479,64 @@ export const knowledgeCards = z.array(knowledgeCardSchema).parse([
     ],
   },
   {
+    id: 'derivative-multivariable-limit',
+    topic: 'derivative',
+    title: '二元极限与偏导：沿直线趋近相等不代表二重极限存在',
+    definition:
+      '二元函数 f(x, y) 在点 (x₀, y₀) 存在二重极限 L，要求动点 (x, y) 在去心邻域内以任意方式、沿任意曲线路径趋近 (x₀, y₀) 时函数值均趋于同一常数 L。偏导数仅刻画平行于坐标轴的单一方向变化率，偏导数存在既不保证二元函数连续，更不保证可微。',
+    formula:
+      '\\lim_{(x,y)\\to(0,0)}\\frac{xy}{x^2+y^2}\\ \\text{does not exist}',
+    conditions: [
+      '二重极限存在判别：必须在空心邻域 0 < √((x - x₀)² + (y - y₀)²) < δ 内与路径无关；证明不存在只需找出两条趋近路径使极限不相等（或某条路径极限不存在），证明存在则需用夹逼准则或极坐标放缩 |f(x₀ + r cos θ, y₀ + r sin θ) - L| ≤ g(r) → 0（g(r) 与 θ 无关）。',
+      '多元概念强弱链：偏导数连续（C¹）⟹ 可微（存在切平面线性近似）⟹ 连续且各方向偏导数存在；上述箭头全部不可逆！',
+    ],
+    examples: [
+      {
+        kind: 'counterexample',
+        explanation:
+          '方向脊线经典反例：f(x, y) = xy / (x² + y²) 沿过原点的任意直线 y = kx 趋近 (0, 0) 时恒等于 k / (1 + k²)，随斜率 k 变化而取不同常数（沿 y = x 为 1/2，沿 y = -x 为 -1/2，沿坐标轴为 0），故二重极限不存在！三维曲面在原点上方形成高度随方位角 θ 变化的扇形褶皱脊线。',
+        surfacePlot: {
+          expression: '(x * y) / (x^2 + y^2)',
+          xMin: -2,
+          xMax: 2,
+          yDomainMin: -2,
+          yDomainMax: 2,
+          gridSize: 64,
+          sourceKnowledgeId: 'derivative-multivariable-limit',
+        },
+      },
+      {
+        kind: 'example',
+        explanation:
+          '可微曲面与驻点切平面：双曲抛物面 z = x² - y² 的一阶偏导数 f_x = 2x、f_y = -2y 在全平面连续，处处可微；在驻点 (0, 0) 处 f_x = f_y = 0，切平面为水平面 z = 0，沿 x 轴方向向上弯曲而沿 y 轴方向向下弯曲，直观展现马鞍点（非极值驻点）几何形态。',
+        surfacePlot: {
+          expression: 'x^2 - y^2',
+          xMin: -2.5,
+          xMax: 2.5,
+          yDomainMin: -2.5,
+          yDomainMax: 2.5,
+          gridSize: 64,
+          probe: { x0: 0, y0: 0 },
+          sourceKnowledgeId: 'derivative-multivariable-limit',
+        },
+      },
+    ],
+    pitfalls: [
+      '即使沿所有过原点的直线 y = kx 趋近极限都相等，仍不能断定二重极限存在（例如 x²y / (x⁴ + y²) 沿任意直线趋于 0，但沿抛物线 y = x² 趋于 1/2）！',
+      '极坐标放缩证明二重极限时，上界函数必须彻底消去角度 θ 对趋近速度的影响，仅验证固定 θ 下 r → 0⁺ 极限相等不等同于二重极限存在。',
+    ],
+    references: [
+      '同济大学数学科学学院《高等数学》（第八版）下册 · 第九章第一节「多元函数的基本概念」与第二节「偏导数」、第三节「全微分」',
+      '工科数学分析课程讲义：二重极限路径反例与多元微积分强弱关系图谱',
+    ],
+    relatedIds: [
+      'limit-square',
+      'continuity-reciprocal',
+      'derivative-absolute',
+      'integral-double-riemann',
+    ],
+  },
+  {
     id: 'integral-newton-leibniz',
     topic: 'integral',
     title: '牛顿-莱布尼茨公式：严禁跨越奇点代端点',
@@ -573,6 +631,81 @@ export const knowledgeCards = z.array(knowledgeCardSchema).parse([
       'sequence-monotone-bounded',
       'limit-infinitesimal-equiv',
       'integral-newton-leibniz',
+    ],
+  },
+  {
+    id: 'integral-double-riemann',
+    topic: 'integral',
+    title: '二重积分与累次定限：曲顶柱体体积及极坐标雅可比因子',
+    definition:
+      '二重积分定义为有界闭区域 D 上黎曼柱体体积和在网格最大直径趋于 0 时的极限。计算时通过富比尼定理转化为直角坐标累次积分（穿线法定上下限），或在圆域、扇形域及含 x² + y² 被积式时利用极坐标变换降维求解。',
+    formula:
+      '\\iint_D f(x,y)\\,\\mathrm{d}x\\,\\mathrm{d}y = \\iint_{D_{r\\theta}} f(r\\cos\\theta,r\\sin\\theta)\\,r\\,\\mathrm{d}r\\,\\mathrm{d}\\theta',
+    conditions: [
+      '黎曼分割求和取极限：将有界闭域 D 任意划分为小区域 Δσ_i，任取样点 (ξ_i, η_i) 作乘积求和 ∑ f(ξ_i, η_i)Δσ_i；当最大直径 λ → 0 时极限与分割及取样方式无关，方称二重积分存在（闭域上连续函数必可积）。',
+      '直角坐标穿线定限法：X 型区域（平行于 y 轴穿线只进出边界各一次）写为 ∫_a^b dx ∫_{φ₁(x)}^{φ₂(x)} f(x, y) dy，外层积分限 [a, b] 必须是常数，绝不可含变量！',
+      '极坐标变换雅可比因子：令 x = r cos θ, y = r sin θ，面积微元 dx dy 变换为 r dr dθ，极径 r ≥ 0 的雅可比行列式因子 r 绝不可遗漏！',
+    ],
+    examples: [
+      {
+        kind: 'example',
+        explanation:
+          '曲顶柱体黎曼逼近：抛物面 f(x, y) = 2 - 0.25(x² + y²) 在矩形域 [-2, 2] × [-2, 2] 上恒非负，累次积分精确值为 64/3 ≈ 21.333333；在三维实验室中加密 N×N 分割柱体可直观看到离散黎曼和 S_N 向真值单调逼近。',
+        surfacePlot: {
+          expression: '2 - 0.25 * (x^2 + y^2)',
+          xMin: -2,
+          xMax: 2,
+          yDomainMin: -2,
+          yDomainMax: 2,
+          gridSize: 56,
+          integral: {
+            regionType: 'rectangle',
+            xStart: -2,
+            xEnd: 2,
+            yStart: -2,
+            yEnd: 2,
+            partitions: 14,
+            rule: 'midpoint',
+          },
+          sourceKnowledgeId: 'integral-double-riemann',
+        },
+      },
+      {
+        kind: 'example',
+        explanation:
+          '圆域极坐标变换优势：高斯钟形函数 exp(-(x² + y²)) 在直角坐标下原函数非初等函数，但在圆域 x² + y² ≤ 4 上改用极坐标并乘上雅可比因子 r 后，被积式化为 r·exp(-r²)，立即积出 π(1 - e⁻⁴) ≈ 3.084058！',
+        surfacePlot: {
+          expression: 'exp(-(x^2 + y^2))',
+          xMin: -2.5,
+          xMax: 2.5,
+          yDomainMin: -2.5,
+          yDomainMax: 2.5,
+          gridSize: 64,
+          integral: {
+            regionType: 'disk',
+            xStart: -2,
+            xEnd: 2,
+            yStart: -2,
+            yEnd: 2,
+            partitions: 18,
+            rule: 'midpoint',
+          },
+          sourceKnowledgeId: 'integral-double-riemann',
+        },
+      },
+    ],
+    pitfalls: [
+      '极坐标换元最常见失误是漏乘雅可比因子 r（把 dx dy 直接错写成 dr dθ）！牢记极坐标扇形微元面积 Δσ ≈ r Δr Δθ。',
+      '交换累次积分次序时，切勿机械对调两个积分号与上下限，必须先根据原积分限画出平面积分区域 D 的边界草图，再沿另一方向重新穿线定限。',
+    ],
+    references: [
+      '同济大学数学科学学院《高等数学》（第八版）下册 · 第十章第一节「二重积分的概念与性质」与第二节「二重积分的计算法」',
+      '工科数学分析课程讲义：重积分黎曼和构造、累次积分换序与极坐标雅可比行列式',
+    ],
+    relatedIds: [
+      'integral-newton-leibniz',
+      'integral-improper-p',
+      'derivative-multivariable-limit',
     ],
   },
 ]);

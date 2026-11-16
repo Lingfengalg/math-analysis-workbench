@@ -11,8 +11,15 @@ const totalPlotLinks = knowledgeCards.reduce(
   0,
 );
 
+const totalSurfacePlotLinks = knowledgeCards.reduce(
+  (sum, card) =>
+    sum +
+    card.examples.filter((example) => Boolean(example.surfacePlot)).length,
+  0,
+);
+
 describe('知识导航', () => {
-  it('能搜索知识卡片并展示空状态', async () => {
+  it('能搜索知识卡片、展示三维仿真入口并支持空状态', async () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter>
@@ -20,13 +27,16 @@ describe('知识导航', () => {
       </MemoryRouter>,
     );
     expect(
-      screen.getByText(/12 张核心知识卡片 · 5 大数分板块/),
+      screen.getByText(/14 张核心知识卡片 · 5 大数分板块/),
     ).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /去绘图中观察/ })).toHaveLength(
       totalPlotLinks,
     );
+    expect(
+      screen.getAllByRole('link', { name: /去三维绘图中仿真/ }),
+    ).toHaveLength(totalSurfacePlotLinks);
     expect(screen.getAllByRole('link', { name: /记入错题本/ })).toHaveLength(
-      12,
+      14,
     );
 
     const search = screen.getByRole('textbox', { name: '搜索知识卡片' });
@@ -40,7 +50,7 @@ describe('知识导航', () => {
     expect(screen.getByText(/没有找到匹配的知识点/)).toBeInTheDocument();
   });
 
-  it('支持全字段大小写不敏感检索（例题表达式、易错点与定理关键词）', async () => {
+  it('支持全字段大小写不敏感检索（含多元曲面表达式、极坐标雅可比与易错点）', async () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter>
@@ -61,6 +71,24 @@ describe('知识导航', () => {
       screen.getByText('洛必达法则：充分条件而非充要条件'),
     ).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /记入错题本/ })).toHaveLength(1);
+
+    await user.clear(search);
+    await user.type(search, 'EXP(-(X^2 + Y^2))');
+    expect(
+      screen.getByText('二重积分与累次定限：曲顶柱体体积及极坐标雅可比因子'),
+    ).toBeInTheDocument();
+    const surfaceLinks = screen.getAllByRole('link', {
+      name: /去三维绘图中仿真/,
+    });
+    expect(surfaceLinks).toHaveLength(2);
+    expect(surfaceLinks[0]).toHaveAttribute(
+      'href',
+      expect.stringContaining('mode=3d'),
+    );
+    expect(surfaceLinks[0]).toHaveAttribute(
+      'href',
+      expect.stringContaining('sourceKnowledgeId=integral-double-riemann'),
+    );
   });
 
   it('支持按路由参数筛选主题，未知主题回退到全部卡片', () => {
@@ -74,6 +102,9 @@ describe('知识导航', () => {
       screen.getByText('洛必达法则：充分条件而非充要条件'),
     ).toBeInTheDocument();
     expect(
+      screen.getByText('二元极限与偏导：沿直线趋近相等不代表二重极限存在'),
+    ).toBeInTheDocument();
+    expect(
       screen.queryByText('函数极限：靠近，而非到达'),
     ).not.toBeInTheDocument();
     unmount();
@@ -84,7 +115,7 @@ describe('知识导航', () => {
       </MemoryRouter>,
     );
     expect(screen.getAllByRole('link', { name: /记入错题本/ })).toHaveLength(
-      12,
+      14,
     );
   });
 
@@ -100,6 +131,9 @@ describe('知识导航', () => {
       screen.getByText(/当前聚焦知识卡片：可导与连续：逆命题不成立/),
     ).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /记入错题本/ })).toHaveLength(1);
+    expect(screen.getAllByRole('link', { name: /去绘图中观察/ })).toHaveLength(
+      1,
+    );
     expect(
       screen.queryByText('函数极限：靠近，而非到达'),
     ).not.toBeInTheDocument();
@@ -132,7 +166,7 @@ describe('知识导航', () => {
     await user.click(screen.getByRole('button', { name: '查看全部知识卡片' }));
     expect(screen.queryByText(/当前聚焦知识卡片：/)).not.toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /记入错题本/ })).toHaveLength(
-      12,
+      14,
     );
   });
 });

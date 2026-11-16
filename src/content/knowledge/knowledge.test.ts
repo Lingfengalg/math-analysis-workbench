@@ -4,6 +4,7 @@ import { knowledgeCards } from './index';
 import {
   KNOWLEDGE_TOPIC_LABELS,
   knowledgeCardSchema,
+  surfacePlotRequestSchema,
   type KnowledgeTopic,
 } from '@/shared/contracts';
 import { compileExpression } from '@/shared/math/sample';
@@ -19,13 +20,15 @@ const EXPECTED_CARD_IDS = [
   'derivative-mean-value',
   'derivative-lhopital',
   'derivative-taylor',
+  'derivative-multivariable-limit',
   'integral-newton-leibniz',
   'integral-improper-p',
+  'integral-double-riemann',
 ];
 
 describe('知识内容契约', () => {
-  it('包含完整的 12 张核心知识卡片且覆盖全部 5 大数分板块，id 唯一且符合 schema', () => {
-    expect(knowledgeCards).toHaveLength(12);
+  it('包含完整的 14 张核心知识卡片且覆盖全部 5 大数分板块，id 唯一且符合 schema', () => {
+    expect(knowledgeCards).toHaveLength(14);
     const ids = knowledgeCards.map((card) => card.id);
     expect(new Set(ids).size).toBe(knowledgeCards.length);
     expect(ids).toEqual(EXPECTED_CARD_IDS);
@@ -54,7 +57,7 @@ describe('知识内容契约', () => {
     }
   });
 
-  it('示例绘图表达式与对比表达式均符合受限白名单', () => {
+  it('一元与三维多元示例绘图表达式均符合受限白名单与契约', () => {
     for (const card of knowledgeCards) {
       for (const example of card.examples) {
         if (example.plot) {
@@ -68,11 +71,22 @@ describe('知识内容契约', () => {
           }
           expect(example.plot.sourceKnowledgeId).toBe(card.id);
         }
+        if (example.surfacePlot) {
+          expect(
+            surfacePlotRequestSchema.safeParse(example.surfacePlot).success,
+          ).toBe(true);
+          expect(() =>
+            compileExpression(
+              example.surfacePlot!.expression.replace(/\by\b/g, 'x'),
+            ),
+          ).not.toThrow();
+          expect(example.surfacePlot.sourceKnowledgeId).toBe(card.id);
+        }
       }
     }
   });
 
-  it('全部 12 张卡片的 LaTeX 公式在 KaTeX strict: error 模式下零报错渲染', () => {
+  it('全部 14 张卡片的 LaTeX 公式在 KaTeX strict: error 模式下零报错渲染', () => {
     for (const card of knowledgeCards) {
       expect(() =>
         katex.renderToString(card.formula, {
