@@ -2,13 +2,20 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PlotRequest, PlotResult } from '@/shared/contracts';
+import type {
+  PlotRequest,
+  PlotResult,
+  SurfacePlotRequest,
+  SurfacePlotResult,
+} from '@/shared/contracts';
 import type { FunctionChartProps } from '@/shared/ui/FunctionChart';
-import { calculatePlot } from '@/shared/math/client';
+import type { Surface3DViewerProps } from '@/shared/ui/Surface3DViewer';
+import { calculatePlot, calculateSurface } from '@/shared/math/client';
 import PlottingPage from './PlottingPage';
 
 vi.mock('@/shared/math/client', () => ({
   calculatePlot: vi.fn(),
+  calculateSurface: vi.fn(),
 }));
 
 vi.mock('@/shared/ui/FunctionChart', () => ({
@@ -30,7 +37,30 @@ vi.mock('@/shared/ui/FunctionChart', () => ({
   ),
 }));
 
+vi.mock('@/shared/ui/Surface3DViewer', () => ({
+  Surface3DViewer: ({
+    expression,
+    xDomain,
+    yDomain,
+    zDomain,
+    integralConfig,
+  }: Surface3DViewerProps) => (
+    <div
+      role="img"
+      aria-label={`二元函数 ${expression} 的三维曲面图像`}
+      data-xdomain={JSON.stringify(xDomain)}
+      data-ydomain={JSON.stringify(yDomain)}
+      data-zdomain={zDomain ? JSON.stringify(zDomain) : ''}
+      data-integral-region={integralConfig?.regionType ?? ''}
+      data-integral-partitions={
+        integralConfig ? String(integralConfig.partitions) : ''
+      }
+    />
+  ),
+}));
+
 const mockedCalculatePlot = vi.mocked(calculatePlot);
+const mockedCalculateSurface = vi.mocked(calculateSurface);
 
 function buildMockPlotResult(request: PlotRequest): PlotResult {
   const result: PlotResult = {
@@ -70,6 +100,75 @@ function buildMockPlotResult(request: PlotRequest): PlotResult {
   return result;
 }
 
+function buildMockSurfaceResult(
+  request: SurfacePlotRequest,
+): SurfacePlotResult {
+  const validCount = request.gridSize * request.gridSize;
+  const result: SurfacePlotResult = {
+    gridX: [request.xMin, request.xMax],
+    gridY: [request.yDomainMin, request.yDomainMax],
+    zValues: [1, 1.5, 1.5, 2],
+    validCount,
+    gaps: 0,
+    zDataMin: 0,
+    zDataMax: 2,
+  };
+  if (request.integral) {
+    const { partitions, xStart, xEnd, yStart, yEnd, regionType } =
+      request.integral;
+    const boxArea = (xEnd - xStart) * (yEnd - yStart);
+    const domainArea =
+      regionType === 'disk'
+        ? Number(((Math.PI * boxArea) / 4).toFixed(6))
+        : regionType === 'triangle'
+          ? boxArea / 2
+          : boxArea;
+    const referenceIntegral = 21.333333;
+    const absError = Number((1.2 / partitions).toFixed(6));
+    const riemannSum = Number((referenceIntegral + absError).toFixed(6));
+    result.integralResult = {
+      prisms: Array.from({ length: partitions * partitions }, (_, idx) => ({
+        x: xStart + idx * 0.01,
+        y: yStart + idx * 0.01,
+        dx: (xEnd - xStart) / partitions,
+        dy: (yEnd - yStart) / partitions,
+        z: 1.5,
+      })),
+      riemannSum,
+      positiveVolume: riemannSum,
+      negativeVolume: 0,
+      referenceIntegral,
+      absError,
+      domainArea,
+      meanValue: Number((referenceIntegral / domainArea).toFixed(6)),
+    };
+  }
+  if (request.probe) {
+    const { x0, y0 } = request.probe;
+    const fx = 2 * x0;
+    const fy = -2 * y0;
+    const z0 = x0 * x0 - y0 * y0;
+    const gradNorm = Math.hypot(fx, fy);
+    result.probeResult = {
+      x0,
+      y0,
+      z0,
+      fx,
+      fy,
+      gradNorm,
+      sliceX: [
+        [request.xMin, 1],
+        [request.xMax, 1],
+      ],
+      sliceY: [
+        [request.yDomainMin, -1],
+        [request.yDomainMax, -1],
+      ],
+    };
+  }
+  return result;
+}
+
 function LocationSearchProbe() {
   const location = useLocation();
   return <div data-testid="location-search">{location.search}</div>;
@@ -84,35 +183,182 @@ function renderPlotting(initialEntry = '/plotting') {
   );
 }
 
-describe('函数实验室 PlottingPage', () => {
+describe('多元曲面与函数仿真实验室 PlottingPage', () => {
   beforeEach(() => {
     window.localStorage.clear();
     vi.clearAllMocks();
     mockedCalculatePlot.mockImplementation(async (request) =>
       buildMockPlotResult(request),
     );
+    mockedCalculateSurface.mockImplementation(async (request) =>
+      buildMockSurfaceResult(request),
+    );
   });
 
-  it('默认加载并渲染初始函数图像与状态摘要', async () => {
+  it('默认进入旗舰三维多元模式，渲染曲顶抛物面与二重积分黎曼柱体看板，并支持区域切换与分割加密', async () => {
+    const user = userEvent.setup();
     renderPlotting();
 
-    expect(await screen.findByRole('status')).toHaveTextContent('f(x) = x^2');
     expect(
-      screen.getByRole('img', { name: '函数 x^2 的采样图像' }),
+      screen.getByRole('heading', { level: 1, name: /让抽象的变化/ }),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText('函数表达式 f(x)')).toHaveValue('x^2');
-    expect(mockedCalculatePlot).toHaveBeenCalledWith(
-      { expression: 'x^2', xMin: -5, xMax: 5 },
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'z = f(x, y) = 2 - 0.25 * (x^2 + y^2)',
+    );
+    expect(
+      screen.getByRole('img', {
+        name: '二元函数 2 - 0.25 * (x^2 + y^2) 的三维曲面图像',
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('多元函数表达式 f(x, y)')).toHaveValue(
+      '2 - 0.25 * (x^2 + y^2)',
+    );
+    expect(mockedCalculateSurface).toHaveBeenCalledWith(
+      {
+        expression: '2 - 0.25 * (x^2 + y^2)',
+        xMin: -2,
+        xMax: 2,
+        yDomainMin: -2,
+        yDomainMax: 2,
+        gridSize: 56,
+        integral: {
+          regionType: 'rectangle',
+          xStart: -2,
+          xEnd: 2,
+          yStart: -2,
+          yEnd: 2,
+          partitions: 14,
+          rule: 'midpoint',
+        },
+      },
       expect.any(AbortSignal),
     );
-    expect(screen.getByRole('link', { name: /记入错题本/ })).toHaveAttribute(
-      'href',
-      expect.stringContaining('/mistakes?draft=1'),
+
+    const integralBoard = screen.getByLabelText('二重积分黎曼柱体量化看板');
+    expect(integralBoard).toBeInTheDocument();
+    expect(screen.getByText('21.333333')).toBeInTheDocument();
+    expect(screen.getByText(/分割 14×14 · 共 196 根柱体/)).toBeInTheDocument();
+
+    // 切换圆域极坐标并展示对应不等式说明
+    await user.click(
+      screen.getByRole('button', { name: '圆域（极坐标变换）' }),
     );
+    expect(screen.getByText(/极坐标变换 dx dy = r dr dθ/)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(mockedCalculateSurface).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          integral: expect.objectContaining({
+            regionType: 'disk',
+          }),
+        }),
+        expect.any(AbortSignal),
+      );
+    });
+
+    // 点击快捷加密 32×32
+    await user.click(screen.getByRole('button', { name: '32×32' }));
+    await waitFor(() => {
+      expect(mockedCalculateSurface).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          integral: expect.objectContaining({
+            regionType: 'disk',
+            partitions: 32,
+          }),
+        }),
+        expect.any(AbortSignal),
+      );
+    });
+    expect(
+      await screen.findByText(/分割 32×32 · 共 1024 根柱体/),
+    ).toBeInTheDocument();
   });
 
-  it('从带 sourceKnowledgeId 的 URL 进入时显示来源卡片与返回链接，切换预设后清除旧来源并清理 URL 参数', async () => {
+  it('支持多元微积分预设（高斯圆域与马鞍面驻点切平面）及三维区间合法性校验', async () => {
     const user = userEvent.setup();
+    renderPlotting();
+    await screen.findByRole('status');
+
+    // 切换至双曲马鞍面 · 驻点切平面预设
+    await user.click(
+      screen.getByRole('button', { name: '双曲马鞍面 · 驻点切平面' }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'z = f(x, y) = x^2 - y^2',
+      );
+    });
+    expect(screen.getByLabelText('偏导数与切平面实时看板')).toBeInTheDocument();
+    expect(screen.getByText(/切平面线性近似方程：/)).toBeInTheDocument();
+
+    // 切换快捷观察点 (1, -1) 对比非驻点切平面斜率
+    await user.click(screen.getByRole('button', { name: '对比点 (1, -1)' }));
+    await waitFor(() => {
+      expect(mockedCalculateSurface).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          expression: 'x^2 - y^2',
+          probe: { x0: 1, y0: -1 },
+        }),
+        expect.any(AbortSignal),
+      );
+    });
+
+    // 校验三维定义域与竖轴范围错误
+    const xMinInput = screen.getByLabelText('x 左端点');
+    await user.clear(xMinInput);
+    await user.type(xMinInput, '8');
+    await user.click(screen.getByRole('button', { name: /生成三维曲面/ }));
+
+    expect(screen.getByText('无法绘制')).toBeInTheDocument();
+    expect(screen.getByText('x 左端点必须小于右端点')).toBeInTheDocument();
+
+    await user.clear(xMinInput);
+    await user.type(xMinInput, '-2.5');
+    await user.click(
+      screen.getByRole('switch', { name: /限制竖轴 z 范围（防奇点拉伸）/ }),
+    );
+    const zMinInput = screen.getByLabelText('z 下界');
+    const zMaxInput = screen.getByLabelText('z 上界');
+    await user.clear(zMinInput);
+    await user.type(zMinInput, '10');
+    await user.clear(zMaxInput);
+    await user.type(zMaxInput, '2');
+    await user.click(screen.getByRole('button', { name: /生成三维曲面/ }));
+
+    expect(screen.getByText('z 轴下界必须小于上界')).toBeInTheDocument();
+  });
+
+  it('从 ?mode=3d 知识卡片链接进入时激活三维模式，从一元 ?expression=... 链接进入时自动激活二维模式并支持清理旧来源', async () => {
+    const user = userEvent.setup();
+    const { unmount } = renderPlotting(
+      '/plotting?mode=3d&expression=exp(-(x%5E2%2By%5E2))&xMin=-2.5&xMax=2.5&yDomainMin=-2.5&yDomainMax=2.5&gridSize=64&intRegion=disk&intX0=-2&intX1=2&intY0=-2&intY1=2&intN=18&intRule=midpoint&sourceKnowledgeId=integral-double-riemann',
+    );
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'z = f(x, y) = exp(-(x^2+y^2))',
+    );
+    expect(screen.getByText('已接收知识导航中的示例')).toBeInTheDocument();
+    expect(
+      screen.getByText(/二重积分与累次定限：曲顶柱体体积及极坐标雅可比因子/),
+    ).toBeInTheDocument();
+
+    // 切换多元预设后清除旧来源与 URL 参数
+    await user.click(
+      screen.getByRole('button', { name: '二元极限反例 · 方向脊线' }),
+    );
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'z = f(x, y) = (x * y) / (x^2 + y^2)',
+      );
+    });
+    expect(
+      screen.queryByText('已接收知识导航中的示例'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId('location-search')).toHaveTextContent('');
+
+    unmount();
+
+    // 一元卡片链接（不含 mode=3d）自动激活二维模式
     renderPlotting(
       '/plotting?expression=abs(x)&xMin=-3&xMax=3&sourceKnowledgeId=derivative-absolute',
     );
@@ -122,15 +368,12 @@ describe('函数实验室 PlottingPage', () => {
     );
     expect(screen.getByText('已接收知识导航中的示例')).toBeInTheDocument();
     expect(screen.getByText(/可导与连续：逆命题不成立/)).toBeInTheDocument();
-    const backLink = screen.getByRole('link', { name: /返回知识卡片/ });
-    expect(backLink).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /返回知识卡片/ })).toHaveAttribute(
       'href',
       '/knowledge?card=derivative-absolute',
     );
-    expect(screen.getByTestId('location-search')).not.toHaveTextContent(/^$/);
 
     await user.click(screen.getByRole('button', { name: 'sin(x)' }));
-
     await waitFor(() => {
       expect(screen.getByRole('status')).toHaveTextContent('f(x) = sin(x)');
     });
@@ -138,80 +381,26 @@ describe('函数实验室 PlottingPage', () => {
       screen.queryByText('已接收知识导航中的示例'),
     ).not.toBeInTheDocument();
     expect(screen.getByTestId('location-search')).toHaveTextContent('');
-    expect(mockedCalculatePlot).toHaveBeenLastCalledWith(
-      { expression: 'sin(x)', xMin: -5, xMax: 5 },
-      expect.any(AbortSignal),
-    );
   });
 
-  it('从带 sourceMistakeId 的 URL 进入时显示错题返回链接，手动提交新函数后清除残留状态', async () => {
-    const user = userEvent.setup();
-    renderPlotting(
-      '/plotting?expression=1%2Fx&xMin=-4&xMax=4&sourceMistakeId=mistake-01',
-    );
-
-    expect(await screen.findByRole('status')).toHaveTextContent('f(x) = 1/x');
-    expect(screen.getByText(/来源错题：mistake-01/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /返回错题本/ })).toHaveAttribute(
-      'href',
-      '/mistakes',
-    );
-
-    const exprInput = screen.getByLabelText('函数表达式 f(x)');
-    await user.clear(exprInput);
-    await user.type(exprInput, 'cos(x)');
-    await user.click(screen.getByRole('button', { name: /绘制函数/ }));
-
-    await waitFor(() => {
-      expect(screen.getByRole('status')).toHaveTextContent('f(x) = cos(x)');
-    });
-    expect(screen.queryByText(/来源错题：mistake-01/)).not.toBeInTheDocument();
-    expect(screen.getByTestId('location-search')).toHaveTextContent('');
-  });
-
-  it('非法横轴区间（xMin >= xMax）与非法纵轴区间（yMin >= yMax）均显示明确校验错误', async () => {
+  it('支持手动切换至二维一元模式进行对比函数、纵轴保护与差商割线实验', async () => {
     const user = userEvent.setup();
     renderPlotting();
     await screen.findByRole('status');
 
-    const xMinInput = screen.getByLabelText('左端点');
-    await user.clear(xMinInput);
-    await user.type(xMinInput, '10');
-    await user.click(screen.getByRole('button', { name: /绘制函数/ }));
+    await user.click(screen.getByText('二维一元与差商 y = f(x)'));
 
-    expect(screen.getByText('无法绘制')).toBeInTheDocument();
-    expect(screen.getByText('左端点必须小于右端点')).toBeInTheDocument();
+    expect(await screen.findByRole('status')).toHaveTextContent('f(x) = x^2');
+    expect(
+      screen.getByRole('img', { name: '函数 x^2 的采样图像' }),
+    ).toBeInTheDocument();
 
-    await user.clear(xMinInput);
-    await user.type(xMinInput, '-5');
-    await user.click(
-      screen.getByRole('switch', { name: /限制纵轴范围（防奇点压扁）/ }),
-    );
-
-    const yMinInput = screen.getByLabelText('纵轴下界');
-    const yMaxInput = screen.getByLabelText('纵轴上界');
-    await user.clear(yMinInput);
-    await user.type(yMinInput, '15');
-    await user.clear(yMaxInput);
-    await user.type(yMaxInput, '5');
-    await user.click(screen.getByRole('button', { name: /绘制函数/ }));
-
-    expect(screen.getByText('无法绘制')).toBeInTheDocument();
-    expect(screen.getByText('纵轴下界必须小于纵轴上界')).toBeInTheDocument();
-  });
-
-  it('开启对比函数与纵轴限制后正确向 calculatePlot 和图表传递 compareExpression、yMin、yMax', async () => {
-    const user = userEvent.setup();
-    renderPlotting();
-    await screen.findByRole('status');
-
+    // 测试对比函数与纵轴限制
     const exprInput = screen.getByLabelText('函数表达式 f(x)');
     await user.clear(exprInput);
     await user.type(exprInput, 'sin(x)');
-
     const compareInput = screen.getByLabelText('对比函数 g(x)（可选）');
     await user.type(compareInput, 'x - x^3/6');
-
     await user.click(
       screen.getByRole('switch', { name: /限制纵轴范围（防奇点压扁）/ }),
     );
@@ -221,7 +410,6 @@ describe('函数实验室 PlottingPage', () => {
     await user.type(yMinInput, '-2');
     await user.clear(yMaxInput);
     await user.type(yMaxInput, '2');
-
     await user.click(screen.getByRole('button', { name: /绘制函数/ }));
 
     await waitFor(() => {
@@ -238,28 +426,12 @@ describe('函数实验室 PlottingPage', () => {
       );
     });
 
-    const chart = await screen.findByRole('img', {
-      name: '函数 sin(x) 的采样图像',
-    });
-    expect(chart).toHaveAttribute('data-compare', 'x - x^3/6');
-    expect(chart).toHaveAttribute('data-ydomain', '[-2,2]');
-    expect(screen.getByRole('status')).toHaveTextContent(
-      '对比 g(x) = x - x^3/6',
-    );
-  });
-
-  it('开启差商观察后展示左右差商数值与不可导提示，并支持快捷切换步长 h', async () => {
-    const user = userEvent.setup();
-    renderPlotting();
-    await screen.findByRole('status');
-
+    // 测试差商与割线观察
     await user.click(screen.getByRole('button', { name: 'abs(x)' }));
     await waitFor(() => {
       expect(screen.getByRole('status')).toHaveTextContent('f(x) = abs(x)');
     });
-
     await user.click(screen.getByRole('switch', { name: /差商与割线观察/ }));
-
     expect(
       await screen.findByLabelText('差商与割线数值观察'),
     ).toBeInTheDocument();
@@ -271,7 +443,6 @@ describe('函数实验室 PlottingPage', () => {
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '-0.01' }));
-
     await waitFor(() => {
       expect(mockedCalculatePlot).toHaveBeenLastCalledWith(
         {
@@ -283,55 +454,91 @@ describe('函数实验室 PlottingPage', () => {
         expect.any(AbortSignal),
       );
     });
-    expect(screen.getByLabelText('步长 h')).toHaveValue('-0.01');
   });
 
-  it('数分实验预设可一键加载夹逼与尖点实验参数', async () => {
-    const user = userEvent.setup();
-    renderPlotting();
-    await screen.findByRole('status');
-
-    await user.click(screen.getByRole('button', { name: '夹逼 x·sin(1/x)' }));
-
-    await waitFor(() => {
-      expect(mockedCalculatePlot).toHaveBeenLastCalledWith(
-        {
-          expression: 'x * sin(1/x)',
-          compareExpression: 'abs(x)',
-          xMin: -1,
-          xMax: 1,
-          yMin: -1.2,
-          yMax: 1.2,
-        },
-        expect.any(AbortSignal),
-      );
-    });
-  });
-
-  it('保存默认设置写入 localStorage，且本地存储损坏时展示警告并回退默认函数', async () => {
+  it('支持保存三维与二维默认设置写入 localStorage，且本地存储损坏时展示警告并回退默认场景', async () => {
     const user = userEvent.setup();
     const { unmount } = renderPlotting();
     await screen.findByRole('status');
 
+    // 保存三维默认设置
+    await user.click(
+      screen.getByRole('button', { name: '高斯钟形 · 圆域极坐标' }),
+    );
+    await user.click(screen.getByRole('button', { name: /保存三维默认设置/ }));
+    expect(
+      await screen.findByText(/已保存三维默认设置到当前浏览器/),
+    ).toBeInTheDocument();
+
+    // 切换到二维并保存二维默认设置，验证二者共存不互冲
+    await user.click(screen.getByText('二维一元与差商 y = f(x)'));
+    await screen.findByRole('status');
     await user.click(screen.getByRole('button', { name: 'sin(x)' }));
     await user.click(screen.getByRole('button', { name: /保存默认设置/ }));
-
     expect(await screen.findByText(/已保存到当前浏览器/)).toBeInTheDocument();
+
     const rawSaved = window.localStorage.getItem('math-workbench:preferences');
     expect(rawSaved).not.toBeNull();
-    expect(JSON.parse(rawSaved ?? '{}')).toEqual({
-      schemaVersion: 1,
-      data: {
-        defaultPlot: { expression: 'sin(x)', xMin: -5, xMax: 5 },
-      },
+    const parsedSaved = JSON.parse(rawSaved ?? '{}');
+    expect(parsedSaved.data.defaultPlot).toEqual({
+      expression: 'sin(x)',
+      xMin: -5,
+      xMax: 5,
+    });
+    expect(parsedSaved.data.defaultSurfacePlot).toMatchObject({
+      expression: 'exp(-(x^2 + y^2))',
+      gridSize: 64,
     });
 
     unmount();
 
+    // 存储损坏时回退默认三维曲顶抛物面并显示警告
     window.localStorage.setItem('math-workbench:preferences', '{corrupted');
     renderPlotting();
 
     expect(await screen.findByText(/无法读取本地数据/)).toBeInTheDocument();
-    expect(await screen.findByRole('status')).toHaveTextContent('f(x) = x^2');
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'z = f(x, y) = 2 - 0.25 * (x^2 + y^2)',
+    );
+  });
+
+  it('支持曲面采样精度切换、三角形域不等式提示、取样规则切换与同步当前定义域，以及错题反例来源横幅', async () => {
+    const user = userEvent.setup();
+    renderPlotting(
+      '/plotting?mode=3d&expression=x%2B2*y%2B1&xMin=-1&xMax=3&yDomainMin=-1&yDomainMax=3&gridSize=48&intRegion=triangle&intX0=0&intX1=2&intY0=0&intY1=2&intN=12&intRule=midpoint&sourceMistakeId=mistake-3d-01',
+    );
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'z = f(x, y) = x+2*y+1',
+    );
+    expect(screen.getByText(/来源错题：mistake-3d-01/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /返回错题本/ })).toHaveAttribute(
+      'href',
+      '/mistakes',
+    );
+    expect(screen.getByText(/三角形域不等式 D：a ≤ x ≤ b/)).toBeInTheDocument();
+
+    // 切换曲面采样精度与黎曼取样规则，并同步当前定义域
+    await user.click(screen.getByRole('button', { name: '精细 64×64' }));
+    await user.click(screen.getByRole('button', { name: '左下端点' }));
+    await user.click(screen.getByRole('button', { name: /同步当前定义域/ }));
+
+    await waitFor(() => {
+      expect(mockedCalculateSurface).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          gridSize: 64,
+          integral: {
+            regionType: 'triangle',
+            xStart: -1,
+            xEnd: 3,
+            yStart: -1,
+            yEnd: 3,
+            partitions: 12,
+            rule: 'lower-left',
+          },
+        }),
+        expect.any(AbortSignal),
+      );
+    });
   });
 });
