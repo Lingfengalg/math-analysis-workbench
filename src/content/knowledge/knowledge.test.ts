@@ -8,6 +8,7 @@ import {
   type KnowledgeTopic,
 } from '@/shared/contracts';
 import { compileExpression } from '@/shared/math/sample';
+import { compileSurfaceExpression } from '@/shared/math/surface';
 
 const EXPECTED_CARD_IDS = [
   'sequence-monotone-bounded',
@@ -76,9 +77,7 @@ describe('知识内容契约', () => {
             surfacePlotRequestSchema.safeParse(example.surfacePlot).success,
           ).toBe(true);
           expect(() =>
-            compileExpression(
-              example.surfacePlot!.expression.replace(/\by\b/g, 'x'),
-            ),
+            compileSurfaceExpression(example.surfacePlot!.expression),
           ).not.toThrow();
           expect(example.surfacePlot.sourceKnowledgeId).toBe(card.id);
         }

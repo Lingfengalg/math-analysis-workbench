@@ -8,6 +8,7 @@ export default defineConfig({
   base: './',
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   build: {
+    chunkSizeWarningLimit: 650,
     rolldownOptions: {
       output: {
         codeSplitting: {

@@ -33,10 +33,10 @@
 ## 技术方案
 
 - React 19 + TypeScript（strict）+ Vite 8；Ant Design 6 与各模块独立 CSS Modules；React Router 8 HashRouter。
-- `mathjs/number` 解析 AST + 自定义白名单实数递归求值器，在可复用常驻 Web Worker 内采样；ECharts 6 绘制主曲线、对比虚线、差商割线与观察锚点；KaTeX（`trust: false, strict: 'error'`）渲染公式。
-- Zod 4 统一跨模块契约与导入校验；版本化 `localStorage` 分别保存绘图默认偏好与错题本数据。
-- Rolldown `codeSplitting` 按 `echarts`、`zrender`、`katex`、`mathjs` 拆分缓存代码块，避免单 chunk 过大。
-- Vitest / Testing Library 单元与组件测试（10 个文件 94 项用例），Playwright 真实 Chromium 验证 8 项端到端与移动端无溢出流程，GitHub Actions 自动检查。
+- `mathjs/number` 解析 AST + 自定义白名单实数递归求值器，在可复用常驻 Web Worker 内执行一维采样、三维网格采样与二重积分高斯求积；**Three.js (`three@0.187.0`)** 驱动三维多元曲面、Marching-Squares 底面等高线、`InstancedMesh` 三维黎曼积分柱体及偏导截痕/切平面仿真，原生交互式 SVG 画板承载二维一元分析；KaTeX（`trust: false, strict: 'error'`）渲染公式。
+- Zod 4 统一跨模块契约与导入校验；版本化 `localStorage` 分别保存三维/二维绘图默认偏好与错题本数据。
+- Rolldown `codeSplitting` 按 `three`、`katex`、`mathjs` 拆分缓存代码块。
+- Vitest / Testing Library 单元与组件测试（11 个文件 145+ 项用例），Playwright 真实 Chromium 验证三维/二维与移动端无溢出流程，GitHub Actions 自动检查。
 
 ## 质量设计
 

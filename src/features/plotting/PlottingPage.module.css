@@ -62,6 +62,13 @@
   align-items: start;
 }
 
+@media (min-width: 961px) {
+  .plotLayout > :last-child {
+    position: sticky;
+    top: 80px;
+  }
+}
+
 .plotLayout :global(.ant-card) {
   min-width: 0;
   border-radius: var(--radius-lg) !important;
