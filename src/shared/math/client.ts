@@ -3,20 +3,31 @@ import type {
   PlotResult,
   PlotWorkerRequest,
   PlotWorkerResponse,
+  SurfacePlotRequest,
+  SurfacePlotResult,
 } from '@/shared/contracts';
 
-interface PendingPlotTask {
-  request: PlotRequest;
-  resolve: (value: PlotResult) => void;
-  reject: (reason: Error | DOMException) => void;
-  cleanup: () => void;
-}
+type PendingTask =
+  | {
+      kind: '1d';
+      request: PlotRequest;
+      resolve: (value: PlotResult) => void;
+      reject: (reason: Error | DOMException) => void;
+      cleanup: () => void;
+    }
+  | {
+      kind: '3d';
+      request: SurfacePlotRequest;
+      resolve: (value: SurfacePlotResult) => void;
+      reject: (reason: Error | DOMException) => void;
+      cleanup: () => void;
+    };
 
 const WORKER_TIMEOUT_MS = 8000;
 
 let sharedWorker: Worker | null = null;
 let nextRequestId = 1;
-const pendingTasks = new Map<number, PendingPlotTask>();
+const pendingTasks = new Map<number, PendingTask>();
 
 function destroySharedWorker(): void {
   if (!sharedWorker) return;
@@ -34,6 +45,13 @@ function failAllPending(error: Error): void {
     entry.cleanup();
     entry.reject(error);
   }
+}
+
+function toWorkerPayload(id: number, task: PendingTask): PlotWorkerRequest {
+  if (task.kind === '3d') {
+    return { kind: '3d', requestId: id, request: task.request };
+  }
+  return { requestId: id, request: task.request };
 }
 
 function getOrCreateWorker(): Worker {
@@ -57,7 +75,13 @@ function getOrCreateWorker(): Worker {
     pendingTasks.delete(matchedId);
     task.cleanup();
     if (event.data.ok) {
-      task.resolve(event.data.data);
+      if (task.kind === '3d' && event.data.kind === '3d') {
+        task.resolve(event.data.data);
+      } else if (task.kind === '1d' && event.data.kind !== '3d') {
+        task.resolve(event.data.data);
+      } else {
+        task.reject(new Error('计算结果类型不匹配。'));
+      }
     } else {
       task.reject(new Error(event.data.error));
     }
@@ -75,11 +99,7 @@ function redispatchSurvivingTasks(): void {
   try {
     const worker = getOrCreateWorker();
     for (const [id, task] of pendingTasks.entries()) {
-      const payload: PlotWorkerRequest = {
-        requestId: id,
-        request: task.request,
-      };
-      worker.postMessage(payload);
+      worker.postMessage(toWorkerPayload(id, task));
     }
   } catch {
     destroySharedWorker();
@@ -96,10 +116,15 @@ export function resetPlotWorkerForTesting(): void {
   nextRequestId = 1;
 }
 
-export function calculatePlot(
-  request: PlotRequest,
+function enqueueWorkerTask<TReq, TRes>(
+  buildTask: (
+    resolve: (value: TRes) => void,
+    reject: (reason: Error | DOMException) => void,
+    cleanup: () => void,
+  ) => PendingTask,
+  _request: TReq,
   signal: AbortSignal,
-): Promise<PlotResult> {
+): Promise<TRes> {
   return new Promise((resolve, reject) => {
     if (signal.aborted) {
       reject(new DOMException('已取消', 'AbortError'));
@@ -122,7 +147,6 @@ export function calculatePlot(
       redispatchSurvivingTasks();
     };
 
-    // Includes initial worker/module loading time; do not block the UI thread.
     const timer = globalThis.setTimeout(() => {
       if (!pendingTasks.delete(requestId)) return;
       cleanup();
@@ -132,12 +156,12 @@ export function calculatePlot(
     }, WORKER_TIMEOUT_MS);
 
     signal.addEventListener('abort', onAbort, { once: true });
-    pendingTasks.set(requestId, { request, resolve, reject, cleanup });
+    const task = buildTask(resolve, reject, cleanup);
+    pendingTasks.set(requestId, task);
 
     try {
       const worker = getOrCreateWorker();
-      const payload: PlotWorkerRequest = { requestId, request };
-      worker.postMessage(payload);
+      worker.postMessage(toWorkerPayload(requestId, task));
     } catch {
       pendingTasks.delete(requestId);
       cleanup();
@@ -145,4 +169,38 @@ export function calculatePlot(
       reject(new Error('计算模块加载失败，请刷新后重试。'));
     }
   });
+}
+
+export function calculatePlot(
+  request: PlotRequest,
+  signal: AbortSignal,
+): Promise<PlotResult> {
+  return enqueueWorkerTask<PlotRequest, PlotResult>(
+    (resolve, reject, cleanup) => ({
+      kind: '1d',
+      request,
+      resolve,
+      reject,
+      cleanup,
+    }),
+    request,
+    signal,
+  );
+}
+
+export function calculateSurface(
+  request: SurfacePlotRequest,
+  signal: AbortSignal,
+): Promise<SurfacePlotResult> {
+  return enqueueWorkerTask<SurfacePlotRequest, SurfacePlotResult>(
+    (resolve, reject, cleanup) => ({
+      kind: '3d',
+      request,
+      resolve,
+      reject,
+      cleanup,
+    }),
+    request,
+    signal,
+  );
 }

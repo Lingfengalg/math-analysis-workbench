@@ -13,14 +13,9 @@ export default defineConfig({
         codeSplitting: {
           groups: [
             {
-              name: 'vendor-zrender',
-              test: /node_modules[\\/]zrender/,
+              name: 'vendor-three',
+              test: /node_modules[\\/]three/,
               priority: 30,
-            },
-            {
-              name: 'vendor-echarts',
-              test: /node_modules[\\/]echarts/,
-              priority: 25,
             },
             {
               name: 'vendor-katex',

@@ -87,19 +87,152 @@ export interface PlotResult {
   secantLine?: SecantLineResult;
 }
 
-export interface PlotWorkerRequest {
-  requestId?: number;
-  request: PlotRequest;
+/* --- 3D Multivariable Surface & Double Integral Contracts --- */
+
+export const integralRegionTypeSchema = z.enum([
+  'rectangle',
+  'disk',
+  'triangle',
+]);
+export type IntegralRegionType = z.infer<typeof integralRegionTypeSchema>;
+
+export const INTEGRAL_REGION_LABELS: Record<IntegralRegionType, string> = {
+  rectangle: '矩形域 [a,b]×[c,d]',
+  disk: '圆域（极坐标变换）',
+  triangle: '三角形域（累次定限）',
+};
+
+export const riemannRuleSchema = z.enum([
+  'midpoint',
+  'lower-left',
+  'upper-right',
+]);
+export type RiemannRule = z.infer<typeof riemannRuleSchema>;
+
+export const RIEMANN_RULE_LABELS: Record<RiemannRule, string> = {
+  midpoint: '中点取样',
+  'lower-left': '左下端点',
+  'upper-right': '右上端点',
+};
+
+export const surfaceIntegralConfigSchema = z
+  .object({
+    regionType: integralRegionTypeSchema,
+    xStart: z.number().finite().min(-1000).max(1000),
+    xEnd: z.number().finite().min(-1000).max(1000),
+    yStart: z.number().finite().min(-1000).max(1000),
+    yEnd: z.number().finite().min(-1000).max(1000),
+    partitions: z.number().int().min(4).max(36),
+    rule: riemannRuleSchema,
+  })
+  .refine((v) => v.xStart < v.xEnd, {
+    message: '积分 x 下限必须小于上限',
+    path: ['xEnd'],
+  })
+  .refine((v) => v.yStart < v.yEnd, {
+    message: '积分 y 下限必须小于上限',
+    path: ['yEnd'],
+  });
+export type SurfaceIntegralConfig = z.infer<typeof surfaceIntegralConfigSchema>;
+
+export const surfaceProbeSchema = z.object({
+  x0: z.number().finite().min(-1000).max(1000),
+  y0: z.number().finite().min(-1000).max(1000),
+});
+export type SurfaceProbe = z.infer<typeof surfaceProbeSchema>;
+
+export const surfacePlotRequestSchema = z
+  .object({
+    expression: z
+      .string()
+      .trim()
+      .min(1, '请输入多元函数表达式 f(x, y)')
+      .max(160, '表达式最多 160 个字符'),
+    xMin: z.number().finite().min(-1000).max(1000),
+    xMax: z.number().finite().min(-1000).max(1000),
+    yDomainMin: z.number().finite().min(-1000).max(1000),
+    yDomainMax: z.number().finite().min(-1000).max(1000),
+    zMin: z.number().finite().min(-1000000).max(1000000).optional(),
+    zMax: z.number().finite().min(-1000000).max(1000000).optional(),
+    gridSize: z.number().int().min(16).max(96).default(56),
+    integral: surfaceIntegralConfigSchema.optional(),
+    probe: surfaceProbeSchema.optional(),
+    sourceKnowledgeId: z.string().max(100).optional(),
+    sourceMistakeId: z.string().max(100).optional(),
+  })
+  .refine((v) => v.xMin < v.xMax, {
+    message: 'x 左端点必须小于右端点',
+    path: ['xMax'],
+  })
+  .refine((v) => v.yDomainMin < v.yDomainMax, {
+    message: 'y 下界必须小于上界',
+    path: ['yDomainMax'],
+  })
+  .refine(
+    (v) => v.zMin === undefined || v.zMax === undefined || v.zMin < v.zMax,
+    {
+      message: 'z 轴下界必须小于上界',
+      path: ['zMax'],
+    },
+  );
+export type SurfacePlotRequest = z.infer<typeof surfacePlotRequestSchema>;
+
+export interface RiemannPrism {
+  x: number;
+  y: number;
+  dx: number;
+  dy: number;
+  z: number;
 }
 
+export interface SurfaceIntegralResult {
+  prisms: RiemannPrism[];
+  riemannSum: number;
+  positiveVolume: number;
+  negativeVolume: number;
+  referenceIntegral: number;
+  absError: number;
+  domainArea: number;
+  meanValue: number | null;
+}
+
+export interface SurfaceProbeResult {
+  x0: number;
+  y0: number;
+  z0: number | null;
+  fx: number | null;
+  fy: number | null;
+  gradNorm: number | null;
+  sliceX: PlotPoint[];
+  sliceY: PlotPoint[];
+}
+
+export interface SurfacePlotResult {
+  gridX: number[];
+  gridY: number[];
+  zValues: Array<number | null>;
+  validCount: number;
+  gaps: number;
+  zDataMin: number | null;
+  zDataMax: number | null;
+  integralResult?: SurfaceIntegralResult;
+  probeResult?: SurfaceProbeResult;
+}
+
+export type PlotWorkerRequest =
+  | { kind?: '1d'; requestId?: number; request: PlotRequest }
+  | { kind: '3d'; requestId?: number; request: SurfacePlotRequest };
+
 export type PlotWorkerResponse =
-  | { requestId?: number; ok: true; data: PlotResult }
-  | { requestId?: number; ok: false; error: string };
+  | { kind?: '1d'; requestId?: number; ok: true; data: PlotResult }
+  | { kind: '3d'; requestId?: number; ok: true; data: SurfacePlotResult }
+  | { kind?: '1d' | '3d'; requestId?: number; ok: false; error: string };
 
 export const knowledgeExampleSchema = z.object({
   kind: z.enum(['example', 'counterexample']).optional(),
   explanation: z.string().min(1),
   plot: plotRequestSchema.optional(),
+  surfacePlot: surfacePlotRequestSchema.optional(),
 });
 export type KnowledgeExample = z.infer<typeof knowledgeExampleSchema>;
 
@@ -119,6 +252,7 @@ export type KnowledgeCard = z.infer<typeof knowledgeCardSchema>;
 
 export const preferencesSchema = z.object({
   defaultPlot: plotRequestSchema,
+  defaultSurfacePlot: surfacePlotRequestSchema.optional(),
 });
 export type Preferences = z.infer<typeof preferencesSchema>;
 
@@ -185,6 +319,7 @@ export const mistakeItemSchema = z.object({
     .regex(/^[a-z][a-z0-9-]*$/)
     .optional(),
   counterexamplePlot: plotRequestSchema.optional(),
+  counterexampleSurfacePlot: surfacePlotRequestSchema.optional(),
   createdAt: z.string().min(1).max(40),
   updatedAt: z.string().min(1).max(40),
 });
