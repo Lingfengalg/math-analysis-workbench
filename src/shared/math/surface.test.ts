@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { compileSurfaceExpression, sampleSurface } from './surface';
+import {
+  compileBoundOfX,
+  compileBoundOfY,
+  compileSurfaceExpression,
+  sampleSurface,
+} from './surface';
 
 describe('二元实函数安全表达式编译器 compileSurfaceExpression', () => {
   it.each([
@@ -339,6 +344,170 @@ describe('二重积分黎曼柱体仿真与高精度参考积分', () => {
     expect(fine.integralResult!.absError).toBeLessThan(
       coarse.integralResult!.absError,
     );
+  });
+
+  it('X-型曲边域：叶形域 ∫_0^1 dx ∫_{x^2}^{√x} (x + 2y) dy = 0.45，面积 1/3 且输出 101 点边界曲线', () => {
+    const coarse = sampleSurface({
+      expression: 'x + 2 * y',
+      xMin: 0,
+      xMax: 1,
+      yDomainMin: 0,
+      yDomainMax: 1,
+      gridSize: 16,
+      integral: {
+        regionType: 'x-type',
+        xStart: 0,
+        xEnd: 1,
+        yStart: 0,
+        yEnd: 1,
+        yLowerExpr: 'x^2',
+        yUpperExpr: 'sqrt(x)',
+        partitions: 10,
+        rule: 'midpoint',
+      },
+    });
+    const fine = sampleSurface({
+      expression: 'x + 2 * y',
+      xMin: 0,
+      xMax: 1,
+      yDomainMin: 0,
+      yDomainMax: 1,
+      gridSize: 16,
+      integral: {
+        regionType: 'x-type',
+        xStart: 0,
+        xEnd: 1,
+        yStart: 0,
+        yEnd: 1,
+        yLowerExpr: 'x^2',
+        yUpperExpr: 'sqrt(x)',
+        partitions: 36,
+        rule: 'midpoint',
+      },
+    });
+
+    const integral = fine.integralResult!;
+    expect(integral.referenceIntegral).toBeCloseTo(0.45, 8);
+    expect(integral.domainArea).toBeCloseTo(1 / 3, 8);
+    expect(integral.meanValue).toBeCloseTo(0.45 / (1 / 3), 8);
+    expect(integral.absError).toBeLessThan(coarse.integralResult!.absError);
+    expect(integral.boundaryCurveA).toHaveLength(101);
+    expect(integral.boundaryCurveB).toHaveLength(101);
+    expect(integral.boundaryCurveA![0]).toEqual([0, 0]);
+    expect(integral.boundaryCurveA![50][0]).toBeCloseTo(0.5, 10);
+    expect(integral.boundaryCurveA![50][1]).toBeCloseTo(0.25, 10);
+    expect(integral.boundaryCurveB![50][1]).toBeCloseTo(Math.SQRT1_2, 10);
+    expect(integral.boundaryCurveB![100]).toEqual([1, 1]);
+  });
+
+  it('Y-型曲边域：∫_0^1 dy ∫_{y^2}^{√y} (x + y) dx = 0.3，输出 xOy 坐标边界并支持边界缺口 null', () => {
+    const res = sampleSurface({
+      expression: 'x + y',
+      xMin: 0,
+      xMax: 1,
+      yDomainMin: 0,
+      yDomainMax: 1,
+      gridSize: 16,
+      integral: {
+        regionType: 'y-type',
+        xStart: 0,
+        xEnd: 1,
+        yStart: 0,
+        yEnd: 1,
+        xLowerExpr: 'y^2',
+        xUpperExpr: 'sqrt(y)',
+        partitions: 24,
+        rule: 'midpoint',
+      },
+    });
+
+    const integral = res.integralResult!;
+    expect(integral.referenceIntegral).toBeCloseTo(0.3, 8);
+    expect(integral.domainArea).toBeCloseTo(1 / 3, 8);
+    expect(integral.meanValue).toBeCloseTo(0.9, 8);
+    expect(integral.boundaryCurveA).toHaveLength(101);
+    expect(integral.boundaryCurveB).toHaveLength(101);
+    // y = 0.25 时 x_lower = 0.0625, x_upper = 0.5
+    expect(integral.boundaryCurveA![25][0]).toBeCloseTo(0.0625, 10);
+    expect(integral.boundaryCurveA![25][1]).toBeCloseTo(0.25, 10);
+    expect(integral.boundaryCurveB![25][0]).toBeCloseTo(0.5, 10);
+    expect(integral.boundaryCurveB![25][1]).toBeCloseTo(0.25, 10);
+
+    // 当 y < 0 时 sqrt(y) 越出实数域，boundaryCurveB 返回 [y, null] 标记断裂
+    const withGap = sampleSurface({
+      expression: '1',
+      xMin: -1,
+      xMax: 1,
+      yDomainMin: -1,
+      yDomainMax: 1,
+      gridSize: 16,
+      integral: {
+        regionType: 'y-type',
+        xStart: -1,
+        xEnd: 1,
+        yStart: -1,
+        yEnd: 1,
+        xLowerExpr: '0',
+        xUpperExpr: 'sqrt(y)',
+        partitions: 12,
+        rule: 'midpoint',
+      },
+    });
+    expect(withGap.integralResult!.boundaryCurveB![0][1]).toBeNull();
+    expect(withGap.integralResult!.domainArea).toBeCloseTo(2 / 3, 4);
+  });
+
+  it('曲边域边界函数变量严格校验：X-型拒绝 y，Y-型拒绝 x，并给出清晰中文报错', () => {
+    expect(() => compileBoundOfX('x + y')).toThrow(
+      'X-型区域边界函数 φ(x) 只能包含变量 x',
+    );
+    expect(() => compileBoundOfY('x^2')).toThrow(
+      'Y-型区域边界函数 ψ(y) 只能包含变量 y',
+    );
+
+    expect(() =>
+      sampleSurface({
+        expression: 'x + y',
+        xMin: 0,
+        xMax: 1,
+        yDomainMin: 0,
+        yDomainMax: 1,
+        gridSize: 16,
+        integral: {
+          regionType: 'x-type',
+          xStart: 0,
+          xEnd: 1,
+          yStart: 0,
+          yEnd: 1,
+          yLowerExpr: '0',
+          yUpperExpr: 'y + 1',
+          partitions: 8,
+          rule: 'midpoint',
+        },
+      }),
+    ).toThrow('X-型区域边界函数 φ(x) 只能包含变量 x');
+
+    expect(() =>
+      sampleSurface({
+        expression: 'x + y',
+        xMin: 0,
+        xMax: 1,
+        yDomainMin: 0,
+        yDomainMax: 1,
+        gridSize: 16,
+        integral: {
+          regionType: 'y-type',
+          xStart: 0,
+          xEnd: 1,
+          yStart: 0,
+          yEnd: 1,
+          xLowerExpr: 'sin(x)',
+          xUpperExpr: '1',
+          partitions: 8,
+          rule: 'midpoint',
+        },
+      }),
+    ).toThrow('Y-型区域边界函数 ψ(y) 只能包含变量 y');
   });
 });
 

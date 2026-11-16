@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 import { sampleFunction } from './sample';
 import { sampleSurface } from './surface';
+import { sampleTripleIntegral } from './volume';
 import type {
   PlotRequest,
   PlotWorkerRequest,
@@ -19,6 +20,23 @@ function isPlotWorkerRequest(
   );
 }
 
+function buildErrorResponse(
+  kind: '3d' | '3d-triple' | undefined,
+  requestId: number | undefined,
+  error: unknown,
+): PlotWorkerResponse {
+  const message =
+    error instanceof Error ? error.message : '计算失败，请检查输入。';
+  if (kind !== undefined) {
+    return requestId !== undefined
+      ? { kind, requestId, ok: false, error: message }
+      : { kind, ok: false, error: message };
+  }
+  return requestId !== undefined
+    ? { requestId, ok: false, error: message }
+    : { ok: false, error: message };
+}
+
 self.onmessage = (event: MessageEvent<PlotWorkerRequest | PlotRequest>) => {
   const payload = event.data;
 
@@ -32,12 +50,23 @@ self.onmessage = (event: MessageEvent<PlotWorkerRequest | PlotRequest>) => {
           ? { kind: '3d', requestId, ok: true, data }
           : { kind: '3d', ok: true, data };
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : '计算失败，请检查输入。';
+      response = buildErrorResponse('3d', requestId, error);
+    }
+    self.postMessage(response);
+    return;
+  }
+
+  if (isPlotWorkerRequest(payload) && payload.kind === '3d-triple') {
+    const { requestId, request } = payload;
+    let response: PlotWorkerResponse;
+    try {
+      const data = sampleTripleIntegral(request);
       response =
         requestId !== undefined
-          ? { kind: '3d', requestId, ok: false, error: message }
-          : { kind: '3d', ok: false, error: message };
+          ? { kind: '3d-triple', requestId, ok: true, data }
+          : { kind: '3d-triple', ok: true, data };
+    } catch (error) {
+      response = buildErrorResponse('3d-triple', requestId, error);
     }
     self.postMessage(response);
     return;
@@ -55,12 +84,7 @@ self.onmessage = (event: MessageEvent<PlotWorkerRequest | PlotRequest>) => {
         ? { requestId, ok: true, data }
         : { ok: true, data };
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : '计算失败，请检查输入。';
-    response =
-      requestId !== undefined
-        ? { requestId, ok: false, error: message }
-        : { ok: false, error: message };
+    response = buildErrorResponse(undefined, requestId, error);
   }
   self.postMessage(response);
 };

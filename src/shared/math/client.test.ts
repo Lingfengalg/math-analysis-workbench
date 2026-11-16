@@ -5,10 +5,13 @@ import type {
   PlotWorkerResponse,
   SurfacePlotRequest,
   SurfacePlotResult,
+  TripleIntegralRequest,
+  TripleIntegralResult,
 } from '@/shared/contracts';
 import {
   calculatePlot,
   calculateSurface,
+  calculateTripleIntegral,
   resetPlotWorkerForTesting,
 } from './client';
 
@@ -70,6 +73,47 @@ const mockSurfaceResult: SurfacePlotResult = {
   gaps: 0,
   zDataMin: -4,
   zDataMax: 4,
+};
+
+const sampleTripleRequest: TripleIntegralRequest = {
+  expression: '1',
+  regionType: 'paraboloid-cap',
+  xMin: -2,
+  xMax: 2,
+  yMin: -2,
+  yMax: 2,
+  zMin: 0,
+  zMax: 4,
+  partitions: 8,
+  sliceZ: 2,
+};
+
+const mockTripleResult: TripleIntegralResult = {
+  voxels: [
+    {
+      x: 0,
+      y: 0,
+      z: 2,
+      dx: 0.5,
+      dy: 0.5,
+      dz: 0.5,
+      value: 1,
+      inSlice: true,
+    },
+  ],
+  riemannSum: 25,
+  referenceIntegral: 8 * Math.PI,
+  absError: 0.13,
+  domainVolume: 8 * Math.PI,
+  meanDensity: 1,
+  valueMin: 1,
+  valueMax: 1,
+  sliceInfo: {
+    z: 2,
+    area: 2 * Math.PI,
+    sliceIntegral: 2 * Math.PI,
+    voxelCount: 1,
+  },
 };
 
 describe('calculatePlot 与 calculateSurface 常驻 Worker 客户端', () => {
@@ -320,9 +364,75 @@ describe('calculatePlot 与 calculateSurface 常驻 Worker 客户端', () => {
     await expect(pErr).rejects.toThrow('exp(y * ln(x))');
     expect(worker.terminated).toBe(false);
   });
+
+  it('calculateTripleIntegral 共享常驻 Worker 路由 kind="3d-triple" 并处理类型校验与取消恢复', async () => {
+    const c1 = new AbortController();
+    const c2 = new AbortController();
+
+    const pTriple = calculateTripleIntegral(sampleTripleRequest, c1.signal);
+    const pPlot = calculatePlot(sampleRequestA, c2.signal);
+
+    expect(MockWorker.instances).toHaveLength(1);
+    const worker = MockWorker.instances[0];
+    expect(worker.postedMessages).toEqual([
+      { kind: '3d-triple', requestId: 1, request: sampleTripleRequest },
+      { requestId: 2, request: sampleRequestA },
+    ]);
+
+    worker.emitMessage({
+      kind: '3d-triple',
+      requestId: 1,
+      ok: true,
+      data: mockTripleResult,
+    });
+    worker.emitMessage({
+      requestId: 2,
+      ok: true,
+      data: { points: [[0, 0]], gaps: 0 },
+    });
+
+    await expect(pTriple).resolves.toEqual(mockTripleResult);
+    await expect(pPlot).resolves.toEqual({ points: [[0, 0]], gaps: 0 });
+    expect(worker.terminated).toBe(false);
+
+    // 返回 3D 曲面结构给三重积分请求应被安全拒绝
+    const c3 = new AbortController();
+    const pMismatch = calculateTripleIntegral(sampleTripleRequest, c3.signal);
+    worker.emitMessage({
+      kind: '3d',
+      requestId: 3,
+      ok: true,
+      data: mockSurfaceResult,
+    });
+    await expect(pMismatch).rejects.toThrow('计算结果类型不匹配。');
+    expect(worker.terminated).toBe(false);
+
+    // 取消 1D 请求后，三重积分请求在新 Worker 自动重派完成
+    const cPlotAbort = new AbortController();
+    const cTripleSurvive = new AbortController();
+    const pPlotAbort = calculatePlot(sampleRequestA, cPlotAbort.signal);
+    const pTripleSurvive = calculateTripleIntegral(
+      sampleTripleRequest,
+      cTripleSurvive.signal,
+    );
+    cPlotAbort.abort();
+    await expect(pPlotAbort).rejects.toMatchObject({ name: 'AbortError' });
+    expect(MockWorker.instances).toHaveLength(2);
+    const secondWorker = MockWorker.instances[1];
+    expect(secondWorker.postedMessages).toEqual([
+      { kind: '3d-triple', requestId: 5, request: sampleTripleRequest },
+    ]);
+    secondWorker.emitMessage({
+      kind: '3d-triple',
+      requestId: 5,
+      ok: true,
+      data: mockTripleResult,
+    });
+    await expect(pTripleSurvive).resolves.toEqual(mockTripleResult);
+  });
 });
 
-describe('plot.worker.ts 1D / 3D 双模态消息处理', () => {
+describe('plot.worker.ts 1D / 3D / 3d-triple 三模态消息处理', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.resetModules();
@@ -417,5 +527,42 @@ describe('plot.worker.ts 1D / 3D 双模态消息处理', () => {
       ok: true,
     });
     expect(posted[2].kind).toBeUndefined();
+
+    // 4. 三重积分 3d-triple 请求
+    workerScope.onmessage!({
+      data: {
+        kind: '3d-triple',
+        requestId: 104,
+        request: sampleTripleRequest,
+      },
+    } as MessageEvent<PlotWorkerRequest>);
+
+    expect(posted[3]).toMatchObject({
+      kind: '3d-triple',
+      requestId: 104,
+      ok: true,
+    });
+    if (posted[3].ok && posted[3].kind === '3d-triple') {
+      expect(posted[3].data.referenceIntegral).toBeCloseTo(8 * Math.PI, 8);
+      expect(posted[3].data.sliceInfo?.area).toBeCloseTo(2 * Math.PI, 8);
+    }
+
+    // 5. 三重积分非法表达式安全拦截
+    workerScope.onmessage!({
+      data: {
+        kind: '3d-triple',
+        requestId: 105,
+        request: {
+          ...sampleTripleRequest,
+          expression: 'x^z',
+        },
+      },
+    } as MessageEvent<PlotWorkerRequest>);
+
+    expect(posted[4]).toMatchObject({
+      kind: '3d-triple',
+      requestId: 105,
+      ok: false,
+    });
   });
 });

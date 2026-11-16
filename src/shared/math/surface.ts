@@ -56,10 +56,29 @@ const REGION_EPSILON = 1e-12;
 const SNAP_EPSILON = 1e-12;
 const REFERENCE_FINE_GRID = 120;
 const GAUSS_OFFSET = 1 / (2 * Math.sqrt(3));
+const CURVILINEAR_GL4_SEGMENTS = 32;
+const GL4_X1 = Math.sqrt(3 / 7 + (2 / 7) * Math.sqrt(6 / 5));
+const GL4_X2 = Math.sqrt(3 / 7 - (2 / 7) * Math.sqrt(6 / 5));
+const GL4_W1 = (18 - Math.sqrt(30)) / 36;
+const GL4_W2 = (18 + Math.sqrt(30)) / 36;
+const GL4_OFFSETS = [-GL4_X1, -GL4_X2, GL4_X2, GL4_X1] as const;
+const GL4_HALF_WEIGHTS = [
+  GL4_W1 / 2,
+  GL4_W2 / 2,
+  GL4_W2 / 2,
+  GL4_W1 / 2,
+] as const;
 const SLICE_SAMPLE_COUNT = 101;
 const PARTIAL_BASE_STEP = 1e-5;
 
 type SurfaceEvaluator = (x: number, y: number) => number | null;
+type BoundEvaluator = (t: number) => number | null;
+
+interface CompiledCurvilinearBounds {
+  kind: 'x-type' | 'y-type';
+  lower: BoundEvaluator;
+  upper: BoundEvaluator;
+}
 
 function normalizeZero(value: number): number {
   return value === 0 ? 0 : value;
@@ -445,7 +464,7 @@ function compileSurfaceNode(node: MathNode): SurfaceEvaluator {
   throw new Error('仅支持简单的二元实函数，不支持赋值、数组或属性访问。');
 }
 
-export function compileSurfaceExpression(expression: string): SurfaceEvaluator {
+function parseSurfaceAst(expression: string): MathNode {
   if (!expression.trim() || expression.length > 160) {
     throw new Error('表达式长度应为 1–160 个字符。');
   }
@@ -462,10 +481,49 @@ export function compileSurfaceExpression(expression: string): SurfaceEvaluator {
       throw new Error('仅支持简单的二元实函数，不支持赋值、数组或属性访问。');
     }
   });
+  return root;
+}
+
+export function compileSurfaceExpression(expression: string): SurfaceEvaluator {
+  const root = parseSurfaceAst(expression);
   const evaluateAst = compileSurfaceNode(root);
   return (x, y) => {
     if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
     return toDisplayValue(evaluateAst(x, y));
+  };
+}
+
+export function compileBoundOfX(expression: string): BoundEvaluator {
+  const root = parseSurfaceAst(expression);
+  root.traverse((node) => {
+    if (node.type === 'SymbolNode') {
+      const name = (node as unknown as { name: string }).name;
+      if (name === 'y') {
+        throw new Error('X-型区域边界函数 φ(x) 只能包含变量 x');
+      }
+    }
+  });
+  const evaluateAst = compileSurfaceNode(root);
+  return (x) => {
+    if (!Number.isFinite(x)) return null;
+    return toDisplayValue(evaluateAst(x, 0));
+  };
+}
+
+export function compileBoundOfY(expression: string): BoundEvaluator {
+  const root = parseSurfaceAst(expression);
+  root.traverse((node) => {
+    if (node.type === 'SymbolNode') {
+      const name = (node as unknown as { name: string }).name;
+      if (name === 'x') {
+        throw new Error('Y-型区域边界函数 ψ(y) 只能包含变量 y');
+      }
+    }
+  });
+  const evaluateAst = compileSurfaceNode(root);
+  return (y) => {
+    if (!Number.isFinite(y)) return null;
+    return toDisplayValue(evaluateAst(0, y));
   };
 }
 
@@ -488,12 +546,32 @@ function buildUniformGrid(
   return grid;
 }
 
+function buildCosineGaussLegendreRule(segments: number): {
+  nodes: Float64Array;
+  weights: Float64Array;
+} {
+  const count = 4 * segments;
+  const nodes = new Float64Array(count);
+  const weights = new Float64Array(count);
+  for (let s = 0; s < segments; s += 1) {
+    for (let r = 0; r < 4; r += 1) {
+      const idx = 4 * s + r;
+      const t = (s + 0.5 + 0.5 * GL4_OFFSETS[r]) / segments;
+      const wt = GL4_HALF_WEIGHTS[r] / segments;
+      nodes[idx] = 0.5 * (1 - Math.cos(Math.PI * t));
+      weights[idx] = wt * 0.5 * Math.PI * Math.sin(Math.PI * t);
+    }
+  }
+  return { nodes, weights };
+}
+
 function createRegionPredicate(
   regionType: IntegralRegionType,
   xStart: number,
   xEnd: number,
   yStart: number,
   yEnd: number,
+  curvilinear?: CompiledCurvilinearBounds,
 ): (x: number, y: number) => boolean {
   const lx = xEnd - xStart;
   const ly = yEnd - yStart;
@@ -520,16 +598,115 @@ function createRegionPredicate(
     };
   }
 
+  if (regionType === 'x-type' && curvilinear?.kind === 'x-type') {
+    const { lower, upper } = curvilinear;
+    return (x, y) => {
+      if (!inBox(x, y)) return false;
+      const lo = lower(x);
+      const hi = upper(x);
+      if (lo === null || hi === null || lo > hi + REGION_EPSILON) {
+        return false;
+      }
+      return y >= lo - REGION_EPSILON && y <= hi + REGION_EPSILON;
+    };
+  }
+
+  if (regionType === 'y-type' && curvilinear?.kind === 'y-type') {
+    const { lower, upper } = curvilinear;
+    return (x, y) => {
+      if (!inBox(x, y)) return false;
+      const lo = lower(y);
+      const hi = upper(y);
+      if (lo === null || hi === null || lo > hi + REGION_EPSILON) {
+        return false;
+      }
+      return x >= lo - REGION_EPSILON && x <= hi + REGION_EPSILON;
+    };
+  }
+
   return (x, y) => {
     if (!inBox(x, y)) return false;
     return y <= yStart + (ly * (x - xStart)) / lx + REGION_EPSILON;
   };
 }
 
+function computeCurvilinearReferenceIntegral(
+  evaluate: SurfaceEvaluator,
+  config: SurfaceIntegralConfig,
+  curvilinear: CompiledCurvilinearBounds,
+): { referenceIntegral: number; domainArea: number } {
+  const { xStart, xEnd, yStart, yEnd } = config;
+  const lx = xEnd - xStart;
+  const ly = yEnd - yStart;
+  const { nodes, weights } = buildCosineGaussLegendreRule(
+    CURVILINEAR_GL4_SEGMENTS,
+  );
+  const totalNodes = nodes.length;
+
+  let domainArea = 0;
+  let referenceIntegral = 0;
+
+  if (curvilinear.kind === 'x-type') {
+    for (let i = 0; i < totalNodes; i += 1) {
+      const x = xStart + nodes[i] * lx;
+      const wx = lx * weights[i];
+      const rawLo = curvilinear.lower(x);
+      const rawHi = curvilinear.upper(x);
+      if (rawLo === null || rawHi === null) continue;
+      const yLo = Math.max(yStart, rawLo);
+      const yHi = Math.min(yEnd, rawHi);
+      if (yHi <= yLo) continue;
+      const spanY = yHi - yLo;
+      const outerFactor = wx * spanY;
+      for (let j = 0; j < totalNodes; j += 1) {
+        const y = yLo + nodes[j] * spanY;
+        const z = evaluate(x, y);
+        if (z !== null) {
+          const dWeight = outerFactor * weights[j];
+          domainArea += dWeight;
+          referenceIntegral += z * dWeight;
+        }
+      }
+    }
+  } else {
+    for (let j = 0; j < totalNodes; j += 1) {
+      const y = yStart + nodes[j] * ly;
+      const wy = ly * weights[j];
+      const rawLo = curvilinear.lower(y);
+      const rawHi = curvilinear.upper(y);
+      if (rawLo === null || rawHi === null) continue;
+      const xLo = Math.max(xStart, rawLo);
+      const xHi = Math.min(xEnd, rawHi);
+      if (xHi <= xLo) continue;
+      const spanX = xHi - xLo;
+      const outerFactor = wy * spanX;
+      for (let i = 0; i < totalNodes; i += 1) {
+        const x = xLo + nodes[i] * spanX;
+        const z = evaluate(x, y);
+        if (z !== null) {
+          const dWeight = outerFactor * weights[i];
+          domainArea += dWeight;
+          referenceIntegral += z * dWeight;
+        }
+      }
+    }
+  }
+
+  return {
+    referenceIntegral: normalizeZero(referenceIntegral),
+    domainArea: normalizeZero(domainArea),
+  };
+}
+
 function computeReferenceIntegral(
   evaluate: SurfaceEvaluator,
   config: SurfaceIntegralConfig,
+  curvilinear?: CompiledCurvilinearBounds,
 ): { referenceIntegral: number; domainArea: number } {
+  if (curvilinear !== undefined) {
+    return computeCurvilinearReferenceIntegral(evaluate, config, curvilinear);
+  }
+
   const { regionType, xStart, xEnd, yStart, yEnd } = config;
   const lx = xEnd - xStart;
   const ly = yEnd - yStart;
@@ -633,12 +810,40 @@ function computeDoubleIntegral(
   const dx = lx / partitions;
   const dy = ly / partitions;
   const dA = dx * dy;
+
+  let curvilinear: CompiledCurvilinearBounds | undefined;
+  let boundaryCurveA: PlotPoint[] | undefined;
+  let boundaryCurveB: PlotPoint[] | undefined;
+
+  if (regionType === 'x-type') {
+    const phi1 = compileBoundOfX(config.yLowerExpr ?? String(yStart));
+    const phi2 = compileBoundOfX(config.yUpperExpr ?? String(yEnd));
+    curvilinear = { kind: 'x-type', lower: phi1, upper: phi2 };
+    const xSeq = buildUniformGrid(xStart, xEnd, SLICE_SAMPLE_COUNT - 1);
+    boundaryCurveA = xSeq.map((x): PlotPoint => [x, phi1(x)]);
+    boundaryCurveB = xSeq.map((x): PlotPoint => [x, phi2(x)]);
+  } else if (regionType === 'y-type') {
+    const psi1 = compileBoundOfY(config.xLowerExpr ?? String(xStart));
+    const psi2 = compileBoundOfY(config.xUpperExpr ?? String(xEnd));
+    curvilinear = { kind: 'y-type', lower: psi1, upper: psi2 };
+    const ySeq = buildUniformGrid(yStart, yEnd, SLICE_SAMPLE_COUNT - 1);
+    boundaryCurveA = ySeq.map((y): PlotPoint => {
+      const xVal = psi1(y);
+      return xVal === null ? [y, null] : [xVal, y];
+    });
+    boundaryCurveB = ySeq.map((y): PlotPoint => {
+      const xVal = psi2(y);
+      return xVal === null ? [y, null] : [xVal, y];
+    });
+  }
+
   const inRegion = createRegionPredicate(
     regionType,
     xStart,
     xEnd,
     yStart,
     yEnd,
+    curvilinear,
   );
 
   const prisms: RiemannPrism[] = [];
@@ -688,12 +893,13 @@ function computeDoubleIntegral(
   const { referenceIntegral, domainArea } = computeReferenceIntegral(
     evaluate,
     config,
+    curvilinear,
   );
   const absError = normalizeZero(Math.abs(riemannSum - referenceIntegral));
   const meanValue =
     domainArea > 0 ? normalizeZero(referenceIntegral / domainArea) : null;
 
-  return {
+  const result: SurfaceIntegralResult = {
     prisms,
     riemannSum,
     positiveVolume,
@@ -703,6 +909,13 @@ function computeDoubleIntegral(
     domainArea,
     meanValue,
   };
+
+  if (boundaryCurveA !== undefined && boundaryCurveB !== undefined) {
+    result.boundaryCurveA = boundaryCurveA;
+    result.boundaryCurveB = boundaryCurveB;
+  }
+
+  return result;
 }
 
 function estimatePartialDerivative(
