@@ -88,7 +88,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             数学分析 <span className="separator">/</span>{' '}
             {active?.title ?? '页面未找到'}
           </span>
-          <span className="version-label">v0.1 · 基础框架</span>
+          <span className="version-label">v0.2 · 三模块协同</span>
         </header>
         <main
           id="main-content"

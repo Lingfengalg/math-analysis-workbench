@@ -1,4 +1,4 @@
-import { parse, type MathNode } from 'mathjs';
+import { parse, type MathNode } from 'mathjs/number';
 import {
   plotRequestSchema,
   type PlotPoint,

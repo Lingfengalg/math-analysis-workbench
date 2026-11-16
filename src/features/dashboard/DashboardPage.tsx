@@ -8,6 +8,7 @@ import {
 } from '@ant-design/icons';
 import { Tag } from 'antd';
 import { PageHeader } from '@/shared/ui/PageHeader';
+import { createKnowledgeLink } from '@/shared/navigation/knowledge-link';
 import { modules } from '@/shared/navigation/modules';
 import styles from './DashboardPage.module.css';
 
@@ -66,7 +67,13 @@ export default function DashboardPage() {
             <br />
             把“看起来如此”变成“为什么如此”。
           </p>
-          <Link className={styles.heroButton} to="/knowledge?topic=derivative">
+          <Link
+            className={styles.heroButton}
+            to={createKnowledgeLink({
+              topic: 'derivative',
+              cardId: 'derivative-absolute',
+            })}
+          >
             探索这个问题 <ArrowRightOutlined />
           </Link>
         </div>
