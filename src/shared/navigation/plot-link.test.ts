@@ -14,6 +14,22 @@ describe('跨模块绘图契约', () => {
       request,
     );
   });
+  it('对比函数、纵轴范围与差商参数可往返传递', () => {
+    const request = {
+      expression: 'sin(x)',
+      compareExpression: 'x - x^3/6',
+      xMin: -4,
+      xMax: 4,
+      yMin: -2,
+      yMax: 2,
+      secant: { x0: 0, h: 0.5 },
+      sourceMistakeId: 'mistake-lhopital',
+    };
+    const link = createPlotLink(request);
+    expect(parsePlotSearch(new URLSearchParams(link.split('?')[1]))).toEqual(
+      request,
+    );
+  });
   it('没有表达式或参数错误时返回 null', () => {
     expect(parsePlotSearch(new URLSearchParams())).toBeNull();
     expect(
@@ -24,6 +40,12 @@ describe('跨模块绘图契约', () => {
     ).toBeNull();
     expect(
       parsePlotSearch(new URLSearchParams('expression=x&xMin=&xMax=2')),
+    ).toBeNull();
+    expect(
+      parsePlotSearch(new URLSearchParams('expression=x&yMin=5&yMax=-5')),
+    ).toBeNull();
+    expect(
+      parsePlotSearch(new URLSearchParams('expression=x&secantX0=0&secantH=0')),
     ).toBeNull();
   });
 });

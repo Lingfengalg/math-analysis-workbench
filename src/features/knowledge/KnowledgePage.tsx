@@ -3,11 +3,12 @@ import { Link, useSearchParams } from 'react-router';
 import { Alert, Card, Input, Segmented, Tag } from 'antd';
 import { ArrowRightOutlined, SearchOutlined } from '@ant-design/icons';
 import { knowledgeCards } from '@/content/knowledge';
+import { KNOWLEDGE_TOPIC_LABELS } from '@/shared/contracts';
 import { createPlotLink } from '@/shared/navigation/plot-link';
 import { Formula } from '@/shared/ui/Formula';
 import { PageHeader } from '@/shared/ui/PageHeader';
 
-const labels = { limit: '极限', continuity: '连续', derivative: '导数' };
+const labels = KNOWLEDGE_TOPIC_LABELS;
 
 export default function KnowledgePage() {
   const [search, setSearch] = useState('');

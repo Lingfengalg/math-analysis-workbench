@@ -8,7 +8,7 @@ import {
   AriaComponent,
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
-import type { PlotPoint } from '@/shared/contracts';
+import type { PlotPoint, SecantLineResult } from '@/shared/contracts';
 
 registerCharts([
   LineChart,
@@ -19,13 +19,16 @@ registerCharts([
   CanvasRenderer,
 ]);
 
-export function FunctionChart({
-  points,
-  expression,
-}: {
+export interface FunctionChartProps {
   points: PlotPoint[];
   expression: string;
-}) {
+  comparePoints?: PlotPoint[];
+  compareExpression?: string;
+  secantLine?: SecantLineResult;
+  yDomain?: [number | undefined, number | undefined];
+}
+
+export function FunctionChart({ points, expression }: FunctionChartProps) {
   const element = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!element.current) return;
