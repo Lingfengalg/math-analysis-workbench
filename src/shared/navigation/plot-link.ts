@@ -1,8 +1,11 @@
+import type { z } from 'zod';
 import {
   plotRequestSchema,
   surfacePlotRequestSchema,
+  tripleIntegralRequestSchema,
   type PlotRequest,
   type SurfacePlotRequest,
+  type TripleIntegralRequest,
 } from '@/shared/contracts';
 
 export function createPlotLink(request: PlotRequest): string {
@@ -28,7 +31,8 @@ export function createPlotLink(request: PlotRequest): string {
 }
 
 export function parsePlotSearch(search: URLSearchParams): PlotRequest | null {
-  if (search.get('mode') === '3d') return null;
+  const mode = search.get('mode');
+  if (mode === '3d' || mode === '3d-triple') return null;
   if (!search.has('expression')) return null;
   const numberParam = (name: string, fallback: number) => {
     const raw = search.get(name);
@@ -90,6 +94,14 @@ export function createSurfacePlotLink(
     search.set('intY1', String(value.integral.yEnd));
     search.set('intN', String(value.integral.partitions));
     search.set('intRule', value.integral.rule);
+    if (value.integral.yLowerExpr)
+      search.set('intYLo', value.integral.yLowerExpr);
+    if (value.integral.yUpperExpr)
+      search.set('intYHi', value.integral.yUpperExpr);
+    if (value.integral.xLowerExpr)
+      search.set('intXLo', value.integral.xLowerExpr);
+    if (value.integral.xUpperExpr)
+      search.set('intXHi', value.integral.xUpperExpr);
   }
   if (value.probe) {
     search.set('probeX', String(value.probe.x0));
@@ -101,8 +113,6 @@ export function createSurfacePlotLink(
     search.set('sourceMistakeId', value.sourceMistakeId);
   return `/plotting?${search.toString()}`;
 }
-
-import type { z } from 'zod';
 
 export function parseSurfacePlotSearch(
   search: URLSearchParams,
@@ -132,7 +142,7 @@ export function parseSurfacePlotSearch(
   if (zMax !== undefined) payload.zMax = zMax;
 
   if (search.has('intRegion')) {
-    payload.integral = {
+    const integralObj: Record<string, unknown> = {
       regionType: search.get('intRegion'),
       xStart: num('intX0', -2),
       xEnd: num('intX1', 2),
@@ -141,6 +151,15 @@ export function parseSurfacePlotSearch(
       partitions: num('intN', 14),
       rule: search.get('intRule') ?? 'midpoint',
     };
+    const yLo = search.get('intYLo');
+    const yHi = search.get('intYHi');
+    const xLo = search.get('intXLo');
+    const xHi = search.get('intXHi');
+    if (yLo !== null) integralObj.yLowerExpr = yLo;
+    if (yHi !== null) integralObj.yUpperExpr = yHi;
+    if (xLo !== null) integralObj.xLowerExpr = xLo;
+    if (xHi !== null) integralObj.xUpperExpr = xHi;
+    payload.integral = integralObj;
   }
   if (search.has('probeX') || search.has('probeY')) {
     payload.probe = {
@@ -154,5 +173,65 @@ export function parseSurfacePlotSearch(
   if (sourceMistakeId !== null) payload.sourceMistakeId = sourceMistakeId;
 
   const result = surfacePlotRequestSchema.safeParse(payload);
+  return result.success ? result.data : null;
+}
+
+export function createTriplePlotLink(
+  request: z.input<typeof tripleIntegralRequestSchema>,
+): string {
+  const value = tripleIntegralRequestSchema.parse(request);
+  const search = new URLSearchParams({
+    mode: '3d-triple',
+    expression: value.expression,
+    regionType: value.regionType,
+    xMin: String(value.xMin),
+    xMax: String(value.xMax),
+    yMin: String(value.yMin),
+    yMax: String(value.yMax),
+    zMin: String(value.zMin),
+    zMax: String(value.zMax),
+    partitions: String(value.partitions),
+  });
+  if (value.sliceZ !== undefined) search.set('sliceZ', String(value.sliceZ));
+  if (value.sourceKnowledgeId)
+    search.set('sourceKnowledgeId', value.sourceKnowledgeId);
+  if (value.sourceMistakeId)
+    search.set('sourceMistakeId', value.sourceMistakeId);
+  return `/plotting?${search.toString()}`;
+}
+
+export function parseTriplePlotSearch(
+  search: URLSearchParams,
+): TripleIntegralRequest | null {
+  if (search.get('mode') !== '3d-triple' || !search.has('expression'))
+    return null;
+  const num = (name: string, fallback: number) => {
+    const raw = search.get(name);
+    return raw === null ? fallback : raw.trim() === '' ? NaN : Number(raw);
+  };
+  const optNum = (name: string): number | undefined => {
+    const raw = search.get(name);
+    if (raw === null) return undefined;
+    return raw.trim() === '' ? NaN : Number(raw);
+  };
+  const payload: Record<string, unknown> = {
+    expression: search.get('expression'),
+    regionType: search.get('regionType') ?? 'sphere',
+    xMin: num('xMin', -2),
+    xMax: num('xMax', 2),
+    yMin: num('yMin', -2),
+    yMax: num('yMax', 2),
+    zMin: num('zMin', -2),
+    zMax: num('zMax', 2),
+    partitions: num('partitions', 12),
+  };
+  const sliceZ = optNum('sliceZ');
+  if (sliceZ !== undefined) payload.sliceZ = sliceZ;
+  const sourceKnowledgeId = search.get('sourceKnowledgeId');
+  if (sourceKnowledgeId !== null) payload.sourceKnowledgeId = sourceKnowledgeId;
+  const sourceMistakeId = search.get('sourceMistakeId');
+  if (sourceMistakeId !== null) payload.sourceMistakeId = sourceMistakeId;
+
+  const result = tripleIntegralRequestSchema.safeParse(payload);
   return result.success ? result.data : null;
 }

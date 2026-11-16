@@ -90,6 +90,10 @@ const REGION_INEQUALITY_NOTES: Record<IntegralRegionType, string> = {
   disk: '圆/椭圆域不等式 D：(x - x_c)² / r_x² + (y - y_c)² / r_y² ≤ 1（宜用极坐标变换 dx dy = r dr dθ，切勿漏乘雅可比因子 r）',
   triangle:
     '三角形域不等式 D：a ≤ x ≤ b，c ≤ y ≤ c + k(x - a)，其中 k = (d - c)/(b - a)（先 y 后 x 穿线法变上限累次积分）',
+  'x-type':
+    '一般 X-型曲边域 D：a ≤ x ≤ b，φ₁(x) ≤ y ≤ φ₂(x)（先对 y 积分再对 x 积分：∫_a^b dx ∫_{φ₁(x)}^{φ₂(x)} f(x, y) dy）',
+  'y-type':
+    '一般 Y-型曲边域 D：c ≤ y ≤ d，ψ₁(y) ≤ x ≤ ψ₂(y)（交换积分次序：先对 x 积分再对 y 积分：∫_c^d dy ∫_{ψ₁(y)}^{ψ₂(y)} f(x, y) dx）',
 };
 
 const SURFACE_PRESETS: ReadonlyArray<{

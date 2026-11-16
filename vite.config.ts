@@ -7,6 +7,14 @@ export default defineConfig({
   // Relative asset URLs work both at / and at /math-analysis-workbench/.
   base: './',
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
+  server: {
+    proxy: {
+      '/api/ai': {
+        target: 'http://127.0.0.1:8787',
+        changeOrigin: true,
+      },
+    },
+  },
   build: {
     chunkSizeWarningLimit: 650,
     rolldownOptions: {

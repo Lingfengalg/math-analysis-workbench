@@ -5,6 +5,8 @@ import type {
   PlotWorkerResponse,
   SurfacePlotRequest,
   SurfacePlotResult,
+  TripleIntegralRequest,
+  TripleIntegralResult,
 } from '@/shared/contracts';
 
 type PendingTask =
@@ -19,6 +21,13 @@ type PendingTask =
       kind: '3d';
       request: SurfacePlotRequest;
       resolve: (value: SurfacePlotResult) => void;
+      reject: (reason: Error | DOMException) => void;
+      cleanup: () => void;
+    }
+  | {
+      kind: '3d-triple';
+      request: TripleIntegralRequest;
+      resolve: (value: TripleIntegralResult) => void;
       reject: (reason: Error | DOMException) => void;
       cleanup: () => void;
     };
@@ -51,6 +60,9 @@ function toWorkerPayload(id: number, task: PendingTask): PlotWorkerRequest {
   if (task.kind === '3d') {
     return { kind: '3d', requestId: id, request: task.request };
   }
+  if (task.kind === '3d-triple') {
+    return { kind: '3d-triple', requestId: id, request: task.request };
+  }
   return { requestId: id, request: task.request };
 }
 
@@ -77,7 +89,13 @@ function getOrCreateWorker(): Worker {
     if (event.data.ok) {
       if (task.kind === '3d' && event.data.kind === '3d') {
         task.resolve(event.data.data);
-      } else if (task.kind === '1d' && event.data.kind !== '3d') {
+      } else if (task.kind === '3d-triple' && event.data.kind === '3d-triple') {
+        task.resolve(event.data.data);
+      } else if (
+        task.kind === '1d' &&
+        event.data.kind !== '3d' &&
+        event.data.kind !== '3d-triple'
+      ) {
         task.resolve(event.data.data);
       } else {
         task.reject(new Error('计算结果类型不匹配。'));
@@ -195,6 +213,23 @@ export function calculateSurface(
   return enqueueWorkerTask<SurfacePlotRequest, SurfacePlotResult>(
     (resolve, reject, cleanup) => ({
       kind: '3d',
+      request,
+      resolve,
+      reject,
+      cleanup,
+    }),
+    request,
+    signal,
+  );
+}
+
+export function calculateTripleIntegral(
+  request: TripleIntegralRequest,
+  signal: AbortSignal,
+): Promise<TripleIntegralResult> {
+  return enqueueWorkerTask<TripleIntegralRequest, TripleIntegralResult>(
+    (resolve, reject, cleanup) => ({
+      kind: '3d-triple',
       request,
       resolve,
       reject,

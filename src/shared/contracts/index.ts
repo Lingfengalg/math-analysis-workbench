@@ -93,13 +93,17 @@ export const integralRegionTypeSchema = z.enum([
   'rectangle',
   'disk',
   'triangle',
+  'x-type',
+  'y-type',
 ]);
 export type IntegralRegionType = z.infer<typeof integralRegionTypeSchema>;
 
 export const INTEGRAL_REGION_LABELS: Record<IntegralRegionType, string> = {
   rectangle: '矩形域 [a,b]×[c,d]',
   disk: '圆域（极坐标变换）',
-  triangle: '三角形域（累次定限）',
+  triangle: '三角形域（直线定限）',
+  'x-type': 'X-型曲边域 φ₁(x)≤y≤φ₂(x)',
+  'y-type': 'Y-型曲边域 ψ₁(y)≤x≤ψ₂(y)',
 };
 
 export const riemannRuleSchema = z.enum([
@@ -122,6 +126,10 @@ export const surfaceIntegralConfigSchema = z
     xEnd: z.number().finite().min(-1000).max(1000),
     yStart: z.number().finite().min(-1000).max(1000),
     yEnd: z.number().finite().min(-1000).max(1000),
+    yLowerExpr: z.string().trim().min(1).max(120).optional(),
+    yUpperExpr: z.string().trim().min(1).max(120).optional(),
+    xLowerExpr: z.string().trim().min(1).max(120).optional(),
+    xUpperExpr: z.string().trim().min(1).max(120).optional(),
     partitions: z.number().int().min(4).max(36),
     rule: riemannRuleSchema,
   })
@@ -194,6 +202,8 @@ export interface SurfaceIntegralResult {
   absError: number;
   domainArea: number;
   meanValue: number | null;
+  boundaryCurveA?: PlotPoint[];
+  boundaryCurveB?: PlotPoint[];
 }
 
 export interface SurfaceProbeResult {
@@ -219,20 +229,115 @@ export interface SurfacePlotResult {
   probeResult?: SurfaceProbeResult;
 }
 
+/* --- 3D Triple Integral Spatial Voxel & Cross-Section Contracts --- */
+
+export const tripleRegionTypeSchema = z.enum([
+  'box',
+  'sphere',
+  'cylinder',
+  'tetrahedron',
+  'paraboloid-cap',
+]);
+export type TripleRegionType = z.infer<typeof tripleRegionTypeSchema>;
+
+export const TRIPLE_REGION_LABELS: Record<TripleRegionType, string> = {
+  box: '长方体域 [x₀,x₁]×[y₀,y₁]×[z₀,z₁]',
+  sphere: '球体域（球面坐标 ρ²sinφ）',
+  cylinder: '圆柱体域（柱面坐标 r dr dθ dz）',
+  tetrahedron: '四面体域（直角坐标三重累次）',
+  'paraboloid-cap': '抛物面顶盖域（先二后一截面法）',
+};
+
+export const tripleIntegralRequestSchema = z
+  .object({
+    expression: z
+      .string()
+      .trim()
+      .min(1, '请输入三元被积函数 f(x, y, z)')
+      .max(160, '表达式最多 160 个字符'),
+    regionType: tripleRegionTypeSchema,
+    xMin: z.number().finite().min(-100).max(100),
+    xMax: z.number().finite().min(-100).max(100),
+    yMin: z.number().finite().min(-100).max(100),
+    yMax: z.number().finite().min(-100).max(100),
+    zMin: z.number().finite().min(-100).max(100),
+    zMax: z.number().finite().min(-100).max(100),
+    partitions: z.number().int().min(4).max(22).default(12),
+    sliceZ: z.number().finite().min(-100).max(100).optional(),
+    sourceKnowledgeId: z.string().max(100).optional(),
+    sourceMistakeId: z.string().max(100).optional(),
+  })
+  .refine((v) => v.xMin < v.xMax, {
+    message: 'x 下限必须小于上限',
+    path: ['xMax'],
+  })
+  .refine((v) => v.yMin < v.yMax, {
+    message: 'y 下限必须小于上限',
+    path: ['yMax'],
+  })
+  .refine((v) => v.zMin < v.zMax, {
+    message: 'z 下限必须小于上限',
+    path: ['zMax'],
+  });
+export type TripleIntegralRequest = z.infer<typeof tripleIntegralRequestSchema>;
+
+export interface TripleVoxel {
+  x: number;
+  y: number;
+  z: number;
+  dx: number;
+  dy: number;
+  dz: number;
+  value: number;
+  inSlice: boolean;
+}
+
+export interface TripleIntegralResult {
+  voxels: TripleVoxel[];
+  riemannSum: number;
+  referenceIntegral: number;
+  absError: number;
+  domainVolume: number;
+  meanDensity: number | null;
+  valueMin: number | null;
+  valueMax: number | null;
+  sliceInfo?: {
+    z: number;
+    area: number;
+    sliceIntegral: number;
+    voxelCount: number;
+  };
+}
+
 export type PlotWorkerRequest =
   | { kind?: '1d'; requestId?: number; request: PlotRequest }
-  | { kind: '3d'; requestId?: number; request: SurfacePlotRequest };
+  | { kind: '3d'; requestId?: number; request: SurfacePlotRequest }
+  | { kind: '3d-triple'; requestId?: number; request: TripleIntegralRequest };
 
 export type PlotWorkerResponse =
   | { kind?: '1d'; requestId?: number; ok: true; data: PlotResult }
   | { kind: '3d'; requestId?: number; ok: true; data: SurfacePlotResult }
-  | { kind?: '1d' | '3d'; requestId?: number; ok: false; error: string };
+  | {
+      kind: '3d-triple';
+      requestId?: number;
+      ok: true;
+      data: TripleIntegralResult;
+    }
+  | {
+      kind?: '1d' | '3d' | '3d-triple';
+      requestId?: number;
+      ok: false;
+      error: string;
+    };
+
+/* --- Knowledge Graph Contracts --- */
 
 export const knowledgeExampleSchema = z.object({
   kind: z.enum(['example', 'counterexample']).optional(),
   explanation: z.string().min(1),
   plot: plotRequestSchema.optional(),
   surfacePlot: surfacePlotRequestSchema.optional(),
+  triplePlot: tripleIntegralRequestSchema.optional(),
 });
 export type KnowledgeExample = z.infer<typeof knowledgeExampleSchema>;
 
@@ -253,8 +358,11 @@ export type KnowledgeCard = z.infer<typeof knowledgeCardSchema>;
 export const preferencesSchema = z.object({
   defaultPlot: plotRequestSchema,
   defaultSurfacePlot: surfacePlotRequestSchema.optional(),
+  defaultTriplePlot: tripleIntegralRequestSchema.optional(),
 });
 export type Preferences = z.infer<typeof preferencesSchema>;
+
+/* --- Mistakes Notebook Contracts --- */
 
 export const mistakeErrorTagSchema = z.enum([
   'domain-ignored',
@@ -320,6 +428,7 @@ export const mistakeItemSchema = z.object({
     .optional(),
   counterexamplePlot: plotRequestSchema.optional(),
   counterexampleSurfacePlot: surfacePlotRequestSchema.optional(),
+  counterexampleTriplePlot: tripleIntegralRequestSchema.optional(),
   createdAt: z.string().min(1).max(40),
   updatedAt: z.string().min(1).max(40),
 });
@@ -329,3 +438,68 @@ export const mistakesStoreSchema = z.object({
   items: z.array(mistakeItemSchema).max(500),
 });
 export type MistakesStore = z.infer<typeof mistakesStoreSchema>;
+
+/* --- Socratic AI Tutor Contracts (Server-Proxied, Zero Client Keys) --- */
+
+export const assistantRoleSchema = z.enum(['user', 'assistant']);
+export type AssistantRole = z.infer<typeof assistantRoleSchema>;
+
+export const assistantContextSchema = z.object({
+  kind: z.enum(['knowledge', 'mistake', 'plotting']),
+  id: z.string().max(100).optional(),
+  title: z.string().trim().min(1).max(160),
+  summary: z.string().trim().min(1).max(800),
+  formula: z.string().trim().max(300).optional(),
+});
+export type AssistantContext = z.infer<typeof assistantContextSchema>;
+
+export const assistantMessageSchema = z.object({
+  id: z.string().min(1).max(80),
+  role: assistantRoleSchema,
+  content: z.string().min(1).max(8000),
+  createdAt: z.string().min(1).max(40),
+  model: z.string().max(100).optional(),
+});
+export type AssistantMessage = z.infer<typeof assistantMessageSchema>;
+
+export const assistantChatRequestSchema = z.object({
+  messages: z
+    .array(
+      z.object({
+        role: assistantRoleSchema,
+        content: z.string().trim().min(1).max(4000),
+      }),
+    )
+    .min(1)
+    .max(24),
+  context: assistantContextSchema.optional(),
+});
+export type AssistantChatRequest = z.infer<typeof assistantChatRequestSchema>;
+
+export const assistantHealthSchema = z.object({
+  configured: z.boolean(),
+  provider: z.string(),
+  model: z.string(),
+  privacyNotice: z.string(),
+});
+export type AssistantHealth = z.infer<typeof assistantHealthSchema>;
+
+export const assistantChatResponseSchema = z.discriminatedUnion('ok', [
+  z.object({
+    ok: z.literal(true),
+    reply: z.string().min(1),
+    model: z.string(),
+  }),
+  z.object({
+    ok: z.literal(false),
+    code: z.string(),
+    error: z.string(),
+  }),
+]);
+export type AssistantChatResponse = z.infer<typeof assistantChatResponseSchema>;
+
+export const assistantSessionSchema = z.object({
+  messages: z.array(assistantMessageSchema).max(60),
+  attachedContext: assistantContextSchema.optional(),
+});
+export type AssistantSession = z.infer<typeof assistantSessionSchema>;

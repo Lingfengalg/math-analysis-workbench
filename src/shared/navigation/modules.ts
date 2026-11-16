@@ -1,4 +1,14 @@
-export const modules = [
+export type ModuleStatus = 'available' | 'planned';
+
+export interface ModuleEntry {
+  id: 'dashboard' | 'knowledge' | 'plotting' | 'mistakes' | 'assistant';
+  path: string;
+  title: string;
+  caption: string;
+  status: ModuleStatus;
+}
+
+export const modules: readonly ModuleEntry[] = [
   {
     id: 'dashboard',
     path: '/',
@@ -17,7 +27,7 @@ export const modules = [
     id: 'plotting',
     path: '/plotting',
     title: '绘图计算',
-    caption: '让抽象函数可视化',
+    caption: '三维曲面与重积分仿真',
     status: 'available',
   },
   {
@@ -31,8 +41,8 @@ export const modules = [
     id: 'assistant',
     path: '/assistant',
     title: 'AI 助教',
-    caption: '循序渐进的学习引导',
-    status: 'planned',
+    caption: '苏格拉底式条件引导',
+    status: 'available',
   },
-] as const;
-export type ModuleId = (typeof modules)[number]['id'];
+];
+export type ModuleId = ModuleEntry['id'];
