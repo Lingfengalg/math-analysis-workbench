@@ -1,0 +1,276 @@
+.alertGap {
+  margin-bottom: 16px;
+}
+
+.bannerRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.bannerLink {
+  color: #176b5b;
+  font-weight: 600;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.bannerLink:hover {
+  color: #194e42;
+  text-decoration: underline;
+}
+
+.plotLayout {
+  display: grid;
+  grid-template-columns: 356px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.plotLayout :global(.ant-card) {
+  min-width: 0;
+}
+
+.rangeFields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.rangeFields :global(.ant-input-number) {
+  width: 100%;
+}
+
+.compactItem {
+  margin-bottom: 0;
+}
+
+.optionPanel {
+  background: #f8faf6;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+
+.optionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.optionLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.optionHint {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.optionBody {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+}
+
+.quickStepBar {
+  margin-top: 10px;
+}
+
+.quickStepLabel {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.secondaryAction {
+  margin-top: 10px;
+}
+
+.presetHeading {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 20px 0 8px;
+  color: var(--text);
+}
+
+.presetSubnote {
+  margin: 0 0 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.smallNote {
+  margin: 18px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.85;
+}
+
+.saveAlert {
+  margin-top: 14px;
+}
+
+.chartExtra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.mistakeLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #176b5b;
+  background: #eef4ed;
+  border: 1px solid #cfe0d4;
+  padding: 4px 10px;
+  border-radius: 6px;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.mistakeLink:hover {
+  background: #e2eee0;
+  border-color: #96b9a9;
+  color: #194e42;
+}
+
+.chartLoading {
+  height: 390px;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  gap: 16px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.errorAlert {
+  margin-bottom: 16px;
+}
+
+.chartSummary {
+  margin: 14px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.8;
+  word-break: break-word;
+}
+
+.secantCard {
+  margin-top: 16px;
+  padding: 14px 16px;
+  background: #f6f9f4;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.secantTitleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.secantTitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #194e42;
+}
+
+.secantFormulaHint {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.secantMetrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.metricItem {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  min-width: 0;
+}
+
+.metricLabel {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.metricValue {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  word-break: break-all;
+}
+
+.metricSub {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.secantAlert {
+  margin-top: 12px;
+}
+
+.footerNotice {
+  margin-top: 24px;
+}
+
+@media (max-width: 1200px) {
+  .plotLayout {
+    grid-template-columns: 310px minmax(0, 1fr);
+  }
+
+  .secantMetrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 960px) {
+  .plotLayout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .rangeFields {
+    grid-template-columns: 1fr;
+  }
+
+  .secantMetrics {
+    grid-template-columns: 1fr;
+  }
+}
