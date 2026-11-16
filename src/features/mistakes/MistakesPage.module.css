@@ -1,0 +1,400 @@
+.headerActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.hiddenFileInput {
+  display: none;
+}
+
+.alertStack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(220px, 1.4fr);
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.statCard {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.statCardHighlight {
+  background: #f4f7f1;
+  border-color: #cfe0d5;
+}
+
+.statLabel {
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.4px;
+}
+
+.statValue {
+  font-size: 26px;
+  font-weight: 650;
+  color: #194e42;
+  line-height: 1.15;
+}
+
+.statValueUnresolved {
+  color: #b54708;
+}
+
+.statValueReviewing {
+  color: #175cd3;
+}
+
+.statValueMastered {
+  color: #176b5b;
+}
+
+.statTopError {
+  font-size: 14px;
+  font-weight: 600;
+  color: #194e42;
+  line-height: 1.45;
+}
+
+.statSubtle {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.filterPanel {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin-bottom: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.filterRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.filterControls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.errorSelect {
+  min-width: 220px;
+}
+
+.searchInput {
+  max-width: 340px;
+  flex: 1;
+  min-width: 200px;
+}
+
+.resultCount {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.emptyBox {
+  background: #ffffff;
+  border: 1px dashed #c5d6cb;
+  border-radius: 16px;
+  padding: 56px 28px;
+  text-align: center;
+  max-width: 760px;
+  margin: 12px auto 28px;
+}
+
+.emptyBadge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: #eef4ed;
+  color: #176b5b;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  margin-bottom: 14px;
+}
+
+.emptyBox h2 {
+  font-size: 21px;
+  margin: 0 0 10px;
+  color: var(--text);
+}
+
+.emptyBox p {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.85;
+  max-width: 520px;
+  margin: 0 auto 26px;
+}
+
+.emptyActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+}
+
+.filteredEmpty {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 48px 20px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.mistakeCard {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  transition: border-color 0.18s;
+}
+
+.mistakeCard:hover {
+  border-color: #a9c4b6;
+}
+
+.cardTopBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tagGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.tagGroup :global(.ant-tag) {
+  margin: 0;
+}
+
+.cardTitle {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.promptText {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.8;
+  color: #4f6359;
+}
+
+.contrastGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.attemptBox {
+  background: #fff9f6;
+  border: 1px solid #f4dfd5;
+  border-left: 3px solid #d96b43;
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.correctionBox {
+  background: #f5faf6;
+  border: 1px solid #d7e8dc;
+  border-left: 3px solid #2b7a5b;
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.boxLabel {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.attemptBox .boxLabel {
+  color: #b44620;
+}
+
+.correctionBox .boxLabel {
+  color: #176b5b;
+}
+
+.boxText {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.85;
+  color: #364940;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.cardFooter {
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.crossLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+}
+
+.crossLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #176b5b;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: #eef5f0;
+  transition: background 0.15s;
+}
+
+.crossLink:hover {
+  background: #dfece3;
+  color: #115245;
+}
+
+.cardActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.confirmPrompt {
+  font-size: 12px;
+  color: #b42318;
+  font-weight: 500;
+}
+
+.formTriple {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.plotConfigBox {
+  background: #f8faf7;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 14px 2px;
+  margin-top: 4px;
+}
+
+.plotConfigTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: #385046;
+  margin: 0 0 10px;
+}
+
+.plotRangeRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.plotRangeRow :global(.ant-input-number) {
+  width: 100%;
+}
+
+.formulaPreview {
+  margin-top: -8px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border: 1px dashed #c8d8ce;
+  border-radius: 8px;
+  background: #fafcf9;
+}
+
+.formulaPreviewLabel {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+@media (max-width: 1200px) {
+  .statsGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .cardGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .statsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .statCardHighlight {
+    grid-column: 1 / -1;
+  }
+  .formTriple {
+    grid-template-columns: 1fr;
+  }
+  .plotRangeRow {
+    grid-template-columns: 1fr;
+  }
+  .searchInput,
+  .errorSelect {
+    max-width: none;
+    width: 100%;
+  }
+}

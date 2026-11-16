@@ -132,6 +132,79 @@
   padding-top: 20px;
   color: #176b5b;
 }
+.loopSection {
+  margin-top: 28px;
+  padding: 24px 26px;
+  background: #f4f7f1;
+  border: 1px solid #dce5d8;
+  border-radius: 14px;
+}
+.loopHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.loopHeader h2 {
+  font-size: 18px;
+  margin: 8px 0 0;
+  color: var(--text);
+}
+.loopCaption {
+  font-size: 11px;
+  color: var(--muted);
+}
+.loopGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.loopCard {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.loopStepBadge {
+  display: inline-block;
+  align-self: flex-start;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: #176b5b;
+  background: #eef4ed;
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+.loopCard h3 {
+  font-size: 15px;
+  margin: 4px 0 0;
+  color: var(--text);
+}
+.loopCard p {
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--muted);
+  margin: 0;
+  flex: 1;
+}
+.loopAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #176b5b;
+  padding-top: 8px;
+}
+.loopAction:hover {
+  color: #115245;
+}
 .teamNote {
   display: flex;
   gap: 24px;
@@ -160,6 +233,13 @@
   .moduleGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .loopGrid {
+    grid-template-columns: 1fr;
+  }
+  .loopHeader {
+    flex-direction: column;
+    align-items: flex-start;
+  }
   .heroCopy {
     padding: 28px;
   }
@@ -176,6 +256,12 @@
   }
   .moduleGrid {
     grid-template-columns: 1fr;
+  }
+  .loopSection {
+    padding: 18px 16px;
+  }
+  .loopCaption {
+    display: none;
   }
   .teamNote {
     display: block;
