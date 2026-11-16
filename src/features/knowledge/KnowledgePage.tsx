@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { Alert, Button, Card, Input, Segmented, Tag } from 'antd';
+import { Button, Card, Input, Segmented, Tag } from 'antd';
 import {
   ArrowRightOutlined,
   CompassOutlined,
@@ -91,17 +91,19 @@ export default function KnowledgePage() {
   return (
     <>
       <PageHeader
-        eyebrow="KNOWLEDGE EXPLORER"
+        eyebrow="ε-δ · 定理与反例图谱"
         title="把条件看清，把概念串起来。"
         description="先读定义，再检查条件，用正例、反例与关联知识图谱检验自己的理解。"
       />
-      <Alert
-        className={styles.noticeAlert}
-        type="info"
-        showIcon
-        title="结构化知识图谱：12 张核心知识卡片 · 5 大数分板块"
-        description="覆盖数列极限、函数极限、连续性、导数与微分、积分学的核心定理与高频反例。学习提示：图像与数值观察仅用于直观启发与反例检验，不能替代严格数学证明。"
-      />
+      <div className={styles.metaRibbon}>
+        <span className={styles.metaBadge}>
+          12 张核心知识卡片 · 5 大数分板块
+        </span>
+        <span className={styles.metaHint}>
+          覆盖数列极限、函数极限、连续性、导数与微分、积分学 ·
+          图像与数值观察不能替代严格数学证明
+        </span>
+      </div>
 
       {focusedCard && !search.trim() && (
         <div className={styles.focusBanner} role="status">

@@ -177,18 +177,35 @@ export function FunctionChart({
       xAxis: {
         type: 'value',
         name: 'x',
-        splitLine: { lineStyle: { color: '#edf0ed' } },
+        axisLine: { lineStyle: { color: 'rgba(20, 58, 48, 0.35)' } },
+        splitLine: { lineStyle: { color: 'rgba(20, 58, 48, 0.07)' } },
       },
       yAxis: {
         type: 'value',
         name: 'f(x)',
         ...(yMin !== undefined ? { min: yMin } : {}),
         ...(yMax !== undefined ? { max: yMax } : {}),
-        splitLine: { lineStyle: { color: '#edf0ed' } },
+        axisLine: { lineStyle: { color: 'rgba(20, 58, 48, 0.35)' } },
+        splitLine: { lineStyle: { color: 'rgba(20, 58, 48, 0.07)' } },
       },
       dataZoom: [
         { type: 'inside', filterMode: 'none' },
-        { type: 'slider', height: 18, bottom: 8 },
+        {
+          type: 'slider',
+          height: 18,
+          bottom: 8,
+          borderColor: 'rgba(255, 255, 255, 0.72)',
+          backgroundColor: 'rgba(255, 255, 255, 0.34)',
+          fillerColor: 'rgba(15, 106, 88, 0.14)',
+          dataBackground: {
+            lineStyle: { color: 'rgba(15, 106, 88, 0.35)' },
+            areaStyle: { color: 'rgba(15, 106, 88, 0.1)' },
+          },
+          handleStyle: {
+            color: '#ffffff',
+            borderColor: '#0f6a58',
+          },
+        },
       ],
       series,
     };

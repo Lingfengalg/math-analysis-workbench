@@ -512,7 +512,7 @@ export default function PlottingPage() {
   return (
     <>
       <PageHeader
-        eyebrow="FUNCTION LAB"
+        eyebrow="f(x) · 函数与差商实验室"
         title="让抽象的变化，变得看得见。"
         description="输入主函数与对比函数，借助纵轴保护与割线差商实验探索极限、连续与可导条件。"
       />
@@ -956,13 +956,13 @@ export default function PlottingPage() {
         </Card>
       </div>
 
-      <Alert
-        className={styles.footerNotice}
-        type="warning"
-        showIcon
-        title="观察图像，不等于证明结论"
-        description="这里只做有限采样。超出实数定义域、非有限值和绝对值大于 10⁶ 的结果会留空；中点检查仅能启发式识别部分间断，可能漏检或误判，不保证识别全部间断点或高频变化。"
-      />
+      <div className={styles.footerNotice}>
+        <strong>观察图像 ≠ 证明结论</strong>
+        <span>
+          此处仅执行有限采样：定义域外、非有限值与绝对值大于 10⁶
+          的结果留空；启发式断点检查可能漏检或误判，不能替代严格极限与可导性论证。
+        </span>
+      </div>
     </>
   );
 }

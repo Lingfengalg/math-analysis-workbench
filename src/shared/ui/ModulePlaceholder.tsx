@@ -17,7 +17,7 @@ export function ModulePlaceholder({
   return (
     <>
       <PageHeader
-        eyebrow="EXTENSION MODULE"
+        eyebrow="扩展模块 · 架构预留"
         title={title}
         description={description}
         extra={<Tag>待开发</Tag>}

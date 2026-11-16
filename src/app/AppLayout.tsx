@@ -45,10 +45,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <NavLink to="/" className="brand" aria-label="析知 首页">
           <span className="brand-symbol">∂</span>
           <span>
-            析知<small>ANALYSIS WORKSPACE</small>
+            析知<small>数学分析研习台</small>
           </span>
         </NavLink>
-        <div className="nav-label">学习空间 / WORKSPACE</div>
+        <div className="nav-label">研习空间</div>
         <nav aria-label="主导航">
           {modules.map((module) => {
             const Icon = icons[module.id];

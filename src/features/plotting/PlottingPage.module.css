@@ -1,5 +1,6 @@
 .alertGap {
   margin-bottom: 16px;
+  border-radius: 14px;
 }
 
 .bannerRow {
@@ -11,7 +12,7 @@
 }
 
 .bannerLink {
-  color: #176b5b;
+  color: var(--accent);
   font-weight: 600;
   font-size: 12px;
   display: inline-flex;
@@ -21,19 +22,25 @@
 }
 
 .bannerLink:hover {
-  color: #194e42;
+  color: var(--accent-strong);
   text-decoration: underline;
 }
 
 .plotLayout {
   display: grid;
-  grid-template-columns: 356px minmax(0, 1fr);
+  grid-template-columns: 364px minmax(0, 1fr);
   gap: 20px;
   align-items: start;
 }
 
 .plotLayout :global(.ant-card) {
   min-width: 0;
+  border-radius: var(--radius-lg) !important;
+  background: var(--glass-bg) !important;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--glass-shadow), var(--glass-rim) !important;
 }
 
 .rangeFields {
@@ -51,10 +58,13 @@
 }
 
 .optionPanel {
-  background: #f8faf6;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.42);
+  backdrop-filter: blur(14px) saturate(165%);
+  -webkit-backdrop-filter: blur(14px) saturate(165%);
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  border-radius: 14px;
+  padding: 13px 15px;
   margin-bottom: 14px;
 }
 
@@ -74,7 +84,7 @@
 
 .optionHint {
   margin: 4px 0 0;
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--muted);
   line-height: 1.6;
 }
@@ -82,7 +92,7 @@
 .optionBody {
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px dashed var(--border);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .quickStepBar {
@@ -101,8 +111,8 @@
 }
 
 .presetHeading {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 12.5px;
+  font-weight: 650;
   margin: 20px 0 8px;
   color: var(--text);
 }
@@ -117,11 +127,12 @@
   margin: 18px 0 0;
   font-size: 11px;
   color: var(--muted);
-  line-height: 1.85;
+  line-height: 1.82;
 }
 
 .saveAlert {
   margin-top: 14px;
+  border-radius: 12px;
 }
 
 .chartExtra {
@@ -137,20 +148,21 @@
   gap: 6px;
   font-size: 12px;
   font-weight: 600;
-  color: #176b5b;
-  background: #eef4ed;
-  border: 1px solid #cfe0d4;
-  padding: 4px 10px;
-  border-radius: 6px;
+  color: var(--accent);
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.88);
+  box-shadow: inset 0 1px 0 #ffffff;
+  padding: 4px 12px;
+  border-radius: 999px;
   transition:
-    background 0.15s,
-    border-color 0.15s;
+    background 0.16s ease,
+    transform 0.16s ease;
 }
 
 .mistakeLink:hover {
-  background: #e2eee0;
-  border-color: #96b9a9;
-  color: #194e42;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--accent-strong);
+  transform: translateY(-1px);
 }
 
 .chartLoading {
@@ -165,6 +177,7 @@
 
 .errorAlert {
   margin-bottom: 16px;
+  border-radius: 12px;
 }
 
 .chartSummary {
@@ -177,10 +190,13 @@
 
 .secantCard {
   margin-top: 16px;
-  padding: 14px 16px;
-  background: #f6f9f4;
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  padding: 15px 17px;
+  background: rgba(255, 255, 255, 0.42);
+  backdrop-filter: blur(16px) saturate(170%);
+  -webkit-backdrop-filter: blur(16px) saturate(170%);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  border-radius: 14px;
 }
 
 .secantTitleRow {
@@ -195,8 +211,8 @@
 .secantTitle {
   margin: 0;
   font-size: 13px;
-  font-weight: 600;
-  color: #194e42;
+  font-weight: 650;
+  color: #133c32;
 }
 
 .secantFormulaHint {
@@ -211,9 +227,12 @@
 }
 
 .metricItem {
-  background: #ffffff;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.56);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.86);
+  box-shadow: inset 0 1px 0 #ffffff;
+  border-radius: 11px;
   padding: 10px 12px;
   min-width: 0;
 }
@@ -228,7 +247,7 @@
 .metricValue {
   display: block;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 650;
   color: var(--text);
   font-variant-numeric: tabular-nums;
   word-break: break-all;
@@ -243,17 +262,37 @@
 
 .secantAlert {
   margin-top: 12px;
+  border-radius: 12px;
 }
 
 .footerNotice {
-  margin-top: 24px;
+  margin-top: 20px;
+  padding: 13px 18px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.38);
+  backdrop-filter: blur(18px) saturate(170%);
+  -webkit-backdrop-filter: blur(18px) saturate(170%);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  box-shadow: var(--glass-rim);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.footerNotice strong {
+  color: #163d33;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 @media (max-width: 1200px) {
   .plotLayout {
-    grid-template-columns: 310px minmax(0, 1fr);
+    grid-template-columns: 316px minmax(0, 1fr);
   }
-
   .secantMetrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -269,7 +308,6 @@
   .rangeFields {
     grid-template-columns: 1fr;
   }
-
   .secantMetrics {
     grid-template-columns: 1fr;
   }

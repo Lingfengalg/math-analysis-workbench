@@ -858,7 +858,7 @@ export default function MistakesPage() {
       />
 
       <PageHeader
-        eyebrow="MISTAKES NOTEBOOK"
+        eyebrow="∑ · 错因归档与复盘"
         title="把每一次失误，沉淀成严谨的条件自觉。"
         description="按数学错因归档典型陷阱，串联定理前提核查与反例图像验证。"
         extra={
