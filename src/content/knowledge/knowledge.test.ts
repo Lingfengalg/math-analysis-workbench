@@ -5,6 +5,7 @@ import {
   KNOWLEDGE_TOPIC_LABELS,
   knowledgeCardSchema,
   surfacePlotRequestSchema,
+  tripleIntegralRequestSchema,
   type KnowledgeTopic,
 } from '@/shared/contracts';
 import { compileExpression } from '@/shared/math/sample';
@@ -25,11 +26,15 @@ const EXPECTED_CARD_IDS = [
   'integral-newton-leibniz',
   'integral-improper-p',
   'integral-double-riemann',
+  'derivative-total-differential',
+  'derivative-lagrange-extrema',
+  'integral-triple-space',
+  'integral-green-singularity',
 ];
 
 describe('知识内容契约', () => {
-  it('包含完整的 14 张核心知识卡片且覆盖全部 5 大数分板块，id 唯一且符合 schema', () => {
-    expect(knowledgeCards).toHaveLength(14);
+  it('包含完整的 18 张核心知识卡片且覆盖全部 5 大数分板块，id 唯一且符合 schema', () => {
+    expect(knowledgeCards).toHaveLength(18);
     const ids = knowledgeCards.map((card) => card.id);
     expect(new Set(ids).size).toBe(knowledgeCards.length);
     expect(ids).toEqual(EXPECTED_CARD_IDS);
@@ -58,7 +63,8 @@ describe('知识内容契约', () => {
     }
   });
 
-  it('一元与三维多元示例绘图表达式均符合受限白名单与契约', () => {
+  it('一元、三维多元曲面与三重积分空间示例绘图均符合受限白名单与契约', () => {
+    let tripleCount = 0;
     for (const card of knowledgeCards) {
       for (const example of card.examples) {
         if (example.plot) {
@@ -81,12 +87,21 @@ describe('知识内容契约', () => {
           ).not.toThrow();
           expect(example.surfacePlot.sourceKnowledgeId).toBe(card.id);
         }
+        if (example.triplePlot) {
+          tripleCount += 1;
+          expect(
+            tripleIntegralRequestSchema.safeParse(example.triplePlot).success,
+          ).toBe(true);
+          expect(example.triplePlot.sourceKnowledgeId).toBe(card.id);
+        }
       }
     }
+    expect(tripleCount).toBeGreaterThanOrEqual(2);
   });
 
-  it('全部 14 张卡片的 LaTeX 公式在 KaTeX strict: error 模式下零报错渲染', () => {
+  it('全部 18 张卡片的 LaTeX 公式不含中文字符且在 KaTeX strict: error 模式下零报错渲染', () => {
     for (const card of knowledgeCards) {
+      expect(card.formula).not.toMatch(/[\u4e00-\u9fff]/);
       expect(() =>
         katex.renderToString(card.formula, {
           throwOnError: true,

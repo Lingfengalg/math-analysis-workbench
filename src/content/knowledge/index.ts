@@ -532,8 +532,8 @@ export const knowledgeCards = z.array(knowledgeCardSchema).parse([
     relatedIds: [
       'limit-square',
       'continuity-reciprocal',
-      'derivative-absolute',
-      'integral-double-riemann',
+      'derivative-total-differential',
+      'derivative-lagrange-extrema',
     ],
   },
   {
@@ -704,8 +704,242 @@ export const knowledgeCards = z.array(knowledgeCardSchema).parse([
     ],
     relatedIds: [
       'integral-newton-leibniz',
-      'integral-improper-p',
+      'integral-triple-space',
+      'integral-green-singularity',
       'derivative-multivariable-limit',
+    ],
+  },
+  {
+    id: 'derivative-total-differential',
+    topic: 'derivative',
+    title: '偏导存在、连续与可微：全微分的真正条件',
+    definition:
+      '二元函数 z = f(x, y) 在点 (x₀, y₀) 可微，是指全增量 Δz 可表示为自变量增量 Δx, Δy 的线性主部 AΔx + BΔy 与径向距离 ρ = √((Δx)² + (Δy)²) 的高阶无穷小 o(ρ) 之和。几何上可微等价于曲面在该点存在非铅直切平面；在多元分析中，偏导存在既不蕴含连续，也不蕴含可微！',
+    formula:
+      '\\Delta z = f_x(x_0,y_0)\\Delta x + f_y(x_0,y_0)\\Delta y + o(\\rho),\\quad \\rho = \\sqrt{(\\Delta x)^2+(\\Delta y)^2}',
+    conditions: [
+      '可微的必要条件：函数在 (x₀, y₀) 处必连续，且两个一阶偏导数 A = f_x(x₀, y₀)、B = f_y(x₀, y₀) 均存在；若不连续或任一偏导不存在，则必不可微。',
+      '可微的定义充要判别：计算极限 lim_{(Δx,Δy)→(0,0)} [Δz - f_x(x₀,y₀)Δx - f_y(x₀,y₀)Δy] / √((Δx)² + (Δy)²)，当且仅当该二重极限存在且严格等于 0 时函数可微。',
+      '可微的充分条件（C¹ 判据）：若偏导数 f_x, f_y 在 (x₀, y₀) 的某邻域内存在，且在 (x₀, y₀) 点处连续，则函数在该点必定可微。',
+    ],
+    examples: [
+      {
+        kind: 'counterexample',
+        explanation:
+          '连续且偏导存在但不可微经典反例：f(x, y) = √(|xy|) 在原点处连续，且沿坐标轴恒为 0，故 f_x(0, 0) = f_y(0, 0) = 0；但沿对角线 y = x 趋近原点时，(Δz - 0)/√(2x²) = |x|/(√2|x|) = 1/√2 ≠ 0，余项不是 o(ρ)，曲面在原点呈十字折脊而无切平面，故不可微！',
+        surfacePlot: {
+          expression: 'sqrt(abs(x * y))',
+          xMin: -2,
+          xMax: 2,
+          yDomainMin: -2,
+          yDomainMax: 2,
+          gridSize: 64,
+          probe: { x0: 0, y0: 0 },
+          sourceKnowledgeId: 'derivative-total-differential',
+        },
+      },
+      {
+        kind: 'example',
+        explanation:
+          '一阶偏导连续必可微：旋转抛物面 z = 0.5(x² + y²) 的偏导数 f_x = x, f_y = y 在全平面连续，在观察点 (1, -1) 处全微分 dz = dx - dy，切平面 z = 1 + (x - 1) - (y + 1) 在局部高精度贴合曲面。',
+        surfacePlot: {
+          expression: '0.5 * (x^2 + y^2)',
+          xMin: -2.5,
+          xMax: 2.5,
+          yDomainMin: -2.5,
+          yDomainMax: 2.5,
+          gridSize: 64,
+          probe: { x0: 1, y0: -1 },
+          sourceKnowledgeId: 'derivative-total-differential',
+        },
+      },
+    ],
+    pitfalls: [
+      '切忌把一元函数“可导 ⟺ 可微 ⟹ 连续”直接套用到多元函数！二元函数偏导存在只约束了沿 x 轴与 y 轴两条直线方向，连原点连续性都无法保证（如 xy/(x²+y²) 补充原点值为 0 时 f_x=f_y=0 但不连续）。',
+      '偏导数不连续也不代表一定不可微（偏导连续只是充分非必要条件），如 (x²+y²)sin(1/√(x²+y²)) 在原点处可微但其偏导数在原点振荡不连续。',
+    ],
+    references: [
+      '同济大学数学科学学院《高等数学》（第八版）下册 · 第九章第三节「全微分」',
+      '工科数学分析课程讲义：多元函数连续、偏导存在、方向导数与可微四者逻辑蕴含关系',
+    ],
+    relatedIds: [
+      'derivative-multivariable-limit',
+      'derivative-lagrange-extrema',
+      'derivative-absolute',
+    ],
+  },
+  {
+    id: 'derivative-lagrange-extrema',
+    topic: 'derivative',
+    title: '多元极值与拉格朗日乘数法：驻点判别式 AC-B²',
+    definition:
+      '多元无条件极值先由一阶偏导为零定位驻点，再借二阶黑塞（Hessian）判别式 Δ = AC - B² 的正负定性区分极值点与马鞍点；而在等式约束 φ(x, y) = 0 下的条件极值，则通过构造拉格朗日辅助函数将约束最优化转化为扩维驻点方程组。',
+    formula:
+      '\\mathcal{L}(x,y,\\lambda)=f(x,y)+\\lambda\\varphi(x,y),\\quad \\Delta = f_{xx}f_{yy}-f_{xy}^2',
+    conditions: [
+      '无条件极值二阶充分条件：设驻点 (x₀, y₀) 处二阶偏导连续，记 A = f_{xx}, B = f_{xy}, C = f_{yy}，当 Δ = AC - B² > 0 时必取极值（A > 0 为极小值，A < 0 为极大值）；当 Δ < 0 时不是极值（马鞍点）；当 Δ = 0 时二阶判别失效，须用定义或高阶泰勒项直接分析。',
+      '拉格朗日乘数法正则前提：约束曲线 φ(x, y) = 0 上梯度 ∇φ(x₀, y₀) ≠ (0, 0)，此时条件极值点必满足梯度共线条件 ∇f + λ∇φ = 0 与 φ(x, y) = 0。',
+      '有界闭区域 D 上连续函数的全局最值：必须将内部所有驻点及不可导点、边界曲线上的拉格朗日候选点以及边界分段角点的函数值逐一比大小，绝不可只算内部驻点！',
+    ],
+    examples: [
+      {
+        kind: 'counterexample',
+        explanation:
+          '驻点未必是极值点（Δ < 0 马鞍面）：z = x² - y² 在原点处 f_x(0,0) = f_y(0,0) = 0 为驻点，但 A = 2, B = 0, C = -2，判别式 Δ = AC - B² = -4 < 0；原点任一邻域内沿 x 轴函数值为正、沿 y 轴函数值为负，故 (0, 0) 是典型马鞍点而非极值点。',
+        surfacePlot: {
+          expression: 'x^2 - y^2',
+          xMin: -2.5,
+          xMax: 2.5,
+          yDomainMin: -2.5,
+          yDomainMax: 2.5,
+          gridSize: 64,
+          probe: { x0: 0, y0: 0 },
+          sourceKnowledgeId: 'derivative-lagrange-extrema',
+        },
+      },
+      {
+        kind: 'example',
+        explanation:
+          '椭圆抛物面严格极小值（Δ > 0 且 A > 0）：z = x² + 2y² 在驻点 (0, 0) 处 A = 2 > 0, B = 0, C = 4，判别式 Δ = 8 > 0，水平切平面 z = 0 位于整个曲面下方，在原点取得严格极小值 0。',
+        surfacePlot: {
+          expression: 'x^2 + 2 * y^2',
+          xMin: -2.5,
+          xMax: 2.5,
+          yDomainMin: -2.5,
+          yDomainMax: 2.5,
+          gridSize: 64,
+          probe: { x0: 0, y0: 0 },
+          sourceKnowledgeId: 'derivative-lagrange-extrema',
+        },
+      },
+    ],
+    pitfalls: [
+      '记混判别式符号是最常见失分点：Δ = f_{xx}f_{yy} - (f_{xy})² 大于 0 才有极值，小于 0 是马鞍面无极值；当 Δ = 0 时（如 x⁴ + y⁴ 有极小值而 x³ + y³ 无极值）绝不能妄下结论！',
+      '拉格朗日方程组解出的点只是条件极值的“必要候选点”，实际应用题或闭集最值问题中须结合几何意义或逐点比较函数值确认最大/最小值。',
+    ],
+    references: [
+      '同济大学数学科学学院《高等数学》（第八版）下册 · 第九章第八节「多元函数的极值及其求法」',
+      '工科数学分析课程讲义：黑塞矩阵正定判别与拉格朗日乘数法几何梯度相切原理',
+    ],
+    relatedIds: [
+      'derivative-total-differential',
+      'derivative-multivariable-limit',
+      'derivative-taylor',
+    ],
+  },
+  {
+    id: 'integral-triple-space',
+    topic: 'integral',
+    title: '三重积分：投影穿线法、截面法与柱球坐标雅可比',
+    definition:
+      '三重积分刻画三维有界闭区域 Ω 上非均匀体密度 f(x, y, z) 的总质量（当 f ≡ 1 时即为空间域体积）。计算核心在于依据空间边界几何对称性选择“先一后二”投影穿线、“先二后一”水平截面切片，或柱面坐标、球面坐标正交变换降维累次积分。',
+    formula:
+      '\\iiint_\\Omega f\\,\\mathrm{d}V = \\iiint f\\,\\rho^2\\sin\\varphi\\,\\mathrm{d}\\rho\\,\\mathrm{d}\\varphi\\,\\mathrm{d}\\theta',
+    conditions: [
+      '直角坐标定限两法：“先一后二”（投影穿线法）将 Ω 投影到 xOy 面得 D_{xy}，沿平行于 z 轴穿线定出下底 z₁(x,y) 到上顶 z₂(x,y)；“先二后一”（截面法）先固定高度 z 求出水平截面 D_z 上的二重积分 I(z)，再对 z 从 z_min 到 z_max 作定积分（最适合截面面积易求的旋转体）。',
+      '柱面坐标变换：x = r cos θ, y = r sin θ, z = z，体积微元 dV = r dr dθ dz（雅可比行列式为 r），适用于圆柱、圆锥、旋转抛物面围成且含 x² + y² 的空间域。',
+      '球面坐标变换：x = ρ sin φ cos θ, y = ρ sin φ sin θ, z = ρ cos φ，体积微元 dV = ρ² sin φ dρ dφ dθ，其中极角 φ ∈ [0, π] 自 z 轴正向向下度量，方位角 θ ∈ [0, 2π]，雅可比因子 ρ² sin φ 绝不可遗漏！',
+    ],
+    examples: [
+      {
+        kind: 'example',
+        explanation:
+          '“先二后一”截面法典范：求旋转抛物面 z = x² + y² 与平面 z = 4 围成的顶盖域体积 ∭_Ω 1 dV。固定高度 z ∈ [0, 4] 时水平截面 D_z 为半径 √z 的圆，截面面积 A(z) = πz（例如 z_s = 2 处圆截面面积为 2π ≈ 6.283185），沿 z 轴积分 ∫_0^4 πz dz = 8π ≈ 25.132741。',
+        triplePlot: {
+          expression: '1',
+          regionType: 'paraboloid-cap',
+          xMin: -2,
+          xMax: 2,
+          yMin: -2,
+          yMax: 2,
+          zMin: 0,
+          zMax: 4,
+          partitions: 14,
+          sliceZ: 2,
+          sourceKnowledgeId: 'integral-triple-space',
+        },
+      },
+      {
+        kind: 'example',
+        explanation:
+          '球面坐标求球体转动惯量：在半径 R = 2 的球体 x² + y² + z² ≤ 4 上计算 ∭_Ω (x² + y² + z²) dV。改用球面坐标后被积函数 ρ² 乘雅可比因子 ρ² sin φ 得 ∫_0^{2π} dθ ∫_0^π sin φ dφ ∫_0^2 ρ⁴ dρ = 2π · 2 · (32/5) = 128π/5 ≈ 80.424772。',
+        triplePlot: {
+          expression: 'x^2 + y^2 + z^2',
+          regionType: 'sphere',
+          xMin: -2,
+          xMax: 2,
+          yMin: -2,
+          yMax: 2,
+          zMin: -2,
+          zMax: 2,
+          partitions: 14,
+          sliceZ: 0,
+          sourceKnowledgeId: 'integral-triple-space',
+        },
+      },
+    ],
+    pitfalls: [
+      '球面坐标极角 φ 的范围是 [0, π]（上半球为 [0, π/2]），切勿误写成 [0, 2π] 或与地理纬度角 [-π/2, π/2] 混用；且体积微元是 ρ² sin φ dρ dφ dθ 而非 ρ² cos φ 或漏掉 ρ²！',
+      '投影穿线定限时必须检验空间域边界是否“鼓肚”超出顶底交线——此时投影域 D_{xy} 是空间体的最大外轮廓投影（如赤道圆），不能误用上下两曲面交线直接充当整个投影域。',
+    ],
+    references: [
+      '同济大学数学科学学院《高等数学》（第八版）下册 · 第十章第三节「三重积分」与第四节「重积分的应用」',
+      '工科数学分析课程讲义：三重积分截面法、柱面坐标与球面坐标雅可比推导',
+    ],
+    relatedIds: [
+      'integral-double-riemann',
+      'integral-green-singularity',
+      'integral-newton-leibniz',
+    ],
+  },
+  {
+    id: 'integral-green-singularity',
+    topic: 'integral',
+    title: '格林公式与路径无关：绝对不可忽略内部奇点',
+    definition:
+      '格林（Green）公式建立了平面有界闭区域 D 上的二重积分与其正向分段光滑边界曲线 ∂D 上第二类曲线积分之间的转换桥梁。使用格林公式或判定平面向量场曲线积分与路径无关前，必须严格核查向量场在闭区域内部是否处处连续可微、绝无奇点！',
+    formula:
+      '\\oint_{\\partial D} P\\,\\mathrm{d}x+Q\\,\\mathrm{d}y = \\iint_D \\left(\\frac{\\partial Q}{\\partial x}-\\frac{\\partial P}{\\partial y}\\right)\\mathrm{d}x\\,\\mathrm{d}y',
+    conditions: [
+      '边界定向规则：∂D 取正向——当观察者沿边界行走时，所围区域 D 始终位于左侧（单连通外边界取逆时针方向；含孔洞复连通域的内边界取顺时针方向）。',
+      '全区域光滑性铁律：P(x, y) 与 Q(x, y) 必须在整个闭区域 D（含内部所有点与边界）上连续且具有一阶连续偏导数；只要内部存在一个分母为零的无定义奇点，就不能直接套用格林公式！',
+      '路径无关充要条件：在单连通开区域 G 内 P, Q ∈ C¹(G) 时，曲线积分与路径无关（闭路环量为 0）当且仅当 ∂Q/∂x ≡ ∂P/∂y 在 G 内恒成立；若区域含奇点（非单连通），须绕奇点作充分小辅助圆周挖孔后再用复连通域格林公式。',
+    ],
+    examples: [
+      {
+        kind: 'counterexample',
+        explanation:
+          '含原点奇点经典陷阱：对 P = -y/(x² + y²), Q = x/(x² + y²)，虽在除原点外处处满足 ∂Q/∂x = (y² - x²)/(x² + y²)² = ∂P/∂y，但沿逆时针单位圆周 x² + y² = 1 积分时，因内部含奇点 (0, 0)，直接套格林公式得 0 完全错误！参数化 x = cos t, y = sin t 算得真实环量为 ∫_0^{2π} dt = 2π ≠ 0；三维视口中可清晰看到 Q(x, y) 在原点处的无界偶极奇点。',
+        surfacePlot: {
+          expression: 'x / (x^2 + y^2)',
+          xMin: -2,
+          xMax: 2,
+          yDomainMin: -2,
+          yDomainMax: 2,
+          zMin: -4,
+          zMax: 4,
+          gridSize: 64,
+          sourceKnowledgeId: 'integral-green-singularity',
+        },
+      },
+      {
+        kind: 'example',
+        explanation:
+          '不含奇点的闭曲线合法归零：同样对 P = -y/(x² + y²), Q = x/(x² + y²)，若积分路径改为圆周 (x - 2)² + y² = 1（所围圆盘不包络原点 (0, 0)），则 P, Q 在闭圆盘上处处一阶偏导连续，格林公式合法生效，环量严格等于 0。',
+      },
+    ],
+    pitfalls: [
+      '看到 ∂Q/∂x = ∂P/∂y 切莫不看路径直接写 0！第一步永远是解分母为零的奇点坐标，并判断奇点落在闭曲线外部、内部还是恰好在曲线上。',
+      '当任意形状正向简单闭曲线 L 包围原点时，利用挖洞法将积分转移到半径 ε 的逆时针小圆周 x² + y² = ε² 上，可证 ∮_L (-y dx + x dy)/(x² + y²) 恒等于拓扑不变量 2π（绕数定理雏形）。',
+    ],
+    references: [
+      '同济大学数学科学学院《高等数学》（第八版）下册 · 第十一章第三节「格林公式及其应用」',
+      '工科数学分析课程讲义：复连通区域格林公式、挖奇点法与平面保守场判别',
+    ],
+    relatedIds: [
+      'integral-double-riemann',
+      'integral-triple-space',
+      'integral-newton-leibniz',
     ],
   },
 ]);
