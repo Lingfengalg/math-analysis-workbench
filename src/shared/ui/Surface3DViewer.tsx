@@ -1224,10 +1224,451 @@ function buildDomainBoundaryPoints(
   ];
 }
 
+function buildPlanarRibbonGeometry(
+  pts: ReadonlyArray<[number, number]>,
+  halfWidth: number,
+  zPos: number,
+  closed: boolean,
+): THREE.BufferGeometry | null {
+  const n = pts.length;
+  if (n < 2) return null;
+  if (closed && n < 3) return null;
+
+  const normals: Array<[number, number]> = new Array(n);
+
+  const segNormal = (
+    p0: [number, number],
+    p1: [number, number],
+  ): [number, number] => {
+    const dx = p1[0] - p0[0];
+    const dy = p1[1] - p0[1];
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-9) return [0, 1];
+    return [-dy / len, dx / len];
+  };
+
+  for (let i = 0; i < n; i += 1) {
+    if (!closed && i === 0) {
+      normals[i] = segNormal(pts[0], pts[1]);
+    } else if (!closed && i === n - 1) {
+      normals[i] = segNormal(pts[n - 2], pts[n - 1]);
+    } else {
+      const prevIdx = (i - 1 + n) % n;
+      const nextIdx = (i + 1) % n;
+      const nPrev = segNormal(pts[prevIdx], pts[i]);
+      const nNext = segNormal(pts[i], pts[nextIdx]);
+      const mx = nPrev[0] + nNext[0];
+      const my = nPrev[1] + nNext[1];
+      const mLen = Math.hypot(mx, my);
+      if (mLen < 1e-6) {
+        normals[i] = nNext;
+      } else {
+        const ux = mx / mLen;
+        const uy = my / mLen;
+        const dot = Math.max(0.55, ux * nNext[0] + uy * nNext[1]);
+        const miterScale = Math.min(1.8, 1 / dot);
+        normals[i] = [ux * miterScale, uy * miterScale];
+      }
+    }
+  }
+
+  const positions = new Float32Array(n * 2 * 3);
+  for (let i = 0; i < n; i += 1) {
+    const [wx, wy] = pts[i];
+    const [nx, ny] = normals[i];
+    const base = i * 6;
+    positions[base] = wx + nx * halfWidth;
+    positions[base + 1] = wy + ny * halfWidth;
+    positions[base + 2] = zPos;
+    positions[base + 3] = wx - nx * halfWidth;
+    positions[base + 4] = wy - ny * halfWidth;
+    positions[base + 5] = zPos;
+  }
+
+  const segCount = closed ? n : n - 1;
+  const indices: number[] = [];
+  for (let i = 0; i < segCount; i += 1) {
+    const j = (i + 1) % n;
+    const a0 = i * 2;
+    const a1 = i * 2 + 1;
+    const b0 = j * 2;
+    const b1 = j * 2 + 1;
+    indices.push(a0, a1, b0, a1, b1, b0);
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geo.setIndex(indices);
+  return geo;
+}
+
+function synthesizeFallbackCurvilinearCurves(
+  config: SurfaceIntegralConfig,
+): { curveA: PlotPoint[]; curveB: PlotPoint[] } | null {
+  const samples = 80;
+  const curveA: PlotPoint[] = [];
+  const curveB: PlotPoint[] = [];
+
+  if (
+    config.regionType === 'x-type' &&
+    config.yLowerExpr &&
+    config.yUpperExpr
+  ) {
+    const span = config.xEnd - config.xStart;
+    for (let i = 0; i <= samples; i += 1) {
+      const x = config.xStart + (span * i) / samples;
+      curveA.push([x, evalBivariateHint(config.yLowerExpr, x, 0)]);
+      curveB.push([x, evalBivariateHint(config.yUpperExpr, x, 0)]);
+    }
+    return { curveA, curveB };
+  }
+
+  if (
+    config.regionType === 'y-type' &&
+    config.xLowerExpr &&
+    config.xUpperExpr
+  ) {
+    const span = config.yEnd - config.yStart;
+    for (let i = 0; i <= samples; i += 1) {
+      const y = config.yStart + (span * i) / samples;
+      const xLo = evalBivariateHint(config.xLowerExpr, 0, y);
+      const xHi = evalBivariateHint(config.xUpperExpr, 0, y);
+      curveA.push(xLo === null ? [0, null] : [xLo, y]);
+      curveB.push(xHi === null ? [0, null] : [xHi, y]);
+    }
+    return { curveA, curveB };
+  }
+
+  return null;
+}
+
+function addCurvilinearDomainBoundary(
+  group: THREE.Group,
+  config: SurfaceIntegralConfig,
+  integralResult: SurfacePlotResult['integralResult'],
+  tf: SpatialTransform,
+  worldZeroZ: number,
+): boolean {
+  let curveA = integralResult?.boundaryCurveA;
+  let curveB = integralResult?.boundaryCurveB;
+
+  if (!curveA || curveA.length === 0 || !curveB || curveB.length === 0) {
+    const synthesized = synthesizeFallbackCurvilinearCurves(config);
+    if (synthesized) {
+      curveA = synthesized.curveA;
+      curveB = synthesized.curveB;
+    }
+  }
+
+  if (!curveA || !curveB || curveA.length === 0 || curveB.length === 0) {
+    return false;
+  }
+
+  const extractWorldRuns = (
+    curve: PlotPoint[],
+  ): {
+    runs: Array<Array<[number, number]>>;
+    allValid: Array<[number, number]>;
+  } => {
+    const runs: Array<Array<[number, number]>> = [];
+    const allValid: Array<[number, number]> = [];
+    let current: Array<[number, number]> = [];
+
+    for (const [x, y] of curve) {
+      if (y === null || !Number.isFinite(x) || !Number.isFinite(y)) {
+        if (current.length >= 2) {
+          runs.push(current);
+        }
+        current = [];
+        continue;
+      }
+      const wpt: [number, number] = [tf.mapX(x), tf.mapY(y)];
+      current.push(wpt);
+      allValid.push(wpt);
+    }
+    if (current.length >= 2) {
+      runs.push(current);
+    }
+    return { runs, allValid };
+  };
+
+  const { runs: runsA, allValid: validA } = extractWorldRuns(curveA);
+  const { runs: runsB, allValid: validB } = extractWorldRuns(curveB);
+  if (validA.length === 0 || validB.length === 0) {
+    return false;
+  }
+
+  const drawFloor = Math.abs(worldZeroZ - -BOX_HALF_Z) > 0.08;
+  const floorZ = -BOX_HALF_Z;
+
+  const emitGlowingPath = (pts: Array<[number, number]>, closed: boolean) => {
+    if (pts.length < (closed ? 3 : 2)) return;
+
+    // Soft outer emerald luminescence halo on z = 0 plane
+    const haloGeo = buildPlanarRibbonGeometry(
+      pts,
+      0.058,
+      worldZeroZ + 0.007,
+      closed,
+    );
+    if (haloGeo) {
+      const haloMesh = new THREE.Mesh(
+        haloGeo,
+        new THREE.MeshBasicMaterial({
+          color: 0x10b981,
+          transparent: true,
+          opacity: 0.28,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        }),
+      );
+      haloMesh.renderOrder = 5;
+      group.add(haloMesh);
+    }
+
+    // Crisp luminous emerald core ribbon on z = 0 plane
+    const coreRibbonGeo = buildPlanarRibbonGeometry(
+      pts,
+      0.022,
+      worldZeroZ + 0.009,
+      closed,
+    );
+    if (coreRibbonGeo) {
+      const coreMesh = new THREE.Mesh(
+        coreRibbonGeo,
+        new THREE.MeshBasicMaterial({
+          color: 0x05b58d,
+          transparent: true,
+          opacity: 0.94,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        }),
+      );
+      coreMesh.renderOrder = 6;
+      group.add(coreMesh);
+    }
+
+    // Razor-sharp emerald-jade highlight centerline on z = 0 plane
+    const lineVerts = pts.map(
+      ([wx, wy]) => new THREE.Vector3(wx, wy, worldZeroZ + 0.011),
+    );
+    const lineGeo = new THREE.BufferGeometry().setFromPoints(lineVerts);
+    const lineMat = new THREE.LineBasicMaterial({
+      color: 0x34f5c5,
+      transparent: true,
+      opacity: 0.98,
+    });
+    const lineObj = closed
+      ? new THREE.LineLoop(lineGeo, lineMat)
+      : new THREE.Line(lineGeo, lineMat);
+    lineObj.renderOrder = 7;
+    group.add(lineObj);
+
+    // Projected curvilinear contour on the floor reference plane
+    if (drawFloor) {
+      const floorRibbonGeo = buildPlanarRibbonGeometry(
+        pts,
+        0.018,
+        floorZ + 0.013,
+        closed,
+      );
+      if (floorRibbonGeo) {
+        const floorRibbon = new THREE.Mesh(
+          floorRibbonGeo,
+          new THREE.MeshBasicMaterial({
+            color: 0x0d7a62,
+            transparent: true,
+            opacity: 0.42,
+            side: THREE.DoubleSide,
+            depthWrite: false,
+          }),
+        );
+        floorRibbon.renderOrder = 4;
+        group.add(floorRibbon);
+      }
+
+      const floorVerts = pts.map(
+        ([wx, wy]) => new THREE.Vector3(wx, wy, floorZ + 0.015),
+      );
+      const floorGeo = new THREE.BufferGeometry().setFromPoints(floorVerts);
+      const floorMat = new THREE.LineBasicMaterial({
+        color: 0x05b58d,
+        transparent: true,
+        opacity: 0.68,
+      });
+      const floorLine = closed
+        ? new THREE.LineLoop(floorGeo, floorMat)
+        : new THREE.Line(floorGeo, floorMat);
+      floorLine.renderOrder = 5;
+      group.add(floorLine);
+    }
+  };
+
+  const aStart = validA[0];
+  const aEnd = validA[validA.length - 1];
+  const bStart = validB[0];
+  const bEnd = validB[validB.length - 1];
+
+  const distDirect =
+    Math.hypot(aStart[0] - bStart[0], aStart[1] - bStart[1]) +
+    Math.hypot(aEnd[0] - bEnd[0], aEnd[1] - bEnd[1]);
+  const distReversed =
+    Math.hypot(aStart[0] - bEnd[0], aStart[1] - bEnd[1]) +
+    Math.hypot(aEnd[0] - bStart[0], aEnd[1] - bStart[1]);
+  const bAlignedSameDir = distDirect <= distReversed;
+
+  let closedLoopPts: Array<[number, number]> | null = null;
+  if (runsA.length === 1 && runsB.length === 1) {
+    const seqB = bAlignedSameDir ? [...runsB[0]].reverse() : runsB[0];
+    const rawLoop = [...runsA[0], ...seqB];
+    const deduped: Array<[number, number]> = [];
+    for (const pt of rawLoop) {
+      const prev = deduped[deduped.length - 1];
+      if (!prev || Math.hypot(pt[0] - prev[0], pt[1] - prev[1]) > 1e-4) {
+        deduped.push(pt);
+      }
+    }
+    if (
+      deduped.length >= 2 &&
+      Math.hypot(
+        deduped[0][0] - deduped[deduped.length - 1][0],
+        deduped[0][1] - deduped[deduped.length - 1][1],
+      ) <= 1e-4
+    ) {
+      deduped.pop();
+    }
+    if (deduped.length >= 3) {
+      closedLoopPts = deduped;
+      emitGlowingPath(closedLoopPts, true);
+    }
+  }
+
+  if (!closedLoopPts) {
+    for (const r of runsA) emitGlowingPath(r, false);
+    for (const r of runsB) emitGlowingPath(r, false);
+
+    const side1B = bAlignedSameDir ? bStart : bEnd;
+    const side2B = bAlignedSameDir ? bEnd : bStart;
+    if (Math.hypot(aStart[0] - side1B[0], aStart[1] - side1B[1]) > 1e-4) {
+      emitGlowingPath([aStart, side1B], false);
+    }
+    if (Math.hypot(aEnd[0] - side2B[0], aEnd[1] - side2B[1]) > 1e-4) {
+      emitGlowingPath([aEnd, side2B], false);
+    }
+  }
+
+  // Translucent curvilinear domain interior highlight on z = 0 plane
+  if (curveA.length === curveB.length && curveA.length >= 2) {
+    const stripVerts: number[] = [];
+    const stripIndices: number[] = [];
+    let hasOrdered = false;
+    let hasInverted = false;
+    for (let i = 0; i < curveA.length; i += 1) {
+      const [xa, ya] = curveA[i];
+      const [xb, yb] = curveB[i];
+      if (
+        ya === null ||
+        yb === null ||
+        !Number.isFinite(xa) ||
+        !Number.isFinite(xb)
+      ) {
+        continue;
+      }
+      const diff = config.regionType === 'y-type' ? xb - xa : yb - ya;
+      if (diff > 1e-6) hasOrdered = true;
+      if (diff < -1e-6) hasInverted = true;
+    }
+    const enforceOrder = hasOrdered && hasInverted;
+
+    for (let i = 0; i < curveA.length - 1; i += 1) {
+      const [xa0, ya0] = curveA[i];
+      const [xb0, yb0] = curveB[i];
+      const [xa1, ya1] = curveA[i + 1];
+      const [xb1, yb1] = curveB[i + 1];
+      if (
+        ya0 === null ||
+        yb0 === null ||
+        ya1 === null ||
+        yb1 === null ||
+        !Number.isFinite(xa0) ||
+        !Number.isFinite(xb0) ||
+        !Number.isFinite(xa1) ||
+        !Number.isFinite(xb1)
+      ) {
+        continue;
+      }
+      if (enforceOrder) {
+        const d0 = config.regionType === 'y-type' ? xb0 - xa0 : yb0 - ya0;
+        const d1 = config.regionType === 'y-type' ? xb1 - xa1 : yb1 - ya1;
+        if (d0 < -1e-5 && d1 < -1e-5) continue;
+      }
+
+      const base = stripVerts.length / 3;
+      stripVerts.push(
+        tf.mapX(xa0),
+        tf.mapY(ya0),
+        worldZeroZ,
+        tf.mapX(xb0),
+        tf.mapY(yb0),
+        worldZeroZ,
+        tf.mapX(xa1),
+        tf.mapY(ya1),
+        worldZeroZ,
+        tf.mapX(xb1),
+        tf.mapY(yb1),
+        worldZeroZ,
+      );
+      stripIndices.push(base, base + 1, base + 3, base, base + 3, base + 2);
+    }
+
+    if (stripIndices.length > 0) {
+      const fillGeo = new THREE.BufferGeometry();
+      fillGeo.setAttribute(
+        'position',
+        new THREE.BufferAttribute(new Float32Array(stripVerts), 3),
+      );
+      fillGeo.setIndex(stripIndices);
+      const fillMesh = new THREE.Mesh(
+        fillGeo,
+        new THREE.MeshBasicMaterial({
+          color: 0x149678,
+          transparent: true,
+          opacity: 0.16,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        }),
+      );
+      fillMesh.renderOrder = 3;
+      group.add(fillMesh);
+    }
+  } else if (closedLoopPts && closedLoopPts.length >= 3) {
+    const shape = new THREE.Shape(
+      closedLoopPts.map(([wx, wy]) => new THREE.Vector2(wx, wy)),
+    );
+    const fillGeo = new THREE.ShapeGeometry(shape);
+    const fillMesh = new THREE.Mesh(
+      fillGeo,
+      new THREE.MeshBasicMaterial({
+        color: 0x149678,
+        transparent: true,
+        opacity: 0.16,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      }),
+    );
+    fillMesh.position.z = worldZeroZ;
+    fillMesh.renderOrder = 3;
+    group.add(fillMesh);
+  }
+
+  return true;
+}
+
 function buildRiemannIntegralGroup(
   prismsRaw: RiemannPrism[],
   config: SurfaceIntegralConfig | undefined,
   tf: SpatialTransform,
+  integralResult?: SurfacePlotResult['integralResult'],
 ): THREE.Group {
   const group = new THREE.Group();
   const prisms = resolvePrismCenters(prismsRaw, config);
@@ -1235,8 +1676,23 @@ function buildRiemannIntegralGroup(
   const zZeroClamped = Math.max(tf.zLo, Math.min(tf.zHi, 0));
   const worldZeroZ = tf.mapZ(zZeroClamped);
 
+  const isCurvilinear =
+    config?.regionType === 'x-type' || config?.regionType === 'y-type';
+  const renderedCurvilinear =
+    isCurvilinear && config
+      ? addCurvilinearDomainBoundary(
+          group,
+          config,
+          integralResult,
+          tf,
+          worldZeroZ,
+        )
+      : false;
+
   // Luminous integration region boundary loop on z = 0 plane & floor
-  const boundaryPts = buildDomainBoundaryPoints(config, prisms);
+  const boundaryPts = renderedCurvilinear
+    ? []
+    : buildDomainBoundaryPoints(config, prisms);
   if (boundaryPts.length >= 3) {
     const loopZeroVerts = boundaryPts.map(
       ([x, y]) => new THREE.Vector3(tf.mapX(x), tf.mapY(y), worldZeroZ + 0.008),
@@ -1932,6 +2388,7 @@ export function Surface3DViewer({
           result.integralResult?.prisms ?? [],
           integralConfig,
           spatial,
+          result.integralResult,
         ),
       );
     }
