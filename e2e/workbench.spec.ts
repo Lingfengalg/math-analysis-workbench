@@ -90,7 +90,11 @@ test('知识图谱支持全字段检索与记入错题本联动', async ({ page 
   await page.goto('/#/knowledge');
   await page.getByPlaceholder('搜索概念或关键词').fill('雅可比');
   await expect(
-    page.getByText('二重积分与累次定限：曲顶柱体体积及极坐标雅可比因子'),
+    page
+      .getByText('二重积分与累次定限：曲顶柱体体积及极坐标雅可比因子', {
+        exact: true,
+      })
+      .first(),
   ).toBeVisible();
   await page
     .getByRole('link', { name: /记入错题本/ })
@@ -123,9 +127,11 @@ test('错题本支持载入典型示例、持久化及跳转反例绘图验证',
   );
 });
 
-test('扩展模块与未知路由有真实状态', async ({ page }) => {
+test('AI 助教模块与未知路由有真实状态', async ({ page }) => {
   await page.goto('/#/assistant');
-  await expect(page.getByText('这是扩展入口，不是已完成功能')).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1 })).toContainText(
+    'AI 助教：先问条件，再推结论',
+  );
   await page.goto('/#/does-not-exist');
   await expect(page.getByText('没有找到这个页面')).toBeVisible();
 });
