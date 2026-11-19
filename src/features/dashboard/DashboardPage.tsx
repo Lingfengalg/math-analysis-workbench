@@ -23,14 +23,14 @@ const learningLoopSteps = [
     index: '01',
     tag: '读条件',
     title: '核查定义域与充要前提',
-    description: '拆解 ε-δ 语言、洛必达与中值定理的成立边界',
+    description: '拆解 ε-δ 语言、洛必达与重积分定理边界',
     to: '/knowledge',
   },
   {
     index: '02',
     tag: '看图像',
-    title: '用双曲线与割线检验直觉',
-    description: '对比泰勒逼近、无穷奇点与尖点左右差商变化',
+    title: '三维曲面与体素直观检验',
+    description: '对比一元割线、二维曲面与三重积分截面体素',
     to: '/plotting',
   },
   {
@@ -39,6 +39,13 @@ const learningLoopSteps = [
     title: '按思维盲区归档订正',
     description: '对照记录错误思路与条件核查，一键回跳反例',
     to: '/mistakes',
+  },
+  {
+    index: '04',
+    tag: '问助教',
+    title: '苏格拉底式条件追问',
+    description: '挂载卡片或错题摘要，经服务端安全代理启发推导',
+    to: '/assistant',
   },
 ] as const;
 
@@ -156,7 +163,7 @@ export default function DashboardPage() {
         >
           <div className={styles.loopHeader}>
             <h2 id="learning-loop-title">研习路径</h2>
-            <span>三模块参数互通</span>
+            <span>四模块闭环互通</span>
           </div>
           <div className={styles.loopList}>
             {learningLoopSteps.map((item) => (
@@ -217,8 +224,9 @@ export default function DashboardPage() {
 
       <section className={styles.teamStrip}>
         <p>
-          <strong>C4 课程开源协作工程</strong> ·
-          知识导航、函数实验室与错题本已完整就绪，团队成员可按模块边界继续增补教材引注与扩展能力。
+          <strong>C4 课程开源协作工程 · v1.0</strong> ·
+          知识导航、三维仿真实验室、错题本与苏格拉底 AI
+          助教已完整就绪，团队成员可按模块边界继续增补教材引注与实验案例。
         </p>
         <a
           href="https://github.com/Lingfengalg/math-analysis-workbench/blob/main/CONTRIBUTING.md"

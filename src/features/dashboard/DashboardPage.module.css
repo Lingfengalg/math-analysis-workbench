@@ -134,7 +134,7 @@
   border: 1px solid var(--border);
   box-shadow: var(--glass-shadow), var(--glass-rim);
   border-radius: 22px;
-  padding: 22px 22px 18px;
+  padding: 20px 20px 18px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -144,7 +144,7 @@
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   padding: 0 4px;
 }
 
@@ -163,7 +163,7 @@
 .loopList {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   flex: 1;
   justify-content: center;
 }
@@ -171,8 +171,8 @@
 .loopItem {
   display: flex;
   align-items: center;
-  gap: 13px;
-  padding: 12px 14px;
+  gap: 12px;
+  padding: 10px 13px;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.44);
   border: 1px solid rgba(255, 255, 255, 0.75);
