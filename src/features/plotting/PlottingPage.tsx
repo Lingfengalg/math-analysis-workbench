@@ -17,6 +17,7 @@ import {
   AppstoreOutlined,
   ArrowLeftOutlined,
   BookOutlined,
+  BulbOutlined,
   LineChartOutlined,
   SaveOutlined,
   SyncOutlined,
@@ -25,9 +26,11 @@ import { knowledgeCards } from '@/content/knowledge';
 import {
   INTEGRAL_REGION_LABELS,
   RIEMANN_RULE_LABELS,
+  TRIPLE_REGION_LABELS,
   plotRequestSchema,
   preferencesSchema,
   surfacePlotRequestSchema,
+  tripleIntegralRequestSchema,
   type IntegralRegionType,
   type PlotRequest,
   type PlotResult,
@@ -35,23 +38,46 @@ import {
   type RiemannRule,
   type SurfacePlotRequest,
   type SurfacePlotResult,
+  type TripleIntegralRequest,
+  type TripleIntegralResult,
+  type TripleRegionType,
 } from '@/shared/contracts';
+import { createAssistantLink } from '@/shared/navigation/assistant-link';
 import { createKnowledgeLink } from '@/shared/navigation/knowledge-link';
 import { createMistakeDraftLink } from '@/shared/navigation/mistake-link';
 import {
   parsePlotSearch,
   parseSurfacePlotSearch,
+  parseTriplePlotSearch,
 } from '@/shared/navigation/plot-link';
 import { createStorage, type StorageResult } from '@/shared/storage';
-import { calculatePlot, calculateSurface } from '@/shared/math/client';
+import {
+  calculatePlot,
+  calculateSurface,
+  calculateTripleIntegral,
+} from '@/shared/math/client';
 import { FunctionChart } from '@/shared/ui/FunctionChart';
 import { PageHeader } from '@/shared/ui/PageHeader';
 import { Surface3DViewer } from '@/shared/ui/Surface3DViewer';
+import { Volume3DViewer } from '@/shared/ui/Volume3DViewer';
 import styles from './PlottingPage.module.css';
 
-type LabMode = '3d' | '1d';
+type LabMode = '3d' | '3d-triple' | '2d';
 
 const DEFAULT_1D: PlotRequest = { expression: 'x^2', xMin: -5, xMax: 5 };
+
+const DEFAULT_TRIPLE: TripleIntegralRequest = {
+  expression: '1',
+  regionType: 'paraboloid-cap',
+  xMin: -2,
+  xMax: 2,
+  yMin: -2,
+  yMax: 2,
+  zMin: 0,
+  zMax: 4,
+  partitions: 12,
+  sliceZ: 2,
+};
 
 const DEFAULT_SURFACE: SurfacePlotRequest = {
   expression: '2 - 0.25 * (x^2 + y^2)',
@@ -193,6 +219,28 @@ const SURFACE_PRESETS: ReadonlyArray<{
     },
   },
   {
+    label: '叶形曲边域 · X-型累次积分',
+    request: {
+      expression: 'x + 2 * y',
+      xMin: 0,
+      xMax: 1,
+      yDomainMin: 0,
+      yDomainMax: 1,
+      gridSize: 56,
+      integral: {
+        regionType: 'x-type',
+        xStart: 0,
+        xEnd: 1,
+        yStart: 0,
+        yEnd: 1,
+        yLowerExpr: 'x^2',
+        yUpperExpr: 'sqrt(x)',
+        partitions: 16,
+        rule: 'midpoint',
+      },
+    },
+  },
+  {
     label: '二元极限反例 · 方向脊线',
     request: {
       expression: '(x * y) / (x^2 + y^2)',
@@ -201,6 +249,90 @@ const SURFACE_PRESETS: ReadonlyArray<{
       yDomainMin: -2,
       yDomainMax: 2,
       gridSize: 64,
+    },
+  },
+];
+
+const TRIPLE_QUICK_PARTITIONS = [8, 12, 16, 20] as const;
+
+const TRIPLE_REGION_NOTES: Record<TripleRegionType, string> = {
+  box: '长方体域 Ω：x₀ ≤ x ≤ x₁，y₀ ≤ y ≤ y₁，z₀ ≤ z ≤ z₁（直角坐标常限三重累次积分 ∭_Ω f dx dy dz）',
+  sphere:
+    '球体/椭球体域 Ω：((x - x_c)/r_x)² + ((y - y_c)/r_y)² + ((z - z_c)/r_z)² ≤ 1（球面坐标 dV = ρ² sin φ dρ dφ dθ，φ ∈ [0, π]）',
+  cylinder:
+    '圆柱体域 Ω：((x - x_c)/r_x)² + ((y - y_c)/r_y)² ≤ 1，z₀ ≤ z ≤ z₁（柱面坐标 dV = r dr dθ dz，切勿漏乘雅可比因子 r）',
+  tetrahedron:
+    '四面体域 Ω：(x - x₀)/(x₁ - x₀) + (y - y₀)/(y₁ - y₀) + (z - z₀)/(z₁ - z₀) ≤ 1（x≥x₀, y≥y₀, z≥z₀，投影穿线定限）',
+  'paraboloid-cap':
+    '抛物面顶盖域 Ω：z₀ + (z₁ - z₀)[((x - x_c)/r_x)² + ((y - y_c)/r_y)²] ≤ z ≤ z₁（“先二后一”水平截面法：先固定 z_s 求截面积分，再沿 z 轴积分）',
+};
+
+const TRIPLE_PRESETS: ReadonlyArray<{
+  label: string;
+  request: TripleIntegralRequest;
+}> = [
+  {
+    label: '抛物面顶盖 · 先二后一截面',
+    request: DEFAULT_TRIPLE,
+  },
+  {
+    label: '球体转动惯量 · 球面坐标',
+    request: {
+      expression: 'x^2 + y^2 + z^2',
+      regionType: 'sphere',
+      xMin: -2,
+      xMax: 2,
+      yMin: -2,
+      yMax: 2,
+      zMin: -2,
+      zMax: 2,
+      partitions: 12,
+      sliceZ: 0,
+    },
+  },
+  {
+    label: '非均匀圆柱 · 柱面坐标',
+    request: {
+      expression: 'z * (x^2 + y^2)',
+      regionType: 'cylinder',
+      xMin: -2,
+      xMax: 2,
+      yMin: -2,
+      yMax: 2,
+      zMin: 0,
+      zMax: 3,
+      partitions: 12,
+      sliceZ: 1.5,
+    },
+  },
+  {
+    label: '四面体域 · 三重累次定限',
+    request: {
+      expression: 'x + y + z',
+      regionType: 'tetrahedron',
+      xMin: 0,
+      xMax: 2,
+      yMin: 0,
+      yMax: 2,
+      zMin: 0,
+      zMax: 2,
+      partitions: 12,
+      sliceZ: 0.8,
+    },
+  },
+  {
+    label: '长方体非均匀体密度',
+    request: {
+      expression: 'x^2 + y^2 + z',
+      regionType: 'box',
+      xMin: -1,
+      xMax: 1,
+      yMin: -1,
+      yMax: 1,
+      zMin: 0,
+      zMax: 2,
+      partitions: 12,
+      sliceZ: 1,
     },
   },
 ];
@@ -287,9 +419,25 @@ interface SurfaceFormValues {
   intXEnd?: number;
   intYStart?: number;
   intYEnd?: number;
+  intYLowerExpr?: string;
+  intYUpperExpr?: string;
+  intXLowerExpr?: string;
+  intXUpperExpr?: string;
   intPartitions?: number;
   probeX0?: number;
   probeY0?: number;
+}
+
+interface TripleFormValues {
+  expression: string;
+  xMin: number;
+  xMax: number;
+  yMin: number;
+  yMax: number;
+  zMin: number;
+  zMax: number;
+  partitions: number;
+  sliceZ?: number;
 }
 
 interface ActiveWorkspaceState {
@@ -302,6 +450,9 @@ interface ActiveWorkspaceState {
   integralRegion: IntegralRegionType;
   integralRule: RiemannRule;
   probeEnabled: boolean;
+  tripleRequest: TripleIntegralRequest;
+  tripleRegion: TripleRegionType;
+  tripleSliceEnabled: boolean;
   plotRequest: PlotRequest;
   yClampEnabled: boolean;
   secantEnabled: boolean;
@@ -313,6 +464,10 @@ type Calc1DState =
 
 type Calc3DState =
   | { requestKey: string; status: 'done'; result: SurfacePlotResult }
+  | { requestKey: string; status: 'error'; error: string };
+
+type CalcTripleState =
+  | { requestKey: string; status: 'done'; result: TripleIntegralResult }
   | { requestKey: string; status: 'error'; error: string };
 
 function toPlotFormValues(request: PlotRequest): PlotFormValues {
@@ -341,9 +496,28 @@ function toSurfaceFormValues(request: SurfacePlotRequest): SurfaceFormValues {
     intXEnd: request.integral?.xEnd ?? request.xMax,
     intYStart: request.integral?.yStart ?? request.yDomainMin,
     intYEnd: request.integral?.yEnd ?? request.yDomainMax,
+    intYLowerExpr: request.integral?.yLowerExpr ?? 'x^2',
+    intYUpperExpr: request.integral?.yUpperExpr ?? 'sqrt(x)',
+    intXLowerExpr: request.integral?.xLowerExpr ?? 'y^2',
+    intXUpperExpr: request.integral?.xUpperExpr ?? 'sqrt(y)',
     intPartitions: request.integral?.partitions ?? 14,
     probeX0: request.probe?.x0 ?? 0,
     probeY0: request.probe?.y0 ?? 0,
+  };
+}
+
+function toTripleFormValues(request: TripleIntegralRequest): TripleFormValues {
+  return {
+    expression: request.expression,
+    xMin: request.xMin,
+    xMax: request.xMax,
+    yMin: request.yMin,
+    yMax: request.yMax,
+    zMin: request.zMin,
+    zMax: request.zMax,
+    partitions: request.partitions,
+    sliceZ:
+      request.sliceZ ?? Number(((request.zMin + request.zMax) / 2).toFixed(2)),
   };
 }
 
@@ -410,7 +584,7 @@ function buildSurfacePayload(
     payload.zMax = values.zMax ?? 6;
   }
   if (options.integralEnabled) {
-    payload.integral = {
+    const integralPayload: Record<string, unknown> = {
       regionType: options.integralRegion,
       xStart: values.intXStart ?? values.xMin ?? -2,
       xEnd: values.intXEnd ?? values.xMax ?? 2,
@@ -419,6 +593,19 @@ function buildSurfacePayload(
       partitions: Math.round(values.intPartitions ?? 14),
       rule: options.integralRule,
     };
+    if (options.integralRegion === 'x-type') {
+      const yLower = values.intYLowerExpr?.trim();
+      const yUpper = values.intYUpperExpr?.trim();
+      if (yLower) integralPayload.yLowerExpr = yLower;
+      if (yUpper) integralPayload.yUpperExpr = yUpper;
+    }
+    if (options.integralRegion === 'y-type') {
+      const xLower = values.intXLowerExpr?.trim();
+      const xUpper = values.intXUpperExpr?.trim();
+      if (xLower) integralPayload.xLowerExpr = xLower;
+      if (xUpper) integralPayload.xUpperExpr = xUpper;
+    }
+    payload.integral = integralPayload;
   }
   if (options.probeEnabled) {
     payload.probe = {
@@ -435,6 +622,54 @@ function buildSurfacePayload(
   return payload;
 }
 
+function buildTriplePayload(
+  values: Partial<TripleFormValues>,
+  options: {
+    regionType: TripleRegionType;
+    sliceEnabled: boolean;
+    sourceKnowledgeId?: string;
+    sourceMistakeId?: string;
+  },
+): Record<string, unknown> {
+  const payload: Record<string, unknown> = {
+    expression: values.expression?.trim() ?? '',
+    regionType: options.regionType,
+    xMin: values.xMin,
+    xMax: values.xMax,
+    yMin: values.yMin,
+    yMax: values.yMax,
+    zMin: values.zMin,
+    zMax: values.zMax,
+    partitions: Math.round(values.partitions ?? 12),
+  };
+  if (options.sliceEnabled) {
+    const zMin = values.zMin ?? 0;
+    const zMax = values.zMax ?? 4;
+    payload.sliceZ = values.sliceZ ?? Number(((zMin + zMax) / 2).toFixed(2));
+  }
+  if (options.sourceKnowledgeId) {
+    payload.sourceKnowledgeId = options.sourceKnowledgeId;
+  }
+  if (options.sourceMistakeId) {
+    payload.sourceMistakeId = options.sourceMistakeId;
+  }
+  return payload;
+}
+
+function mergePreferences(
+  prev: Preferences,
+  patch: Partial<Preferences>,
+): Preferences {
+  const next: Preferences = {
+    defaultPlot: patch.defaultPlot ?? prev.defaultPlot,
+  };
+  const nextSurface = patch.defaultSurfacePlot ?? prev.defaultSurfacePlot;
+  if (nextSurface) next.defaultSurfacePlot = nextSurface;
+  const nextTriple = patch.defaultTriplePlot ?? prev.defaultTriplePlot;
+  if (nextTriple) next.defaultTriplePlot = nextTriple;
+  return next;
+}
+
 function resolveEnvState(
   searchKey: string,
   stored: StorageResult<Preferences>,
@@ -448,13 +683,16 @@ function resolveEnvState(
   const defaultSurface = stored.ok
     ? (stored.data.defaultSurfacePlot ?? DEFAULT_SURFACE)
     : DEFAULT_SURFACE;
+  const defaultTriple = stored.ok
+    ? (stored.data.defaultTriplePlot ?? DEFAULT_TRIPLE)
+    : DEFAULT_TRIPLE;
 
-  const isExplicit1D =
+  const isExplicit2D =
     rawMode === '1d' ||
     rawMode === '2d' ||
-    (rawMode !== '3d' && params.has('expression'));
+    (rawMode !== '3d' && rawMode !== '3d-triple' && params.has('expression'));
 
-  if (isExplicit1D) {
+  if (isExplicit2D) {
     const linked1D = parsePlotSearch(params);
     const initial1D = linked1D ?? default1D;
     const warning =
@@ -468,7 +706,7 @@ function resolveEnvState(
       state: {
         baseSearchKey: searchKey,
         seq: 0,
-        mode: '1d',
+        mode: '2d',
         surfaceRequest: defaultSurface,
         zClampEnabled:
           defaultSurface.zMin !== undefined ||
@@ -477,10 +715,48 @@ function resolveEnvState(
         integralRegion: defaultSurface.integral?.regionType ?? 'rectangle',
         integralRule: defaultSurface.integral?.rule ?? 'midpoint',
         probeEnabled: defaultSurface.probe !== undefined,
+        tripleRequest: defaultTriple,
+        tripleRegion: defaultTriple.regionType,
+        tripleSliceEnabled: defaultTriple.sliceZ !== undefined,
         plotRequest: initial1D,
         yClampEnabled:
           initial1D.yMin !== undefined || initial1D.yMax !== undefined,
         secantEnabled: initial1D.secant !== undefined,
+      },
+      warning,
+    };
+  }
+
+  if (rawMode === '3d-triple') {
+    const linkedTriple = parseTriplePlotSearch(params);
+    const initialTriple = linkedTriple ?? defaultTriple;
+    const warning =
+      params.has('expression') && !linkedTriple
+        ? '三重积分链接参数无效，已使用默认三重设置。'
+        : !stored.ok
+          ? stored.error
+          : undefined;
+
+    return {
+      state: {
+        baseSearchKey: searchKey,
+        seq: 0,
+        mode: '3d-triple',
+        surfaceRequest: defaultSurface,
+        zClampEnabled:
+          defaultSurface.zMin !== undefined ||
+          defaultSurface.zMax !== undefined,
+        integralEnabled: defaultSurface.integral !== undefined,
+        integralRegion: defaultSurface.integral?.regionType ?? 'rectangle',
+        integralRule: defaultSurface.integral?.rule ?? 'midpoint',
+        probeEnabled: defaultSurface.probe !== undefined,
+        tripleRequest: initialTriple,
+        tripleRegion: initialTriple.regionType,
+        tripleSliceEnabled: initialTriple.sliceZ !== undefined,
+        plotRequest: default1D,
+        yClampEnabled:
+          default1D.yMin !== undefined || default1D.yMax !== undefined,
+        secantEnabled: default1D.secant !== undefined,
       },
       warning,
     };
@@ -508,6 +784,9 @@ function resolveEnvState(
       integralRegion: initialSurface.integral?.regionType ?? 'rectangle',
       integralRule: initialSurface.integral?.rule ?? 'midpoint',
       probeEnabled: initialSurface.probe !== undefined,
+      tripleRequest: defaultTriple,
+      tripleRegion: defaultTriple.regionType,
+      tripleSliceEnabled: defaultTriple.sliceZ !== undefined,
       plotRequest: default1D,
       yClampEnabled:
         default1D.yMin !== undefined || default1D.yMax !== undefined,
@@ -549,6 +828,24 @@ function getSafeMistakeDraftLink(params: {
     });
   } catch {
     return '/mistakes?draft=1';
+  }
+}
+
+function getSafeAssistantLink(params: {
+  id?: string;
+  title: string;
+  summary: string;
+}): string {
+  try {
+    return createAssistantLink({
+      kind: 'plotting',
+      id: params.id,
+      title: params.title.slice(0, 160).trim() || '函数仿真实验',
+      summary:
+        params.summary.slice(0, 800).trim() || '请帮我检查当前推导的条件。',
+    });
+  } catch {
+    return '/assistant';
   }
 }
 
@@ -800,6 +1097,17 @@ function SurfaceWorkspace({
 
   const handleChangeRegionType = (regionType: IntegralRegionType) => {
     const current = getMergedSurfaceFormValues();
+    if (regionType === 'x-type') {
+      surfaceForm.setFieldsValue({
+        intYLowerExpr: current.intYLowerExpr?.trim() || 'x^2',
+        intYUpperExpr: current.intYUpperExpr?.trim() || 'sqrt(x)',
+      });
+    } else if (regionType === 'y-type') {
+      surfaceForm.setFieldsValue({
+        intXLowerExpr: current.intXLowerExpr?.trim() || 'y^2',
+        intXUpperExpr: current.intXUpperExpr?.trim() || 'sqrt(y)',
+      });
+    }
     const candidate = buildSurfacePayload(current, {
       gridSize: activeSurfaceRequest.gridSize,
       zClampEnabled: active.zClampEnabled,
@@ -954,10 +1262,9 @@ function SurfaceWorkspace({
         setSaveStatus({ ok: false, text: message });
         return;
       }
-      const nextPrefs: Preferences = {
-        defaultPlot: persistedPrefs.defaultPlot,
+      const nextPrefs = mergePreferences(persistedPrefs, {
         defaultSurfacePlot: valid.data,
-      };
+      });
       const writeResult = preferences.write(nextPrefs);
       const nextSearchKey = clearExternalSearchIfPresent();
       if (writeResult.ok) {
@@ -1199,6 +1506,76 @@ function SurfaceWorkspace({
                 <div className={styles.regionFormulaBox}>
                   {REGION_INEQUALITY_NOTES[active.integralRegion]}
                 </div>
+
+                {active.integralRegion === 'x-type' && (
+                  <div className={styles.rangeFields}>
+                    <Form.Item
+                      name="intYLowerExpr"
+                      label="下边界函数 φ₁(x)"
+                      className={styles.compactItem}
+                      rules={[
+                        {
+                          required: true,
+                          whitespace: true,
+                          message: '请输入下边界函数 φ₁(x)',
+                        },
+                        { max: 120, message: '最多 120 个字符' },
+                      ]}
+                    >
+                      <Input placeholder="例如 x^2" autoComplete="off" />
+                    </Form.Item>
+                    <Form.Item
+                      name="intYUpperExpr"
+                      label="上边界函数 φ₂(x)"
+                      className={styles.compactItem}
+                      rules={[
+                        {
+                          required: true,
+                          whitespace: true,
+                          message: '请输入上边界函数 φ₂(x)',
+                        },
+                        { max: 120, message: '最多 120 个字符' },
+                      ]}
+                    >
+                      <Input placeholder="例如 sqrt(x)" autoComplete="off" />
+                    </Form.Item>
+                  </div>
+                )}
+
+                {active.integralRegion === 'y-type' && (
+                  <div className={styles.rangeFields}>
+                    <Form.Item
+                      name="intXLowerExpr"
+                      label="左边界函数 ψ₁(y)"
+                      className={styles.compactItem}
+                      rules={[
+                        {
+                          required: true,
+                          whitespace: true,
+                          message: '请输入左边界函数 ψ₁(y)',
+                        },
+                        { max: 120, message: '最多 120 个字符' },
+                      ]}
+                    >
+                      <Input placeholder="例如 y^2" autoComplete="off" />
+                    </Form.Item>
+                    <Form.Item
+                      name="intXUpperExpr"
+                      label="右边界函数 ψ₂(y)"
+                      className={styles.compactItem}
+                      rules={[
+                        {
+                          required: true,
+                          whitespace: true,
+                          message: '请输入右边界函数 ψ₂(y)',
+                        },
+                        { max: 120, message: '最多 120 个字符' },
+                      ]}
+                    >
+                      <Input placeholder="例如 sqrt(y)" autoComplete="off" />
+                    </Form.Item>
+                  </div>
+                )}
 
                 <div className={styles.subSectionRow}>
                   <span className={styles.subSectionTitle}>积分边界范围</span>
@@ -1474,6 +1851,22 @@ function SurfaceWorkspace({
             <Tag>三维网格采样 · 黎曼柱体数值积分</Tag>
             <Link
               className={styles.mistakeLink}
+              to={getSafeAssistantLink({
+                id:
+                  activeSurfaceRequest.sourceKnowledgeId ??
+                  activeSurfaceRequest.sourceMistakeId,
+                title: `三维仿真：z = ${activeSurfaceRequest.expression}`,
+                summary: `在区域 [${activeSurfaceRequest.xMin}, ${activeSurfaceRequest.xMax}] × [${activeSurfaceRequest.yDomainMin}, ${activeSurfaceRequest.yDomainMax}] 上观察二元曲面 z = ${activeSurfaceRequest.expression}${
+                  activeSurfaceRequest.integral
+                    ? `，并开启了 ${INTEGRAL_REGION_LABELS[activeSurfaceRequest.integral.regionType]} 二重积分逼近`
+                    : ''
+                }。`,
+              })}
+            >
+              <BulbOutlined /> 向 AI 助教追问
+            </Link>
+            <Link
+              className={styles.mistakeLink}
               to={getSafeMistakeDraftLink({
                 expression: activeSurfaceRequest.expression,
                 xMin: activeSurfaceRequest.xMin,
@@ -1714,6 +2107,618 @@ function SurfaceWorkspace({
   );
 }
 
+interface TripleWorkspaceProps {
+  active: ActiveWorkspaceState;
+  searchKey: string;
+  tripleLoading: boolean;
+  tripleResult: TripleIntegralResult | null;
+  tripleError: string;
+  saveStatus: { ok: boolean; text: string } | null;
+  persistedPrefs: Preferences;
+  clearExternalSearchIfPresent: () => string;
+  setValidationError: (msg: string) => void;
+  setSaveStatus: (status: { ok: boolean; text: string } | null) => void;
+  setPersistedPrefs: (prefs: Preferences) => void;
+  setUserState: (next: ActiveWorkspaceState) => void;
+}
+
+function TripleWorkspace({
+  active,
+  searchKey,
+  tripleLoading,
+  tripleResult,
+  tripleError,
+  saveStatus,
+  persistedPrefs,
+  clearExternalSearchIfPresent,
+  setValidationError,
+  setSaveStatus,
+  setPersistedPrefs,
+  setUserState,
+}: TripleWorkspaceProps) {
+  const [tripleForm] = Form.useForm<TripleFormValues>();
+  const activeTripleRequest = active.tripleRequest;
+
+  useEffect(() => {
+    if (!searchKey) return;
+    const linked = parseTriplePlotSearch(new URLSearchParams(searchKey));
+    if (linked) {
+      tripleForm.setFieldsValue(toTripleFormValues(linked));
+    }
+  }, [searchKey, tripleForm]);
+
+  const getMergedTripleFormValues = (): TripleFormValues => ({
+    ...toTripleFormValues(activeTripleRequest),
+    ...(tripleForm.getFieldsValue(true) as Partial<TripleFormValues>),
+  });
+
+  const commitTripleCandidate = (
+    candidate: Record<string, unknown>,
+    overrides: Partial<ActiveWorkspaceState>,
+    clearUrl = false,
+  ) => {
+    const valid = tripleIntegralRequestSchema.safeParse(candidate);
+    if (!valid.success) {
+      setValidationError(valid.error.issues[0].message);
+      return;
+    }
+    const nextSearchKey = clearUrl ? clearExternalSearchIfPresent() : searchKey;
+    setValidationError('');
+    setUserState({
+      ...active,
+      ...overrides,
+      baseSearchKey: nextSearchKey,
+      seq: active.seq + 1,
+      mode: '3d-triple',
+      tripleRequest: valid.data,
+    });
+  };
+
+  const handleTripleFinish = (values: TripleFormValues) => {
+    setSaveStatus(null);
+    const merged = { ...getMergedTripleFormValues(), ...values };
+    const payload = buildTriplePayload(merged, {
+      regionType: active.tripleRegion,
+      sliceEnabled: active.tripleSliceEnabled,
+    });
+    commitTripleCandidate(payload, {}, true);
+  };
+
+  const applyTriplePreset = (presetRequest: TripleIntegralRequest) => {
+    setSaveStatus(null);
+    const nextSliceEnabled = presetRequest.sliceZ !== undefined;
+    tripleForm.setFieldsValue(toTripleFormValues(presetRequest));
+    const valid = tripleIntegralRequestSchema.safeParse(presetRequest);
+    if (!valid.success) {
+      setValidationError(valid.error.issues[0].message);
+      return;
+    }
+    const nextSearchKey = clearExternalSearchIfPresent();
+    setValidationError('');
+    setUserState({
+      ...active,
+      baseSearchKey: nextSearchKey,
+      seq: active.seq + 1,
+      mode: '3d-triple',
+      tripleRequest: valid.data,
+      tripleRegion: valid.data.regionType,
+      tripleSliceEnabled: nextSliceEnabled,
+    });
+  };
+
+  const handleChangeTripleRegion = (regionType: TripleRegionType) => {
+    setSaveStatus(null);
+    const current = getMergedTripleFormValues();
+    const candidate = buildTriplePayload(current, {
+      regionType,
+      sliceEnabled: active.tripleSliceEnabled,
+      sourceKnowledgeId: activeTripleRequest.sourceKnowledgeId,
+      sourceMistakeId: activeTripleRequest.sourceMistakeId,
+    });
+    commitTripleCandidate(candidate, { tripleRegion: regionType });
+  };
+
+  const handleChangeTriplePartitions = (partitions: number) => {
+    setSaveStatus(null);
+    const current = getMergedTripleFormValues();
+    tripleForm.setFieldsValue({ partitions });
+    const candidate = buildTriplePayload(
+      { ...current, partitions },
+      {
+        regionType: active.tripleRegion,
+        sliceEnabled: active.tripleSliceEnabled,
+        sourceKnowledgeId: activeTripleRequest.sourceKnowledgeId,
+        sourceMistakeId: activeTripleRequest.sourceMistakeId,
+      },
+    );
+    commitTripleCandidate(candidate, {});
+  };
+
+  const handleToggleSlice = (checked: boolean) => {
+    setSaveStatus(null);
+    const current = getMergedTripleFormValues();
+    const zMin = current.zMin ?? activeTripleRequest.zMin;
+    const zMax = current.zMax ?? activeTripleRequest.zMax;
+    const fallbackSliceZ =
+      current.sliceZ ??
+      activeTripleRequest.sliceZ ??
+      Number(((zMin + zMax) / 2).toFixed(2));
+    if (checked) {
+      tripleForm.setFieldsValue({ sliceZ: fallbackSliceZ });
+    }
+    const candidate = buildTriplePayload(
+      { ...current, sliceZ: fallbackSliceZ },
+      {
+        regionType: active.tripleRegion,
+        sliceEnabled: checked,
+        sourceKnowledgeId: activeTripleRequest.sourceKnowledgeId,
+        sourceMistakeId: activeTripleRequest.sourceMistakeId,
+      },
+    );
+    const parsed = tripleIntegralRequestSchema.safeParse(candidate);
+    setValidationError('');
+    setUserState({
+      ...active,
+      seq: active.seq + 1,
+      tripleSliceEnabled: checked,
+      tripleRequest: parsed.success
+        ? parsed.data
+        : {
+            ...activeTripleRequest,
+            sliceZ: checked ? fallbackSliceZ : undefined,
+          },
+    });
+  };
+
+  const handleSaveTripleDefault = async () => {
+    try {
+      const values = await tripleForm.validateFields();
+      const merged = { ...getMergedTripleFormValues(), ...values };
+      const payload = buildTriplePayload(merged, {
+        regionType: active.tripleRegion,
+        sliceEnabled: active.tripleSliceEnabled,
+      });
+      const valid = tripleIntegralRequestSchema.safeParse(payload);
+      if (!valid.success) {
+        const message = valid.error.issues[0].message;
+        setValidationError(message);
+        setSaveStatus({ ok: false, text: message });
+        return;
+      }
+      const nextPrefs = mergePreferences(persistedPrefs, {
+        defaultTriplePlot: valid.data,
+      });
+      const writeResult = preferences.write(nextPrefs);
+      const nextSearchKey = clearExternalSearchIfPresent();
+      if (writeResult.ok) {
+        setPersistedPrefs(nextPrefs);
+        setValidationError('');
+        setUserState({
+          ...active,
+          baseSearchKey: nextSearchKey,
+          tripleRequest: valid.data,
+        });
+      }
+      setSaveStatus({
+        ok: writeResult.ok,
+        text: writeResult.ok
+          ? '已保存三重默认设置到当前浏览器，下次打开三重积分实验室时直接加载。'
+          : writeResult.error,
+      });
+    } catch {
+      /* Ant Design form highlights invalid fields */
+    }
+  };
+
+  return (
+    <div className={styles.plotLayout}>
+      <Card title="三重积分空间与截面参数">
+        <Form
+          form={tripleForm}
+          layout="vertical"
+          initialValues={toTripleFormValues(activeTripleRequest)}
+          onFinish={handleTripleFinish}
+          requiredMark={false}
+        >
+          <Form.Item
+            name="expression"
+            label="三元被积函数 f(x, y, z)"
+            rules={[
+              {
+                required: true,
+                whitespace: true,
+                message: '请输入三元被积函数 f(x, y, z)',
+              },
+              { max: 160, message: '表达式最多 160 个字符' },
+            ]}
+          >
+            <Input placeholder="例如 1 或 x^2 + y^2 + z^2" autoComplete="off" />
+          </Form.Item>
+
+          <div className={styles.precisionBlock}>
+            <span className={styles.quickStepLabel}>空间积分域 Ω 类型：</span>
+            <Space size={[6, 6]} wrap>
+              {(
+                Object.entries(TRIPLE_REGION_LABELS) as Array<
+                  [TripleRegionType, string]
+                >
+              ).map(([regionKey, regionLabel]) => (
+                <Button
+                  key={regionKey}
+                  size="small"
+                  type={
+                    active.tripleRegion === regionKey ? 'primary' : 'default'
+                  }
+                  onClick={() => handleChangeTripleRegion(regionKey)}
+                >
+                  {regionLabel}
+                </Button>
+              ))}
+            </Space>
+            <div className={styles.regionFormulaBox}>
+              {TRIPLE_REGION_NOTES[active.tripleRegion]}
+            </div>
+          </div>
+
+          <div className={styles.rangeFields}>
+            <Form.Item
+              name="xMin"
+              label="x 下限"
+              className={styles.compactItem}
+              rules={[
+                { required: true, type: 'number', message: '请输入 x 下限' },
+              ]}
+            >
+              <InputNumber min={-100} max={100} step={0.5} />
+            </Form.Item>
+            <Form.Item
+              name="xMax"
+              label="x 上限"
+              className={styles.compactItem}
+              rules={[
+                { required: true, type: 'number', message: '请输入 x 上限' },
+              ]}
+            >
+              <InputNumber min={-100} max={100} step={0.5} />
+            </Form.Item>
+          </div>
+
+          <div className={styles.rangeFields}>
+            <Form.Item
+              name="yMin"
+              label="y 下限"
+              className={styles.compactItem}
+              rules={[
+                { required: true, type: 'number', message: '请输入 y 下限' },
+              ]}
+            >
+              <InputNumber min={-100} max={100} step={0.5} />
+            </Form.Item>
+            <Form.Item
+              name="yMax"
+              label="y 上限"
+              className={styles.compactItem}
+              rules={[
+                { required: true, type: 'number', message: '请输入 y 上限' },
+              ]}
+            >
+              <InputNumber min={-100} max={100} step={0.5} />
+            </Form.Item>
+          </div>
+
+          <div className={styles.rangeFields}>
+            <Form.Item
+              name="zMin"
+              label="z 下限"
+              className={styles.compactItem}
+              rules={[
+                { required: true, type: 'number', message: '请输入 z 下限' },
+              ]}
+            >
+              <InputNumber min={-100} max={100} step={0.5} />
+            </Form.Item>
+            <Form.Item
+              name="zMax"
+              label="z 上限"
+              className={styles.compactItem}
+              rules={[
+                { required: true, type: 'number', message: '请输入 z 上限' },
+              ]}
+            >
+              <InputNumber min={-100} max={100} step={0.5} />
+            </Form.Item>
+          </div>
+
+          <Form.Item
+            name="partitions"
+            label="体素分割数 N（N³，4–22）"
+            className={styles.compactItem}
+            rules={[
+              { required: true, type: 'number', message: '请输入分割数 N' },
+            ]}
+          >
+            <InputNumber min={4} max={22} step={1} />
+          </Form.Item>
+
+          <div className={styles.precisionBlock}>
+            <span className={styles.quickStepLabel}>
+              快捷三维体素加密（N×N×N）：
+            </span>
+            <Space size={[6, 6]} wrap>
+              {TRIPLE_QUICK_PARTITIONS.map((nVal) => (
+                <Button
+                  key={nVal}
+                  size="small"
+                  type={
+                    activeTripleRequest.partitions === nVal
+                      ? 'primary'
+                      : 'default'
+                  }
+                  onClick={() => handleChangeTriplePartitions(nVal)}
+                >
+                  {`${nVal}³`}
+                </Button>
+              ))}
+            </Space>
+          </div>
+
+          <div className={styles.optionPanel}>
+            <div className={styles.optionHeader}>
+              <label
+                htmlFor="triple-slice-switch"
+                className={styles.optionLabel}
+              >
+                截面高度 z_s（先二后一水平切片）
+              </label>
+              <Switch
+                id="triple-slice-switch"
+                size="small"
+                checked={active.tripleSliceEnabled}
+                onChange={handleToggleSlice}
+              />
+            </div>
+            <p className={styles.optionHint}>
+              在指定高度 z = z_s 处剖出水平截面 D_z，高亮该层体素并计算截面面积
+              A(z_s) 与截面通量 ∬_&#123;D_z&#125; f dσ。
+            </p>
+            {active.tripleSliceEnabled && (
+              <div className={styles.optionBody}>
+                <Form.Item
+                  name="sliceZ"
+                  label="截面高度 z_s"
+                  className={styles.compactItemLast}
+                  rules={[
+                    {
+                      required: true,
+                      type: 'number',
+                      message: '请输入截面高度 z_s',
+                    },
+                  ]}
+                >
+                  <InputNumber min={-100} max={100} step={0.2} />
+                </Form.Item>
+              </div>
+            )}
+          </div>
+
+          <Button
+            type="primary"
+            htmlType="submit"
+            icon={<AppstoreOutlined />}
+            block
+            loading={tripleLoading}
+          >
+            生成三重体素与截面
+          </Button>
+        </Form>
+
+        <Button
+          className={styles.secondaryAction}
+          icon={<SaveOutlined />}
+          onClick={() => void handleSaveTripleDefault()}
+          block
+        >
+          保存三重默认设置
+        </Button>
+
+        <h3 className={styles.presetHeading}>三重积分空间预设</h3>
+        <p className={styles.presetSubnote}>
+          一键加载抛物面顶盖截面、球体转动惯量、柱面、四面体与长方体 5
+          类典型空间域：
+        </p>
+        <Space size={[6, 8]} wrap>
+          {TRIPLE_PRESETS.map((preset) => (
+            <Button
+              key={preset.label}
+              size="small"
+              onClick={() => applyTriplePreset(preset.request)}
+            >
+              {preset.label}
+            </Button>
+          ))}
+        </Space>
+
+        <p className={styles.smallNote}>
+          支持三元变量 x、y、z 与常量 pi、e，以及常用初等函数与 min / max
+          及有理常数幂运算。体素求和提供几何直观，严格计算须依据投影穿线、截面法或柱/球面坐标雅可比完成。
+        </p>
+
+        {saveStatus && (
+          <Alert
+            className={styles.saveAlert}
+            type={saveStatus.ok ? 'success' : 'error'}
+            title={saveStatus.text}
+            showIcon
+          />
+        )}
+      </Card>
+
+      <Card
+        title="三重积分空间体素与截面视口"
+        extra={
+          <div className={styles.chartExtra}>
+            <Tag>三维体素离散逼近 · 高斯参考积分</Tag>
+            <Link
+              className={styles.mistakeLink}
+              to={getSafeAssistantLink({
+                id:
+                  activeTripleRequest.sourceKnowledgeId ??
+                  activeTripleRequest.sourceMistakeId,
+                title: `三重积分仿真：∭ (${activeTripleRequest.expression}) dV`,
+                summary: `在 ${TRIPLE_REGION_LABELS[activeTripleRequest.regionType]} [${activeTripleRequest.xMin}, ${activeTripleRequest.xMax}] × [${activeTripleRequest.yMin}, ${activeTripleRequest.yMax}] × [${activeTripleRequest.zMin}, ${activeTripleRequest.zMax}] 上计算三重积分，分割 ${activeTripleRequest.partitions}³${
+                  activeTripleRequest.sliceZ !== undefined
+                    ? `，截面高度 z_s = ${activeTripleRequest.sliceZ}`
+                    : ''
+                }。`,
+              })}
+            >
+              <BulbOutlined /> 向 AI 助教追问
+            </Link>
+            <Link
+              className={styles.mistakeLink}
+              to={getSafeMistakeDraftLink({
+                expression: activeTripleRequest.expression,
+                xMin: activeTripleRequest.xMin,
+                xMax: activeTripleRequest.xMax,
+                sourceKnowledgeId: activeTripleRequest.sourceKnowledgeId,
+              })}
+            >
+              <BookOutlined /> 记入错题本
+            </Link>
+          </div>
+        }
+      >
+        {tripleLoading && (
+          <div className={styles.chartLoading}>
+            <Spin />
+            <p>正在计算三重积分空间体素与水平截面…</p>
+          </div>
+        )}
+
+        {tripleError && (
+          <Alert
+            className={styles.errorAlert}
+            type="error"
+            showIcon
+            title="无法绘制"
+            description={tripleError}
+          />
+        )}
+
+        {!tripleLoading && tripleResult && (
+          <>
+            <Volume3DViewer
+              result={tripleResult}
+              request={activeTripleRequest}
+            />
+
+            <p className={styles.chartSummary} role="status">
+              ∭_Ω ({activeTripleRequest.expression}) dV · 区域：
+              {TRIPLE_REGION_LABELS[activeTripleRequest.regionType]} · 外接范围
+              [{activeTripleRequest.xMin}, {activeTripleRequest.xMax}] × [
+              {activeTripleRequest.yMin}, {activeTripleRequest.yMax}] × [
+              {activeTripleRequest.zMin}, {activeTripleRequest.zMax}]
+              {activeTripleRequest.sliceZ !== undefined
+                ? ` · 截面 z_s = ${activeTripleRequest.sliceZ}`
+                : ''}
+              {' · '}分割 {activeTripleRequest.partitions}³ · 有效体素{' '}
+              {tripleResult.voxels.length} 个
+            </p>
+
+            {tripleResult.voxels.length === 0 && (
+              <Alert
+                className={styles.secantAlert}
+                type="warning"
+                showIcon
+                title="该空间区域内没有落入的有效体素，请调整上下限或被积函数定义域。"
+              />
+            )}
+
+            <div
+              className={styles.secantCard}
+              aria-label="三重积分空间体素与截面看板"
+            >
+              <div className={styles.secantTitleRow}>
+                <h3 className={styles.secantTitle}>
+                  三重积分空间体素与截面实时看板（
+                  {TRIPLE_REGION_LABELS[activeTripleRequest.regionType]}）
+                </h3>
+                <span className={styles.secantFormulaHint}>
+                  分割精度 {activeTripleRequest.partitions}×
+                  {activeTripleRequest.partitions}×
+                  {activeTripleRequest.partitions}
+                </span>
+              </div>
+
+              <div className={styles.integralMetrics}>
+                <div className={styles.metricItem}>
+                  <span className={styles.metricLabel}>
+                    体素黎曼和 S_&#123;N³&#125;
+                  </span>
+                  <span className={styles.metricValue}>
+                    {formatMetric(tripleResult.riemannSum)}
+                  </span>
+                  <span className={styles.metricSub}>
+                    共 {tripleResult.voxels.length} 个有效体素
+                  </span>
+                </div>
+
+                <div className={styles.metricItem}>
+                  <span className={styles.metricLabel}>
+                    高精度参考积分 ∭_Ω f dV
+                  </span>
+                  <span className={styles.metricValue}>
+                    {formatMetric(tripleResult.referenceIntegral)}
+                  </span>
+                  <span className={styles.metricSub}>三维高斯求积参考值</span>
+                </div>
+
+                <div className={styles.metricItem}>
+                  <span className={styles.metricLabel}>
+                    离散逼近误差 |S_N - I|
+                  </span>
+                  <span className={styles.metricValue}>
+                    {formatMetric(tripleResult.absError)}
+                  </span>
+                  <span className={styles.metricSub}>
+                    体素加密后误差单调收敛
+                  </span>
+                </div>
+
+                <div className={styles.metricItem}>
+                  <span className={styles.metricLabel}>空间域体积与均值</span>
+                  <span className={styles.metricValue}>
+                    体积 {formatMetric(tripleResult.domainVolume)}
+                  </span>
+                  <span className={styles.metricSub}>
+                    平均密度 f̄ = {formatMetric(tripleResult.meanDensity)}
+                  </span>
+                </div>
+
+                <div className={styles.metricItem}>
+                  <span className={styles.metricLabel}>
+                    水平截面 D_z（先二后一）
+                  </span>
+                  <span className={styles.metricValue}>
+                    {tripleResult.sliceInfo
+                      ? `面积 ${formatMetric(tripleResult.sliceInfo.area)}`
+                      : '未启用截面'}
+                  </span>
+                  <span className={styles.metricSub}>
+                    {tripleResult.sliceInfo
+                      ? `z_s = ${formatMetric(tripleResult.sliceInfo.z)} · 截面通量 ${formatMetric(tripleResult.sliceInfo.sliceIntegral)} · ${tripleResult.sliceInfo.voxelCount} 个高亮体素`
+                      : '开启“截面高度 z_s”观察水平截面通量'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+      </Card>
+    </div>
+  );
+}
+
 interface UnivariateWorkspaceProps {
   active: ActiveWorkspaceState;
   searchKey: string;
@@ -1771,7 +2776,7 @@ function UnivariateWorkspace({
       ...active,
       baseSearchKey: nextSearchKey,
       seq: active.seq + 1,
-      mode: '1d',
+      mode: '2d',
       plotRequest: valid.data,
     });
   };
@@ -1793,7 +2798,7 @@ function UnivariateWorkspace({
       ...active,
       baseSearchKey: nextSearchKey,
       seq: active.seq + 1,
-      mode: '1d',
+      mode: '2d',
       plotRequest: valid.data,
       yClampEnabled: nextYClamp,
       secantEnabled: nextSecant,
@@ -1916,12 +2921,9 @@ function UnivariateWorkspace({
         setSaveStatus({ ok: false, text: message });
         return;
       }
-      const nextPrefs: Preferences = persistedPrefs.defaultSurfacePlot
-        ? {
-            defaultPlot: valid.data,
-            defaultSurfacePlot: persistedPrefs.defaultSurfacePlot,
-          }
-        : { defaultPlot: valid.data };
+      const nextPrefs = mergePreferences(persistedPrefs, {
+        defaultPlot: valid.data,
+      });
       const writeResult = preferences.write(nextPrefs);
       const nextSearchKey = clearExternalSearchIfPresent();
       if (writeResult.ok) {
@@ -2213,6 +3215,26 @@ function UnivariateWorkspace({
             <Tag>数值采样 · 非符号计算</Tag>
             <Link
               className={styles.mistakeLink}
+              to={getSafeAssistantLink({
+                id:
+                  activePlotRequest.sourceKnowledgeId ??
+                  activePlotRequest.sourceMistakeId,
+                title: `二维函数仿真：f(x) = ${activePlotRequest.expression}`,
+                summary: `在区间 [${activePlotRequest.xMin}, ${activePlotRequest.xMax}] 上观察一元函数 f(x) = ${activePlotRequest.expression}${
+                  activePlotRequest.compareExpression
+                    ? ` 与对比函数 g(x) = ${activePlotRequest.compareExpression}`
+                    : ''
+                }${
+                  activePlotRequest.secant
+                    ? `，并在 x₀ = ${activePlotRequest.secant.x0}, h = ${activePlotRequest.secant.h} 处观察差商割线`
+                    : ''
+                }。`,
+              })}
+            >
+              <BulbOutlined /> 向 AI 助教追问
+            </Link>
+            <Link
+              className={styles.mistakeLink}
               to={getSafeMistakeDraftLink({
                 expression: activePlotRequest.expression,
                 xMin: activePlotRequest.xMin,
@@ -2360,6 +3382,7 @@ export default function PlottingPage() {
     preferences.read({
       defaultPlot: DEFAULT_1D,
       defaultSurfacePlot: DEFAULT_SURFACE,
+      defaultTriplePlot: DEFAULT_TRIPLE,
     }),
   );
   const [persistedPrefs, setPersistedPrefs] = useState<Preferences>(() =>
@@ -2375,6 +3398,8 @@ export default function PlottingPage() {
   const [validationError, setValidationError] = useState('');
   const [calc1DState, setCalc1DState] = useState<Calc1DState | null>(null);
   const [calc3DState, setCalc3DState] = useState<Calc3DState | null>(null);
+  const [calcTripleState, setCalcTripleState] =
+    useState<CalcTripleState | null>(null);
   const [saveStatus, setSaveStatus] = useState<{
     ok: boolean;
     text: string;
@@ -2388,9 +3413,11 @@ export default function PlottingPage() {
   const activeMode = active.mode;
   const activePlotRequest = active.plotRequest;
   const activeSurfaceRequest = active.surfaceRequest;
+  const activeTripleRequest = active.tripleRequest;
 
-  const request1DKey = `1d:${active.seq}:${JSON.stringify(activePlotRequest)}`;
+  const request1DKey = `2d:${active.seq}:${JSON.stringify(activePlotRequest)}`;
   const request3DKey = `3d:${active.seq}:${JSON.stringify(activeSurfaceRequest)}`;
+  const requestTripleKey = `3d-triple:${active.seq}:${JSON.stringify(activeTripleRequest)}`;
 
   useEffect(() => {
     if (activeMode !== '3d') return;
@@ -2418,7 +3445,32 @@ export default function PlottingPage() {
   }, [activeMode, activeSurfaceRequest, request3DKey]);
 
   useEffect(() => {
-    if (activeMode !== '1d') return;
+    if (activeMode !== '3d-triple') return;
+    const controller = new AbortController();
+    calculateTripleIntegral(activeTripleRequest, controller.signal)
+      .then((data) => {
+        if (!controller.signal.aborted) {
+          setCalcTripleState({
+            requestKey: requestTripleKey,
+            status: 'done',
+            result: data,
+          });
+        }
+      })
+      .catch((cause: unknown) => {
+        if (!controller.signal.aborted) {
+          setCalcTripleState({
+            requestKey: requestTripleKey,
+            status: 'error',
+            error: cause instanceof Error ? cause.message : '三重积分计算失败',
+          });
+        }
+      });
+    return () => controller.abort();
+  }, [activeMode, activeTripleRequest, requestTripleKey]);
+
+  useEffect(() => {
+    if (activeMode !== '2d') return;
     const controller = new AbortController();
     calculatePlot(activePlotRequest, controller.signal)
       .then((data) => {
@@ -2451,7 +3503,12 @@ export default function PlottingPage() {
   };
 
   const handleModeChange = (value: string | number) => {
-    const nextMode: LabMode = value === '1d' ? '1d' : '3d';
+    const nextMode: LabMode =
+      value === '3d-triple'
+        ? '3d-triple'
+        : value === '2d' || value === '1d'
+          ? '2d'
+          : '3d';
     if (nextMode === activeMode) return;
     setSaveStatus(null);
     setValidationError('');
@@ -2466,6 +3523,11 @@ export default function PlottingPage() {
       sourceKnowledgeId: undefined,
       sourceMistakeId: undefined,
     };
+    const cleanTriple: TripleIntegralRequest = {
+      ...activeTripleRequest,
+      sourceKnowledgeId: undefined,
+      sourceMistakeId: undefined,
+    };
     setUserState({
       ...active,
       baseSearchKey: nextSearchKey,
@@ -2473,17 +3535,22 @@ export default function PlottingPage() {
       mode: nextMode,
       plotRequest: cleanPlot,
       surfaceRequest: cleanSurface,
+      tripleRequest: cleanTriple,
     });
   };
 
   const sourceKnowledgeId =
     activeMode === '3d'
       ? activeSurfaceRequest.sourceKnowledgeId
-      : activePlotRequest.sourceKnowledgeId;
+      : activeMode === '3d-triple'
+        ? activeTripleRequest.sourceKnowledgeId
+        : activePlotRequest.sourceKnowledgeId;
   const sourceMistakeId =
     activeMode === '3d'
       ? activeSurfaceRequest.sourceMistakeId
-      : activePlotRequest.sourceMistakeId;
+      : activeMode === '3d-triple'
+        ? activeTripleRequest.sourceMistakeId
+        : activePlotRequest.sourceMistakeId;
 
   const sourceCard = sourceKnowledgeId
     ? knowledgeCards.find((card) => card.id === sourceKnowledgeId)
@@ -2505,17 +3572,35 @@ export default function PlottingPage() {
         (is3DSettled && calc3DState.status === 'error' ? calc3DState.error : '')
       : '';
 
+  const isTripleSettled = calcTripleState?.requestKey === requestTripleKey;
+  const tripleLoading =
+    activeMode === '3d-triple' && !validationError && !isTripleSettled;
+  const tripleResult =
+    activeMode === '3d-triple' &&
+    !validationError &&
+    isTripleSettled &&
+    calcTripleState.status === 'done'
+      ? calcTripleState.result
+      : null;
+  const tripleError =
+    activeMode === '3d-triple'
+      ? validationError ||
+        (isTripleSettled && calcTripleState.status === 'error'
+          ? calcTripleState.error
+          : '')
+      : '';
+
   const is1DSettled = calc1DState?.requestKey === request1DKey;
-  const plotLoading = activeMode === '1d' && !validationError && !is1DSettled;
+  const plotLoading = activeMode === '2d' && !validationError && !is1DSettled;
   const plotResult =
-    activeMode === '1d' &&
+    activeMode === '2d' &&
     !validationError &&
     is1DSettled &&
     calc1DState.status === 'done'
       ? calc1DState.result
       : null;
   const plotError =
-    activeMode === '1d'
+    activeMode === '2d'
       ? validationError ||
         (is1DSettled && calc1DState.status === 'error' ? calc1DState.error : '')
       : '';
@@ -2525,7 +3610,7 @@ export default function PlottingPage() {
       <PageHeader
         eyebrow="∬ · 多元曲面与函数仿真实验室"
         title="让抽象的变化，变得看得见。"
-        description="三维多元曲面旋转剖切、二重积分黎曼柱体逼近与一元函数差商分析一体化仿真。"
+        description="三维多元曲面与二重积分、三重积分空间截面与一元函数差商分析三模式一体化仿真。"
       />
 
       <div className={styles.modeBar}>
@@ -2535,12 +3620,16 @@ export default function PlottingPage() {
             value={activeMode}
             options={[
               {
-                label: '三维多元与重积分 z = f(x, y)',
+                label: '三维多元与二重积分 z = f(x, y)',
                 value: '3d',
               },
               {
+                label: '三重积分空间与截面 ∭_Ω f dV',
+                value: '3d-triple',
+              },
+              {
                 label: '二维一元与差商 y = f(x)',
-                value: '1d',
+                value: '2d',
               },
             ]}
             onChange={handleModeChange}
@@ -2549,8 +3638,10 @@ export default function PlottingPage() {
         <span className={styles.modeHint}>
           <AppstoreOutlined />
           {activeMode === '3d'
-            ? '黎曼柱体分割求和 · 偏导截痕与切平面联动'
-            : '主副函数同屏对比 · 对称差商与割线逼近'}
+            ? '黎曼柱体分割求和 · 曲边定限与切平面联动'
+            : activeMode === '3d-triple'
+              ? '空间体素离散逼近 · 先二后一水平截面剖切'
+              : '主副函数同屏对比 · 对称差商与割线逼近'}
         </span>
       </div>
 
@@ -2609,6 +3700,21 @@ export default function PlottingPage() {
           surfaceLoading={surfaceLoading}
           surfaceResult={surfaceResult}
           surfaceError={surfaceError}
+          saveStatus={saveStatus}
+          persistedPrefs={persistedPrefs}
+          clearExternalSearchIfPresent={clearExternalSearchIfPresent}
+          setValidationError={setValidationError}
+          setSaveStatus={setSaveStatus}
+          setPersistedPrefs={setPersistedPrefs}
+          setUserState={setUserState}
+        />
+      ) : activeMode === '3d-triple' ? (
+        <TripleWorkspace
+          active={active}
+          searchKey={searchKey}
+          tripleLoading={tripleLoading}
+          tripleResult={tripleResult}
+          tripleError={tripleError}
           saveStatus={saveStatus}
           persistedPrefs={persistedPrefs}
           clearExternalSearchIfPresent={clearExternalSearchIfPresent}

@@ -13,7 +13,9 @@ import {
   Tag,
 } from 'antd';
 import {
+  AppstoreOutlined,
   ArrowRightOutlined,
+  BulbOutlined,
   DeleteOutlined,
   DownloadOutlined,
   EditOutlined,
@@ -40,12 +42,18 @@ import {
   type PlotRequest,
 } from '@/shared/contracts';
 import { compileExpression } from '@/shared/math/sample';
+import { compileSurfaceExpression } from '@/shared/math/surface';
+import { createAssistantLink } from '@/shared/navigation/assistant-link';
 import { createKnowledgeLink } from '@/shared/navigation/knowledge-link';
 import {
   parseMistakeDraftSearch,
   type MistakeDraftQuery,
 } from '@/shared/navigation/mistake-link';
-import { createPlotLink } from '@/shared/navigation/plot-link';
+import {
+  createPlotLink,
+  createSurfacePlotLink,
+  createTriplePlotLink,
+} from '@/shared/navigation/plot-link';
 import { createStorage } from '@/shared/storage';
 import { Formula } from '@/shared/ui/Formula';
 import { PageHeader } from '@/shared/ui/PageHeader';
@@ -195,6 +203,18 @@ function parseImportedMistakes(
         };
       }
     }
+    if (item.counterexampleSurfacePlot) {
+      try {
+        compileSurfaceExpression(item.counterexampleSurfacePlot.expression);
+      } catch (cause) {
+        return {
+          ok: false,
+          error: `错题「${item.title}」的三维反例表达式不受支持：${
+            cause instanceof Error ? cause.message : '语法无效'
+          }`,
+        };
+      }
+    }
   }
   return { ok: true, items: validated.data.items };
 }
@@ -287,6 +307,8 @@ function MistakeEditorModal({
       correction: values.correction.trim(),
       relatedKnowledgeId: trimmedCardId.length > 0 ? trimmedCardId : undefined,
       counterexamplePlot,
+      counterexampleSurfacePlot: state.editingItem?.counterexampleSurfacePlot,
+      counterexampleTriplePlot: state.editingItem?.counterexampleTriplePlot,
       createdAt: state.editingItem?.createdAt ?? now,
       updatedAt: now,
     };
@@ -694,7 +716,7 @@ export default function MistakesPage() {
     if (missingStarter.length === 0) {
       setFeedback({
         type: 'info',
-        title: '4 道典型错题示例均已在列表中，未覆盖你的现有修改。',
+        title: `${starterMistakes.length} 道典型错题示例均已在列表中，未覆盖你的现有修改。`,
       });
       return;
     }
@@ -1013,8 +1035,8 @@ export default function MistakesPage() {
           <span className={styles.emptyBadge}>START FROM ONE MISTAKE</span>
           <h2>还没有错题记录，从一道典型陷阱开始复盘</h2>
           <p>
-            工科数分中最有价值的进步，往往来自看清“为什么看似合理的推导会在边界条件失效”。你可以直接记录自己的错题，或先载入
-            4 道精选高频错题体验完整联动。
+            工科数分中最有价值的进步，往往来自看清“为什么看似合理的推导会在边界条件失效”。你可以直接记录自己的错题，或先载入{' '}
+            {starterMistakes.length} 道精选高频错题体验完整联动。
           </p>
           <div className={styles.emptyActions}>
             <Button
@@ -1190,6 +1212,53 @@ export default function MistakesPage() {
                             <ArrowRightOutlined />
                           </Link>
                         )}
+                        {item.counterexampleSurfacePlot && (
+                          <Link
+                            className={styles.crossLink}
+                            to={createSurfacePlotLink({
+                              ...item.counterexampleSurfacePlot,
+                              sourceMistakeId:
+                                item.counterexampleSurfacePlot
+                                  .sourceMistakeId ?? item.id,
+                            })}
+                          >
+                            <AppstoreOutlined />
+                            去三维绘图中验证反例
+                            <ArrowRightOutlined />
+                          </Link>
+                        )}
+                        {item.counterexampleTriplePlot && (
+                          <Link
+                            className={styles.crossLink}
+                            to={createTriplePlotLink({
+                              ...item.counterexampleTriplePlot,
+                              sourceMistakeId:
+                                item.counterexampleTriplePlot.sourceMistakeId ??
+                                item.id,
+                            })}
+                          >
+                            <AppstoreOutlined />
+                            去三重积分实验室验证反例
+                            <ArrowRightOutlined />
+                          </Link>
+                        )}
+                        <Link
+                          className={styles.crossLink}
+                          to={createAssistantLink({
+                            kind: 'mistake',
+                            id: item.id,
+                            title: item.title,
+                            summary:
+                              `题目：${item.prompt}；错误思路：${item.myAttempt}；订正要点：${item.correction}`
+                                .slice(0, 800)
+                                .trim(),
+                            formula: item.formula || undefined,
+                          })}
+                        >
+                          <BulbOutlined />
+                          向 AI 助教追问
+                          <ArrowRightOutlined />
+                        </Link>
                       </div>
 
                       <div className={styles.cardActions}>

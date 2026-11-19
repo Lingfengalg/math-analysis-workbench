@@ -7,15 +7,23 @@ import type {
   PlotResult,
   SurfacePlotRequest,
   SurfacePlotResult,
+  TripleIntegralRequest,
+  TripleIntegralResult,
 } from '@/shared/contracts';
 import type { FunctionChartProps } from '@/shared/ui/FunctionChart';
 import type { Surface3DViewerProps } from '@/shared/ui/Surface3DViewer';
-import { calculatePlot, calculateSurface } from '@/shared/math/client';
+import type { Volume3DViewerProps } from '@/shared/ui/Volume3DViewer';
+import {
+  calculatePlot,
+  calculateSurface,
+  calculateTripleIntegral,
+} from '@/shared/math/client';
 import PlottingPage from './PlottingPage';
 
 vi.mock('@/shared/math/client', () => ({
   calculatePlot: vi.fn(),
   calculateSurface: vi.fn(),
+  calculateTripleIntegral: vi.fn(),
 }));
 
 vi.mock('@/shared/ui/FunctionChart', () => ({
@@ -59,8 +67,22 @@ vi.mock('@/shared/ui/Surface3DViewer', () => ({
   ),
 }));
 
+vi.mock('@/shared/ui/Volume3DViewer', () => ({
+  Volume3DViewer: ({ request, result }: Volume3DViewerProps) => (
+    <div
+      role="img"
+      aria-label={`三元函数 ${request.expression} 的三重积分空间体素图像`}
+      data-region={request.regionType}
+      data-partitions={String(request.partitions)}
+      data-slicez={request.sliceZ !== undefined ? String(request.sliceZ) : ''}
+      data-voxels={String(result.voxels.length)}
+    />
+  ),
+}));
+
 const mockedCalculatePlot = vi.mocked(calculatePlot);
 const mockedCalculateSurface = vi.mocked(calculateSurface);
+const mockedCalculateTriple = vi.mocked(calculateTripleIntegral);
 
 function buildMockPlotResult(request: PlotRequest): PlotResult {
   const result: PlotResult = {
@@ -169,6 +191,49 @@ function buildMockSurfaceResult(
   return result;
 }
 
+function buildMockTripleResult(
+  request: TripleIntegralRequest,
+): TripleIntegralResult {
+  const referenceIntegral =
+    request.regionType === 'paraboloid-cap' ? 25.132741 : 80.424772;
+  const domainVolume =
+    request.regionType === 'paraboloid-cap' ? 25.132741 : 33.510322;
+  const voxelCount = request.partitions * request.partitions;
+  const absError = Number((1.5 / request.partitions).toFixed(6));
+  const riemannSum = Number((referenceIntegral - absError).toFixed(6));
+  return {
+    voxels: Array.from({ length: voxelCount }, (_, idx) => ({
+      x: request.xMin + 0.1 * (idx % request.partitions),
+      y: request.yMin + 0.1 * Math.floor(idx / request.partitions),
+      z: request.sliceZ ?? (request.zMin + request.zMax) / 2,
+      dx: (request.xMax - request.xMin) / request.partitions,
+      dy: (request.yMax - request.yMin) / request.partitions,
+      dz: (request.zMax - request.zMin) / request.partitions,
+      value: 1,
+      inSlice: request.sliceZ !== undefined && idx < request.partitions,
+    })),
+    riemannSum,
+    referenceIntegral,
+    absError,
+    domainVolume,
+    meanDensity: Number((referenceIntegral / domainVolume).toFixed(6)),
+    valueMin: 0,
+    valueMax: 4,
+    ...(request.sliceZ !== undefined
+      ? {
+          sliceInfo: {
+            z: request.sliceZ,
+            area: Number((Math.PI * Math.max(0.5, request.sliceZ)).toFixed(6)),
+            sliceIntegral: Number(
+              (Math.PI * Math.max(0.5, request.sliceZ)).toFixed(6),
+            ),
+            voxelCount: request.partitions,
+          },
+        }
+      : {}),
+  };
+}
+
 function LocationSearchProbe() {
   const location = useLocation();
   return <div data-testid="location-search">{location.search}</div>;
@@ -192,6 +257,9 @@ describe('多元曲面与函数仿真实验室 PlottingPage', () => {
     );
     mockedCalculateSurface.mockImplementation(async (request) =>
       buildMockSurfaceResult(request),
+    );
+    mockedCalculateTriple.mockImplementation(async (request) =>
+      buildMockTripleResult(request),
     );
   });
 
@@ -540,5 +608,149 @@ describe('多元曲面与函数仿真实验室 PlottingPage', () => {
         expect.any(AbortSignal),
       );
     });
+  });
+
+  it('支持 X-型与 Y-型曲边域边界函数输入及「叶形曲边域 · X-型累次积分」预设与向 AI 助教追问入口', async () => {
+    const user = userEvent.setup();
+    renderPlotting();
+    await screen.findByRole('status');
+
+    expect(
+      screen.getByRole('link', { name: /向 AI 助教追问/ }),
+    ).toHaveAttribute('href', expect.stringContaining('ctxKind=plotting'));
+
+    await user.click(
+      screen.getByRole('button', { name: '叶形曲边域 · X-型累次积分' }),
+    );
+
+    await waitFor(() => {
+      expect(mockedCalculateSurface).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          expression: 'x + 2 * y',
+          integral: expect.objectContaining({
+            regionType: 'x-type',
+            yLowerExpr: 'x^2',
+            yUpperExpr: 'sqrt(x)',
+            partitions: 16,
+          }),
+        }),
+        expect.any(AbortSignal),
+      );
+    });
+    expect(screen.getByLabelText('下边界函数 φ₁(x)')).toHaveValue('x^2');
+    expect(screen.getByLabelText('上边界函数 φ₂(x)')).toHaveValue('sqrt(x)');
+
+    await user.click(
+      screen.getByRole('button', { name: 'Y-型曲边域 ψ₁(y)≤x≤ψ₂(y)' }),
+    );
+    expect(screen.getByLabelText('左边界函数 ψ₁(y)')).toBeInTheDocument();
+    expect(screen.getByLabelText('右边界函数 ψ₂(y)')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(mockedCalculateSurface).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          integral: expect.objectContaining({
+            regionType: 'y-type',
+            xLowerExpr: 'y^2',
+            xUpperExpr: 'sqrt(y)',
+          }),
+        }),
+        expect.any(AbortSignal),
+      );
+    });
+  });
+
+  it('支持切换至三重积分空间与截面模式：体素计算、截面 z_s 切换、16³ 加密、预设与保存三重默认设置', async () => {
+    const user = userEvent.setup();
+    renderPlotting();
+    await screen.findByRole('status');
+
+    await user.click(screen.getByText('三重积分空间与截面 ∭_Ω f dV'));
+
+    expect(await screen.findByRole('status')).toHaveTextContent('∭_Ω (1) dV');
+    expect(
+      screen.getByRole('img', {
+        name: '三元函数 1 的三重积分空间体素图像',
+      }),
+    ).toBeInTheDocument();
+    expect(mockedCalculateTriple).toHaveBeenCalledWith(
+      {
+        expression: '1',
+        regionType: 'paraboloid-cap',
+        xMin: -2,
+        xMax: 2,
+        yMin: -2,
+        yMax: 2,
+        zMin: 0,
+        zMax: 4,
+        partitions: 12,
+        sliceZ: 2,
+      },
+      expect.any(AbortSignal),
+    );
+    expect(
+      screen.getByLabelText('三重积分空间体素与截面看板'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('面积 6.283185')).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: /向 AI 助教追问/ }),
+    ).toHaveAttribute('href', expect.stringContaining('ctxKind=plotting'));
+
+    // 点击 16³ 快捷体素加密
+    await user.click(screen.getByRole('button', { name: '16³' }));
+    await waitFor(() => {
+      expect(mockedCalculateTriple).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          partitions: 16,
+          regionType: 'paraboloid-cap',
+        }),
+        expect.any(AbortSignal),
+      );
+    });
+
+    // 关闭水平截面切片开关
+    await user.click(
+      screen.getByRole('switch', { name: /截面高度 z_s（先二后一水平切片）/ }),
+    );
+    expect(await screen.findByText('未启用截面')).toBeInTheDocument();
+
+    // 切换球体转动惯量预设并保存三重默认设置
+    await user.click(
+      screen.getByRole('button', { name: '球体转动惯量 · 球面坐标' }),
+    );
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(
+        '∭_Ω (x^2 + y^2 + z^2) dV',
+      );
+    });
+    await user.click(screen.getByRole('button', { name: /保存三重默认设置/ }));
+    expect(
+      await screen.findByText(/已保存三重默认设置到当前浏览器/),
+    ).toBeInTheDocument();
+
+    const rawSaved = window.localStorage.getItem('math-workbench:preferences');
+    const parsedSaved = JSON.parse(rawSaved ?? '{}');
+    expect(parsedSaved.data.defaultTriplePlot).toMatchObject({
+      expression: 'x^2 + y^2 + z^2',
+      regionType: 'sphere',
+      sliceZ: 0,
+    });
+  });
+
+  it('从 ?mode=3d-triple 知识卡片链接进入时自动激活三重积分模式并展示来源横幅', async () => {
+    renderPlotting(
+      '/plotting?mode=3d-triple&expression=x%5E2%2By%5E2%2Bz%5E2&regionType=sphere&xMin=-2&xMax=2&yMin=-2&yMax=2&zMin=-2&zMax=2&partitions=14&sliceZ=0&sourceKnowledgeId=integral-triple-space',
+    );
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      '∭_Ω (x^2+y^2+z^2) dV',
+    );
+    expect(screen.getByText('已接收知识导航中的示例')).toBeInTheDocument();
+    expect(
+      screen.getByText(/三重积分：投影穿线法、截面法与柱球坐标雅可比/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /返回知识卡片/ })).toHaveAttribute(
+      'href',
+      '/knowledge?card=integral-triple-space',
+    );
   });
 });

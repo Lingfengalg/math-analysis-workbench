@@ -102,4 +102,69 @@ export const starterMistakes: MistakeItem[] = z.array(mistakeItemSchema).parse([
     createdAt: '2026-03-04T16:45:00.000Z',
     updatedAt: '2026-03-04T16:45:00.000Z',
   },
+  {
+    id: 'mistake-polar-missing-jacobian',
+    title: '极坐标计算二重积分时漏乘雅可比因子 r',
+    topic: 'integral',
+    errorTag: 'calculation-error',
+    status: 'unresolved',
+    prompt:
+      '在圆域 D: x^2 + y^2 ≤ 4 上计算二重积分 ∬_D exp(-(x^2 + y^2)) dx dy，检验极坐标变换时的面积微元换算。',
+    formula:
+      '\\iint_{x^2+y^2\\le 4} e^{-(x^2+y^2)}\\,\\mathrm{d}x\\,\\mathrm{d}y = \\int_0^{2\\pi}\\mathrm{d}\\theta\\int_0^2 e^{-r^2}\\,r\\,\\mathrm{d}r = \\pi(1-e^{-4})',
+    myAttempt:
+      '令 x = r cos θ, y = r sin θ，直接把 dx dy 写成 dr dθ，试图计算 ∫_0^{2π} dθ ∫_0^2 exp(-r^2) dr，不仅漏掉因子 r 且导致被积函数无初等原函数。',
+    correction:
+      '极坐标变换的雅可比行列式为 |∂(x, y)/∂(r, θ)| = r（r ≥ 0），面积微元必须满足 dx dy = r dr dθ（扇形微元弧长 r dθ 乘径向厚度 dr）。补上因子 r 后，∫_0^2 r·exp(-r^2) dr = (1 - e^{-4})/2，再乘 2π 得精确值 π(1 - e^{-4}) ≈ 3.084058。',
+    relatedKnowledgeId: 'integral-double-riemann',
+    counterexampleSurfacePlot: {
+      expression: 'exp(-(x^2 + y^2))',
+      xMin: -2.5,
+      xMax: 2.5,
+      yDomainMin: -2.5,
+      yDomainMax: 2.5,
+      gridSize: 64,
+      integral: {
+        regionType: 'disk',
+        xStart: -2,
+        xEnd: 2,
+        yStart: -2,
+        yEnd: 2,
+        partitions: 18,
+        rule: 'midpoint',
+      },
+      sourceMistakeId: 'mistake-polar-missing-jacobian',
+    },
+    createdAt: '2026-03-05T09:20:00.000Z',
+    updatedAt: '2026-03-05T09:20:00.000Z',
+  },
+  {
+    id: 'mistake-green-origin-pole',
+    title: '忽略区域内部奇点直接套用格林公式归零',
+    topic: 'integral',
+    errorTag: 'domain-ignored',
+    status: 'reviewing',
+    prompt:
+      '沿逆时针单位圆周 L: x^2 + y^2 = 1 计算第二类曲线积分 ∮_L (-y dx + x dy)/(x^2 + y^2)，分析为何 ∂Q/∂x ≡ ∂P/∂y 却不能直接得出环量为 0。',
+    formula:
+      '\\oint_{x^2+y^2=1}\\frac{-y\\,\\mathrm{d}x+x\\,\\mathrm{d}y}{x^2+y^2}=2\\pi \\neq 0',
+    myAttempt:
+      '分别求偏导算出 ∂Q/∂x = (y^2 - x^2)/(x^2 + y^2)^2 且 ∂P/∂y = (y^2 - x^2)/(x^2 + y^2)^2，见二者相等便直接套用格林公式写成 ∬_D (∂Q/∂x - ∂P/∂y) dx dy = 0。',
+    correction:
+      '格林公式要求 P, Q 在闭区域 D 的每一点（含内部与边界）均具有一阶连续偏导数。本题 (0, 0) ∈ D 是无界奇点，不能直接对单位圆盘应用单连通格林公式！应围绕原点作半径 ε < 1 的辅助小圆挖孔（复连通域格林公式），或直接参数化 x = cos t, y = sin t (0 ≤ t ≤ 2π) 算得精确环量 2π。',
+    relatedKnowledgeId: 'integral-green-singularity',
+    counterexampleSurfacePlot: {
+      expression: 'x / (x^2 + y^2)',
+      xMin: -2,
+      xMax: 2,
+      yDomainMin: -2,
+      yDomainMax: 2,
+      zMin: -4,
+      zMax: 4,
+      gridSize: 64,
+      sourceMistakeId: 'mistake-green-origin-pole',
+    },
+    createdAt: '2026-03-06T11:00:00.000Z',
+    updatedAt: '2026-03-06T11:00:00.000Z',
+  },
 ]);

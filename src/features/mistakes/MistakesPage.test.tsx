@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { starterMistakes } from '@/content/mistakes/starter';
 import { mistakeItemSchema } from '@/shared/contracts';
 import { compileExpression } from '@/shared/math/sample';
+import { compileSurfaceExpression } from '@/shared/math/surface';
 import MistakesPage from './MistakesPage';
 
 const STORAGE_KEY = 'math-workbench:mistakes';
@@ -44,9 +45,9 @@ describe('错题本模块与典型错题库', () => {
     vi.restoreAllMocks();
   });
 
-  it('内置 4 道典型错题符合契约、KaTeX 严格渲染零报错且反例表达式通过白名单', () => {
-    expect(starterMistakes).toHaveLength(4);
-    expect(new Set(starterMistakes.map((item) => item.id)).size).toBe(4);
+  it('内置 6 道典型错题符合契约、KaTeX 严格渲染零报错且反例表达式通过白名单', () => {
+    expect(starterMistakes).toHaveLength(6);
+    expect(new Set(starterMistakes.map((item) => item.id)).size).toBe(6);
 
     for (const item of starterMistakes) {
       expect(mistakeItemSchema.safeParse(item).success).toBe(true);
@@ -64,10 +65,15 @@ describe('错题本模块与典型错题库', () => {
           compileExpression(item.counterexamplePlot!.expression),
         ).not.toThrow();
       }
+      if (item.counterexampleSurfacePlot) {
+        expect(() =>
+          compileSurfaceExpression(item.counterexampleSurfacePlot!.expression),
+        ).not.toThrow();
+      }
     }
   });
 
-  it('展示初始空状态，点击“载入典型错题示例”加载 4 道错题并持久化到 localStorage', async () => {
+  it('展示初始空状态，点击“载入典型错题示例”加载 6 道错题并持久化到 localStorage', async () => {
     const user = userEvent.setup();
     renderMistakes();
 
@@ -100,19 +106,45 @@ describe('错题本模块与典型错题库', () => {
         name: '在加减运算中盲目使用一阶等价无穷小相消',
       }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole('article', {
+        name: '极坐标计算二重积分时漏乘雅可比因子 r',
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('article', {
+        name: '忽略区域内部奇点直接套用格林公式归零',
+      }),
+    ).toBeInTheDocument();
 
     expect(screen.getAllByRole('link', { name: /复习关联概念/ })).toHaveLength(
-      4,
+      6,
     );
     expect(
       screen.getAllByRole('link', { name: /去绘图中验证反例/ }),
     ).toHaveLength(4);
+    const surfaceLinks = screen.getAllByRole('link', {
+      name: /去三维绘图中验证反例/,
+    });
+    expect(surfaceLinks).toHaveLength(2);
+    expect(surfaceLinks[0]).toHaveAttribute(
+      'href',
+      expect.stringContaining('mode=3d'),
+    );
+    const tutorLinks = screen.getAllByRole('link', {
+      name: /向 AI 助教追问/,
+    });
+    expect(tutorLinks).toHaveLength(6);
+    expect(tutorLinks[0]).toHaveAttribute(
+      'href',
+      expect.stringContaining('ctxKind=mistake'),
+    );
 
     const raw = localStorage.getItem(STORAGE_KEY);
     expect(raw).not.toBeNull();
     const persisted = JSON.parse(raw!);
     expect(persisted.schemaVersion).toBe(1);
-    expect(persisted.data.items).toHaveLength(4);
+    expect(persisted.data.items).toHaveLength(6);
   });
 
   it('支持新建错题表单校验、创建、公式实时预览、编辑、状态切换与二次确认删除', async () => {
@@ -205,25 +237,30 @@ describe('错题本模块与典型错题库', () => {
     renderMistakes();
 
     await user.click(screen.getByRole('button', { name: /载入典型错题示例/ }));
-    expect(screen.getAllByRole('article')).toHaveLength(4);
+    expect(screen.getAllByRole('article')).toHaveLength(6);
 
     // 按主题筛选：积分学
     const topicSegmented = screen.getByLabelText('按主题筛选');
     await user.click(within(topicSegmented).getByText('积分学'));
-    expect(screen.getAllByRole('article')).toHaveLength(1);
+    expect(screen.getAllByRole('article')).toHaveLength(3);
     expect(
       screen.getByRole('article', {
         name: '跨越无界奇点直接套用牛顿-莱布尼茨公式',
       }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole('article', {
+        name: '极坐标计算二重积分时漏乘雅可比因子 r',
+      }),
+    ).toBeInTheDocument();
 
     await user.click(within(topicSegmented).getByText('全部主题'));
-    expect(screen.getAllByRole('article')).toHaveLength(4);
+    expect(screen.getAllByRole('article')).toHaveLength(6);
 
     // 按掌握状态筛选：复习中
     const statusSegmented = screen.getByLabelText('按掌握状态筛选');
     await user.click(within(statusSegmented).getByText('复习中'));
-    expect(screen.getAllByRole('article')).toHaveLength(1);
+    expect(screen.getAllByRole('article')).toHaveLength(2);
     expect(
       screen.getByRole('article', {
         name: '把“连续”误当成“可导”的充分条件',
@@ -241,7 +278,7 @@ describe('错题本模块与典型错题库', () => {
     expect(screen.getAllByRole('article')).toHaveLength(1);
 
     await user.click(screen.getByRole('button', { name: '清空筛选' }));
-    expect(screen.getAllByRole('article')).toHaveLength(4);
+    expect(screen.getAllByRole('article')).toHaveLength(6);
 
     // 关键词搜索（不区分大小写）
     const searchBox = screen.getByRole('textbox', { name: '搜索错题' });
@@ -310,8 +347,8 @@ describe('错题本模块与典型错题库', () => {
     expect(
       screen.getByText(/本地存储写入失败（当前页面修改仍保留在内存中）/),
     ).toBeInTheDocument();
-    // 内存中依然展示已载入的 4 道错题，不丢失用户操作
-    expect(screen.getAllByRole('article')).toHaveLength(4);
+    // 内存中依然展示已载入的 6 道错题，不丢失用户操作
+    expect(screen.getAllByRole('article')).toHaveLength(6);
   });
 
   it('支持合法 JSON 导入合并与导出，并拒绝损坏或格式不符的导入文件', async () => {
