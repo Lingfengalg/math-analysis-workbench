@@ -10,6 +10,7 @@ import {
   Input,
   InputNumber,
   Popconfirm,
+  Select,
   Slider,
   Segmented,
   Space,
@@ -33,6 +34,13 @@ import {
 } from '@/shared/contracts';
 import { parsePlotSearch } from '@/shared/navigation/plot-link';
 import { createStorage } from '@/shared/storage';
+import {
+  addHistoryEntry,
+  EMPTY_PLOT_HISTORY,
+  historyEntryLabel,
+  plotHistoryStorage,
+  type PlotHistory,
+} from './history';
 import { calculatePlot } from '@/shared/math/client';
 import {
   formatGapRange,
@@ -322,6 +330,13 @@ function PlottingWorkspace({
   const { state: plot, draw: drawPlot } = usePlotCalculation(initial);
   const { state: sequence, draw: drawSequence } = useSequenceCalculation();
   const [mode, setMode] = useState<PlotMode>('function');
+  const [history, setHistory] = useState<PlotHistory>(() => {
+    const stored = plotHistoryStorage.read(EMPTY_PLOT_HISTORY);
+    return stored.ok ? stored.data : EMPTY_PLOT_HISTORY;
+  });
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const historyRef = useRef(history);
+  const recordedRequest = useRef<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [storageError, setStorageError] = useState(initialStorageError);
   // 知识来源提示只在当前绘图仍与链接示例一致时显示
@@ -359,6 +374,32 @@ function PlottingWorkspace({
   const [taylorOrder, setTaylorOrder] = useState(TAYLOR_DEFAULT_ORDER);
   const [taylorCenter, setTaylorCenter] = useState<number | null>(0);
   const result = plot.status === 'ready' ? plot.result : null;
+
+  // 成功绘制后记录「最近绘制」；损坏数据不会被覆盖（读取失败时保持空历史并在下方提示）
+  useEffect(() => {
+    if (plot.status !== 'ready') return;
+    const request = plot.request;
+    const key = JSON.stringify(request);
+    if (recordedRequest.current === key) return;
+    recordedRequest.current = key;
+    const next = addHistoryEntry(historyRef.current, request);
+    historyRef.current = next;
+    setHistory(next);
+    const written = plotHistoryStorage.write(next);
+    if (!written.ok) setHistoryError(written.error);
+  }, [plot]);
+
+  const applyHistory = (index: number) => {
+    const entry = history.entries[index];
+    if (!entry) return;
+    form.setFieldsValue({
+      expression: entry.request.expression,
+      xMin: entry.request.xMin,
+      xMax: entry.request.xMax,
+    });
+    setRange({ xMin: entry.request.xMin, xMax: entry.request.xMax });
+    draw({ ...entry.request });
+  };
   // 主曲线绘制完成后才有交点可算；重绘期间置空。
   const mainRequest = plot.status === 'ready' ? plot.request : null;
   const summary = useMemo(
@@ -721,6 +762,30 @@ function PlottingWorkspace({
           title={mode === 'function' ? '设置函数' : '设置数列'}
           className="plot-settings"
         >
+          {history.entries.length > 0 && (
+            <Space className="section-gap-bottom" wrap>
+              <span>最近绘制：</span>
+              <Select
+                aria-label="最近绘制记录"
+                placeholder="选择一条记录重新绘制"
+                style={{ minWidth: 260 }}
+                onChange={(value) => applyHistory(value as number)}
+                options={history.entries.map((entry, index) => ({
+                  value: index,
+                  label: historyEntryLabel(entry),
+                }))}
+              />
+            </Space>
+          )}
+          {historyError && (
+            <Alert
+              type="warning"
+              showIcon
+              className="section-gap-bottom"
+              title="最近绘制记录保存失败"
+              description={historyError}
+            />
+          )}
           <Form
             form={form}
             layout="vertical"
