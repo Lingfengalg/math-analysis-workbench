@@ -943,3 +943,33 @@ test('知识卡片的迷你示意图渲染出像素并保留整页入口 (#67)',
     page.getByRole('link', { name: /去绘图中观察/ }).first(),
   ).toBeVisible();
 });
+
+test('最近绘制记录可恢复表单并重绘 (#65)', async ({ page }) => {
+  await page.goto('/#/plotting');
+  await expect(page.getByRole('status')).toContainText('f(x)', {
+    timeout: 20000,
+  });
+
+  await page.getByLabel('函数表达式 f(x)').fill('x^2');
+  await page.getByRole('button', { name: /绘制函数/ }).click();
+  await expect(page.getByRole('status')).toContainText('f(x) = x^2');
+
+  await page.getByLabel('函数表达式 f(x)').fill('abs(x)');
+  await page.getByRole('button', { name: /绘制函数/ }).click();
+  await expect(page.getByRole('status')).toContainText('f(x) = abs(x)');
+
+  await expect(page.getByText('最近绘制：')).toBeVisible();
+  await page.getByLabel('最近绘制记录').click();
+  await page
+    .locator('.ant-select-dropdown:visible .ant-select-item-option')
+    .filter({ hasText: 'x^2 · [-5, 5]' })
+    .first()
+    .click();
+
+  await expect(page.getByLabel('函数表达式 f(x)')).toHaveValue('x^2');
+  await expect(page.getByRole('status')).toContainText('f(x) = x^2');
+
+  // 刷新后历史仍在
+  await page.reload();
+  await expect(page.getByText('最近绘制：')).toBeVisible();
+});
