@@ -87,6 +87,36 @@ npm run test:run -- src/shared/math/sample.perf
 预算留了约 20–100 倍余量，只用于拦截「数量级」退化；同时有一条断言检查 `1/x` 仍产生缺口、
 `x^2` 仍无缺口，防止为了提速而关掉间断检测。
 
+## 2.1 路由依赖闭包预算（#86）
+
+`perf:budget` 按构建文件名估算单 chunk，构建器重新分块后可能漏算。`perf:routes` 改为读 Vite 清单
+（`build.manifest = true`），从入口模块沿 `imports` 求闭包，再逐文件计算 gzip / Brotli：
+
+```bash
+npm run build
+npm run perf:routes   # 读取 perf/route-budgets.json
+```
+
+2026-11-21 实测（gzip）：
+
+| 路由入口               | 文件数 | raw       | gzip     | brotli   | 预算   |
+| ---------------------- | ------ | --------- | -------- | -------- | ------ |
+| home（`index.html`）   | 10     | 788.9 KB  | 256.4 KB | 222.5 KB | 285 KB |
+| plotting               | 19     | 1579.9 KB | 524.2 KB | 451.8 KB | 580 KB |
+| knowledge              | 15     | 1100.0 KB | 352.8 KB | 302.6 KB | 390 KB |
+| mistakes               | 16     | 1028.6 KB | 340.5 KB | 297.0 KB | 375 KB |
+| math-input（MathLive） | 12     | 1583.2 KB | 473.8 KB | 399.7 KB | 525 KB |
+| limit-lab（JSXGraph）  | 17     | 2116.4 KB | 605.4 KB | 500.5 KB | 670 KB |
+
+规则：
+
+- **入口缺失直接失败**：构建重命名入口或删掉路由时，脚本不会静默跳过。
+- 闭包默认只沿静态 `imports`；需要时可在预算项里加 `"includeDynamic": true` 打开一层动态导入。
+- 预算调整必须在 PR 说明原因，不能只提高阈值。
+- 该脚本只测「构建产物体积」，不代表冷/热缓存下的实际下载量：浏览器网络测量见下方局限。
+
+CI：Quality job 在 `perf:budget` 之后执行 `perf:routes`。
+
 ## 3. 已知局限
 
 - Node/Vitest 环境测的是采样纯函数，不等同于浏览器 Worker 内的真实耗时：首次绘图还包含 Worker 创建与模块加载，
