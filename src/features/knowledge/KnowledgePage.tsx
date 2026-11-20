@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Input, Segmented } from 'antd';
 import { ArrowRightOutlined, SearchOutlined } from '@ant-design/icons';
@@ -6,6 +6,9 @@ import { knowledgeCards } from '@/content/knowledge';
 import { matchesKnowledgeQuery } from './search';
 import { createPlotLink } from '@/shared/navigation/plot-link';
 import { createKnowledgeCardLink } from '@/shared/navigation/knowledge-link';
+const MiniPlot = lazy(() =>
+  import('./MiniPlot').then((module) => ({ default: module.MiniPlot })),
+);
 import { createMistakeTopicLink } from '@/shared/navigation/knowledge-link';
 import { Formula } from '@/shared/ui/Formula';
 import { DerivativeLab } from './DerivativeLab';
@@ -139,6 +142,14 @@ export default function KnowledgePage() {
                 {card.examples.map((example) => (
                   <div key={example.explanation}>
                     <p>{example.explanation}</p>
+                    {example.plot && (
+                      <Suspense fallback={null}>
+                        <MiniPlot
+                          request={example.plot}
+                          label={`${card.title} 的迷你示意图`}
+                        />
+                      </Suspense>
+                    )}
                     {example.plot && (
                       <Link
                         className={styles.plotLink}

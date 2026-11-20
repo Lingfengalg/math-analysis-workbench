@@ -901,3 +901,45 @@ test('知识卡片的「相关概念」可以跳转并高亮目标卡片', async
     /cardFocused/,
   );
 });
+
+test('知识卡片的迷你示意图渲染出像素并保留整页入口 (#67)', async ({ page }) => {
+  await page.goto('/#/knowledge');
+  const canvas = page.getByRole('img', { name: /的迷你示意图/ }).first();
+  await expect(canvas).toBeVisible();
+
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const element = document.querySelector('canvas[role="img"]');
+          if (!(element instanceof HTMLCanvasElement)) return 0;
+          const context = element.getContext('2d');
+          if (!context) return 0;
+          const data = context.getImageData(
+            0,
+            0,
+            element.width,
+            element.height,
+          ).data;
+          let colored = 0;
+          for (let index = 0; index < data.length; index += 4) {
+            const [r, g, b, a] = [
+              data[index],
+              data[index + 1],
+              data[index + 2],
+              data[index + 3],
+            ];
+            if (a > 0 && !(r > 240 && g > 240 && b > 240)) colored += 1;
+          }
+          return colored;
+        }),
+      { timeout: 20000 },
+    )
+    .toBeGreaterThan(100);
+  await expect(
+    page.getByText(/迷你示意图：数值采样，仅用于快速观察/).first(),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: /去绘图中观察/ }).first(),
+  ).toBeVisible();
+});
