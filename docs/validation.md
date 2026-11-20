@@ -763,3 +763,12 @@ order)` 循环做「符号求导 → 白名单校验 → 编译求值」，系�
 - Windows 本地，Node.js 22.23.4 / npm 10.9.9：`npm run test:run -- --maxWorkers=2` 31 个文件、309 项通过；`npm run build` 与 `npm run perf:budget` 通过。
 - Chromium：预先启动本次构建的预览服务后，`npm run test:e2e -- --workers=2` 复跑 53 项通过。首次完整运行有两项批注测试在加载阶段超时，单独复跑均通过；未测试 Firefox / WebKit。
 - 本机直接执行 `npm run check` 两次未完整通过：第一次既有错题页面测试超出 5 秒；第二次两个 Vitest worker 启动超时。格式、lint、类型检查均已通过，上述低并发全量测试与独立构建已通过；CI 状态以 PR 的实际运行结果为准。
+
+## 2026-11-21 GitHub Pages 发布尝试（#8）
+
+- 手动触发 `Deploy Pages`（run `44782558005`）：
+  - `npm ci`、`npm run check` 通过（构建产物已生成）；
+  - `actions/configure-pages@v5` 失败：`Get Pages site failed ... Not Found`，deploy job 被跳过。
+- 结论：**仓库尚未启用 Pages**（需要管理员在 Settings → Pages 选择 GitHub Actions 作为来源）。
+  因此本轮没有真实站点 URL，也没有验证子路径资源、hash 路由刷新、知识示例跳转或 Worker；
+  这些验证在 Pages 启用并成功部署后再补，不能提前写成已完成。
