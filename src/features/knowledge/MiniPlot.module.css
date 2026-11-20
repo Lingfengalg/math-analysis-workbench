@@ -1,0 +1,20 @@
+.figure {
+  margin: 8px 0 0;
+}
+
+.canvas {
+  display: block;
+  width: 100%;
+  max-width: 260px;
+  height: 120px;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid var(--color-border-subtle, #e2e8e4);
+}
+
+.caption {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-text-muted, #6b7280);
+}
