@@ -406,20 +406,21 @@ test('移动端导航与内容不横向溢出', async ({ page }) => {
 test('知识搜索覆盖条件、例题与误区', async ({ page }) => {
   await page.goto('/#/knowledge');
   const search = page.getByPlaceholder('搜索概念、条件、例题或误区');
-  await expect(page.getByText('函数极限：靠近，而非到达')).toBeVisible();
+  const heading = (name: string) => page.getByRole('heading', { name });
+  await expect(heading('函数极限：靠近，而非到达')).toBeVisible();
 
   // 只在误区里出现
   await search.fill('倒过来');
-  await expect(page.getByText('可导与连续：逆命题不成立')).toBeVisible();
-  await expect(page.getByText('函数极限：靠近，而非到达')).toBeHidden();
+  await expect(heading('可导与连续：逆命题不成立')).toBeVisible();
+  await expect(heading('函数极限：靠近，而非到达')).toBeHidden();
 
   // 只在例题里出现
   await search.fill('左导数');
-  await expect(page.getByText('可导与连续：逆命题不成立')).toBeVisible();
+  await expect(heading('可导与连续：逆命题不成立')).toBeVisible();
 
   // 只在适用条件里出现
   await search.fill('区间端点');
-  await expect(page.getByText('连续性：先检查定义域')).toBeVisible();
+  await expect(heading('连续性：先检查定义域')).toBeVisible();
 
   await search.fill('不存在的关键词');
   await expect(page.getByText(/没有找到匹配的知识点/)).toBeVisible();
@@ -882,4 +883,21 @@ test('首页与侧栏的模块入口、路由和待开发状态一致', async ({
     await nav.getByRole('link', { name: /工作台概览/ }).click();
     await expect(tools).toBeVisible();
   }
+});
+
+test('知识卡片的「相关概念」可以跳转并高亮目标卡片', async ({ page }) => {
+  await page.goto('/#/knowledge');
+  const nav = page.getByRole('navigation', { name: '相关概念' }).first();
+  const link = nav.getByRole('link').first();
+  const href = (await link.getAttribute('href')) ?? '';
+  const focusId = new URLSearchParams(href.split('?')[1] ?? '').get('focus');
+  expect(focusId).toBeTruthy();
+
+  await link.click();
+  await expect(page).toHaveURL(new RegExp(`#\\/knowledge\\?focus=${focusId}$`));
+  await expect(page.getByText(/已定位到错题关联的卡片/)).toBeVisible();
+
+  await expect(page.locator(`[data-card-id="${focusId}"]`)).toHaveClass(
+    /cardFocused/,
+  );
 });

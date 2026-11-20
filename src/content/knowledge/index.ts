@@ -29,6 +29,7 @@ export const knowledgeCards = z.array(knowledgeCardSchema).parse([
       '不能仅凭图像或有限次采样证明极限存在。',
       '极限存在不要求 f(a) 等于该极限，甚至不要求 f(a) 有定义。',
     ],
+    related: ['continuity-reciprocal', 'derivative-absolute'],
     references: [
       '参考主题：函数极限的 ε-δ 定义；提交前由组员对照本课程教材补充版本与页码。',
     ],
@@ -69,6 +70,7 @@ export const knowledgeCards = z.array(knowledgeCardSchema).parse([
     references: [
       '参考主题：函数连续性与定义域；提交前对照本课程教材补充引用。',
     ],
+    related: ['limit-square', 'derivative-absolute'],
   },
   {
     id: 'derivative-absolute',
@@ -93,6 +95,7 @@ export const knowledgeCards = z.array(knowledgeCardSchema).parse([
       '不能把“可导必连续”倒过来使用。',
       '数值差商只是观察工具，不能替代极限论证。',
     ],
+    related: ['continuity-reciprocal', 'limit-square'],
     references: [
       '参考主题：导数定义及可导与连续的关系；提交前对照本课程教材补充引用。',
     ],

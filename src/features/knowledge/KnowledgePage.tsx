@@ -5,6 +5,7 @@ import { ArrowRightOutlined, SearchOutlined } from '@ant-design/icons';
 import { knowledgeCards } from '@/content/knowledge';
 import { matchesKnowledgeQuery } from './search';
 import { createPlotLink } from '@/shared/navigation/plot-link';
+import { createKnowledgeCardLink } from '@/shared/navigation/knowledge-link';
 import { createMistakeTopicLink } from '@/shared/navigation/knowledge-link';
 import { Formula } from '@/shared/ui/Formula';
 import { DerivativeLab } from './DerivativeLab';
@@ -188,6 +189,25 @@ export default function KnowledgePage() {
                 </ul>
               </section>
             </aside>
+            {(card.related?.length ?? 0) > 0 && (
+              <nav className={styles.related} aria-label="相关概念">
+                <span className={styles.relatedLabel}>相关概念：</span>
+                {card.related?.map((id) => {
+                  const target = knowledgeCards.find(
+                    (entry) => entry.id === id,
+                  );
+                  return (
+                    <Link
+                      key={id}
+                      className={styles.relatedLink}
+                      to={createKnowledgeCardLink(id)}
+                    >
+                      {target ? target.title : `未知卡片（${id}）`}
+                    </Link>
+                  );
+                })}
+              </nav>
+            )}
             {card.id === 'derivative-absolute' && topic === 'derivative' && (
               <DerivativeLab />
             )}

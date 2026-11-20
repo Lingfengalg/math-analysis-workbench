@@ -274,3 +274,23 @@
   outline: 2px solid var(--color-accent, #2f7a56);
   outline-offset: 2px;
 }
+
+.related {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--color-border-subtle, #e2e8e4);
+}
+
+.relatedLabel {
+  color: var(--color-text-muted, #6b7280);
+}
+
+.relatedLink {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--color-surface-muted, #f1f5f2);
+}
