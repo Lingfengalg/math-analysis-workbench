@@ -29,6 +29,13 @@ npm run test:e2e          # 构建并自动启动生产预览服务器
 npm run preview          # 先 build，再本地预览生产包
 ```
 
+练习题题库（#84）：
+
+- 数据与校验在 `src/features/mistakes/practice/bank.ts`，`practiceQuestions` 仍从 `questions.ts` 导出。
+- 题目需声明 `source`（可公开引用或「原创示例」）与 `reviewStatus`（`draft` / `reviewed`），课程组审校后改状态并补 `reviewedBy` / `reviewedAt`。
+- 题目 id 稳定：练习记录与错题用 `practice:<id>` 关联，不要改已发布题目的 id；修改答案不会改写历史记录（记录保存当时作答与判定）。
+- 结构不兼容变化才升 `PRACTICE_BANK_VERSION`，新增可选字段不升版本。
+
 性能基线（体积预算是 CI 的常规检查，采样预算随单测执行）：
 
 ```bash
