@@ -24,9 +24,10 @@ describe('模块注册表', () => {
       'knowledge',
       'plotting',
       'mistakes',
+      'backup',
       'assistant',
     ]);
-    expect(modules.filter((module) => module.showOnDashboard)).toHaveLength(4);
+    expect(modules.filter((module) => module.showOnDashboard)).toHaveLength(5);
     for (const module of modules) {
       expect(module.title).not.toBe('');
       expect(module.caption).not.toBe('');

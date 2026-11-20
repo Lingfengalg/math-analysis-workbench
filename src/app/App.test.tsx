@@ -26,7 +26,7 @@ describe('路由、导航和首页模块入口', () => {
     render(<App />);
     const tools = await screen.findByRole('region', { name: '学习工具' });
     const toolLinks = within(tools).getAllByRole('link');
-    expect(toolLinks).toHaveLength(4);
+    expect(toolLinks).toHaveLength(5);
     expect(
       within(tools).getByRole('link', { name: /AI 助教/ }),
     ).toHaveTextContent('待开发');

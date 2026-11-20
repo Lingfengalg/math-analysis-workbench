@@ -860,7 +860,7 @@ test('首页与侧栏的模块入口、路由和待开发状态一致', async ({
   await page.goto('/#/');
   const tools = page.getByRole('region', { name: '学习工具' });
   const nav = page.getByRole('navigation', { name: '主导航' });
-  await expect(tools.getByRole('link')).toHaveCount(4);
+  await expect(tools.getByRole('link')).toHaveCount(5);
   await expect(tools.getByRole('link', { name: /AI 助教/ })).toContainText(
     '待开发',
   );
@@ -868,6 +868,7 @@ test('首页与侧栏的模块入口、路由和待开发状态一致', async ({
     ['知识导航', '/knowledge'],
     ['绘图计算', '/plotting'],
     ['错题本', '/mistakes'],
+    ['数据备份', '/backup'],
     ['AI 助教', '/assistant'],
   ]) {
     await tools.getByRole('link', { name: new RegExp(title) }).click();
