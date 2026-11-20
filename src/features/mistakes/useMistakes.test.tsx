@@ -492,3 +492,44 @@ it('合并时接受相同计划的后续编辑，忽略较旧备份并拒绝不�
   });
   expect(storedItems()[0].schedule).toEqual(schedule);
 });
+
+describe('复习撤销（#83）', () => {
+  it('撤销最近一次评分后恢复计划与复习标记', async () => {
+    const a = renderHook(() => useMistakes());
+    await act(async () => {
+      await a.result.current.add(draft('撤销测试'));
+    });
+    const item = a.result.current.items[0];
+    await act(async () => {
+      expect(await a.result.current.completeRedo(item, 3 as never)).toBe(true);
+    });
+    const reviewed = a.result.current.items[0];
+    expect(reviewed.schedule).toBeDefined();
+    expect(reviewed.reviewLog).toHaveLength(1);
+
+    await act(async () => {
+      expect(await a.result.current.undoLastReview(reviewed)).toBe(true);
+    });
+    const restored = a.result.current.items[0];
+    expect(restored.schedule).toBeUndefined();
+    expect(restored.reviewedAt).toBeNull();
+    expect(restored.reviewLog).toHaveLength(0);
+  });
+
+  it('其他标签页已修改时拒绝撤销并保留新数据', async () => {
+    const a = renderHook(() => useMistakes());
+    await act(async () => {
+      await a.result.current.add(draft('冲突测试'));
+    });
+    const item = a.result.current.items[0];
+    await act(async () => {
+      await a.result.current.completeRedo(item, 3 as never);
+    });
+    const stale = { ...a.result.current.items[0], title: '过期快照' };
+    await act(async () => {
+      expect(await a.result.current.undoLastReview(stale)).toBe(false);
+    });
+    expect(a.result.current.saveError).toContain('其他标签页');
+    expect(a.result.current.items[0].reviewLog).toHaveLength(1);
+  });
+});

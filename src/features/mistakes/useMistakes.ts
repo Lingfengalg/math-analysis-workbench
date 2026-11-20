@@ -16,6 +16,7 @@ import {
 import { resolveImport, type ImportMode } from './transfer';
 import { practiceMistakeId } from './practice/questions';
 import { nextReview, Rating, type ReviewRating } from './schedule';
+import { appendReviewLog, undoReviewLog } from './model';
 
 interface BootState {
   items: Mistake[];
@@ -53,6 +54,7 @@ export interface MistakesController {
   remove: (original: Mistake) => Promise<boolean>;
   setReviewed: (id: string, reviewed: boolean) => Promise<boolean>;
   completeRedo: (original: Mistake, rating: ReviewRating) => Promise<boolean>;
+  undoLastReview: (original: Mistake) => Promise<boolean>;
   syncPracticeResult: (
     questionId: string,
     draft: MistakeDraft,
@@ -296,10 +298,19 @@ export function useMistakes(): MistakesController {
           const schedule = nextReview(latest.schedule, rating, now);
           return current.map((item) =>
             item.id === original.id
-              ? {
-                  ...markReviewed(item, rating !== Rating.Again, now),
-                  schedule,
-                }
+              ? appendReviewLog(
+                  {
+                    ...markReviewed(item, rating !== Rating.Again, now),
+                    schedule,
+                  },
+                  {
+                    at: now,
+                    rating,
+                    beforeSchedule: latest.schedule,
+                    beforeReviewedAt: latest.reviewedAt,
+                    dueAfter: schedule.due,
+                  },
+                )
               : item,
           );
         } catch {
@@ -313,6 +324,40 @@ export function useMistakes(): MistakesController {
         );
       if (scheduleError)
         setSaveError('无法计算下次复习时间，请检查系统时间与记录后重试。');
+      return saved;
+    },
+    [commit],
+  );
+
+  const undoLastReview = useCallback(
+    async (original: Mistake): Promise<boolean> => {
+      let conflict = false;
+      let nothingToUndo = false;
+      const saved = await commit((current) => {
+        const latest = current.find((item) => item.id === original.id);
+        if (!latest || JSON.stringify(latest) !== JSON.stringify(original)) {
+          conflict = true;
+          return null;
+        }
+        const restored = undoReviewLog(latest, Date.now());
+        if (!restored) {
+          nothingToUndo = true;
+          return null;
+        }
+        return current.map((item) =>
+          item.id === original.id ? restored : item,
+        );
+      });
+      if (conflict) {
+        setSaveError(
+          '这条错题已在其他标签页修改或删除，未撤销评分；请重新打开后再试。',
+        );
+        return false;
+      }
+      if (nothingToUndo) {
+        setSaveError('这条错题没有可撤销的评分记录。');
+        return false;
+      }
       return saved;
     },
     [commit],
@@ -412,6 +457,7 @@ export function useMistakes(): MistakesController {
     remove,
     setReviewed,
     completeRedo,
+    undoLastReview,
     syncPracticeResult,
     importMistakes,
     reset,
