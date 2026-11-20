@@ -145,8 +145,12 @@ test('错题可以按主题回到知识导航，其他主题不显示无效入�
   ).toHaveCount(0);
   await page.getByRole('link', { name: '查看「导数」相关知识' }).click();
   await expect(page).toHaveURL(/#\/knowledge\?topic=derivative$/);
-  await expect(page.getByText('可导与连续：逆命题不成立')).toBeVisible();
-  await expect(page.getByText('函数极限：靠近，而非到达')).toHaveCount(0);
+  await expect(
+    page.getByRole('heading', { name: '可导与连续：逆命题不成立' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: '函数极限：靠近，而非到达' }),
+  ).toHaveCount(0);
   expect(page.url()).not.toContain('私有题目');
   await page.goBack();
   await expect(page.getByText('导数错题')).toBeVisible();

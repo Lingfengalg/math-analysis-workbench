@@ -72,8 +72,9 @@ describe('知识导航', () => {
     expect(
       screen.getByRole('link', { name: '查看「导数」错题' }),
     ).toHaveAttribute('href', '/mistakes?topic=derivative');
+    // 互链会以链接文字出现其他卡片标题，这里只断言卡片本身被筛掉
     expect(
-      screen.queryByText('函数极限：靠近，而非到达'),
+      screen.queryByRole('heading', { name: '函数极限：靠近，而非到达' }),
     ).not.toBeInTheDocument();
   });
   it('未知主题回退到全部卡片', () => {
@@ -181,10 +182,24 @@ describe('按卡片 id 定位（#70）', () => {
     );
     expect(screen.getByText(/已定位到错题关联的卡片/)).toBeInTheDocument();
     const card = screen
-      .getByText('可导与连续：逆命题不成立')
+      .getByRole('heading', { name: '可导与连续：逆命题不成立' })
       .closest('article');
     expect(card).not.toBeNull();
     expect(card?.getAttribute('data-card-id')).toBe('derivative-absolute');
     expect(card?.className).toMatch(/cardFocused/);
+  });
+});
+
+describe('相关概念互链（#66）', () => {
+  it('卡片展示相关概念链接并指向 focus 参数', () => {
+    render(
+      <MemoryRouter initialEntries={['/knowledge']}>
+        <KnowledgePage />
+      </MemoryRouter>,
+    );
+    const nav = screen.getAllByRole('navigation', { name: '相关概念' })[0];
+    expect(nav).toBeInTheDocument();
+    const link = within(nav).getAllByRole('link')[0];
+    expect(link.getAttribute('href')).toMatch(/focus=/);
   });
 });

@@ -103,6 +103,11 @@ export const knowledgeCardSchema = z.object({
     .min(1),
   pitfalls: z.array(z.string()).min(1),
   references: z.array(z.string()).min(1),
+  /** 相关概念：只存卡片 id，旧数据缺省表示暂无互链。 */
+  related: z
+    .array(z.string().regex(/^[a-z][a-z0-9-]*$/))
+    .max(5)
+    .optional(),
 });
 export type KnowledgeCard = z.infer<typeof knowledgeCardSchema>;
 
