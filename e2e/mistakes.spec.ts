@@ -675,3 +675,56 @@ test('错题可关联知识卡片并跳转定位（#70）', async ({ page }) => 
     page.getByRole('link', { name: '可导与连续：逆命题不成立' }),
   ).toBeVisible();
 });
+
+test('复习评分可撤销并恢复评分前的计划（#83）', async ({ page }) => {
+  await page.goto('/#/mistakes');
+  await page.getByRole('button', { name: /记录错题/ }).click();
+  await page.getByLabel('题目', { exact: true }).fill('撤销评分测试题');
+  await page.getByLabel('题目内容').fill('先写下思路，再查看订正。');
+  await page.getByRole('button', { name: /保\s*存/ }).click();
+  await expect(page.getByText('撤销评分测试题')).toBeVisible();
+
+  const before = await page.evaluate(() => {
+    const raw = localStorage.getItem('math-workbench:mistakes');
+    return JSON.parse(raw!).data.items[0];
+  });
+  expect(before.schedule).toBeUndefined();
+
+  // 重做 → 查看订正 → 评分
+  await page.getByRole('button', { name: '重做' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel(/你的思路/).fill('按定义计算');
+  await dialog.getByRole('button', { name: '查看订正' }).click();
+  await dialog.getByRole('button', { name: '已掌握，标记已复习' }).click();
+  await expect(dialog).toBeHidden();
+
+  const reviewed = await page.evaluate(() => {
+    const raw = localStorage.getItem('math-workbench:mistakes');
+    const item = JSON.parse(raw!).data.items[0];
+    return {
+      hasSchedule: Boolean(item.schedule),
+      log: item.reviewLog?.length ?? 0,
+    };
+  });
+  expect(reviewed.hasSchedule).toBe(true);
+  expect(reviewed.log).toBe(1);
+  await expect(page.getByText(/最近一次评分：已掌握/)).toBeVisible();
+
+  // 撤销
+  await page.getByRole('button', { name: /撤销评分/ }).click();
+  await page.getByRole('button', { name: /^撤\s*销$/ }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const raw = localStorage.getItem('math-workbench:mistakes');
+        const item = JSON.parse(raw!).data.items[0];
+        return {
+          schedule: item.schedule ?? null,
+          reviewedAt: item.reviewedAt,
+          log: item.reviewLog?.length ?? 0,
+        };
+      }),
+    )
+    .toEqual({ schedule: null, reviewedAt: null, log: 0 });
+  await expect(page.getByText(/尚未安排复习/)).toBeVisible();
+});

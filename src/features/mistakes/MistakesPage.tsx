@@ -57,6 +57,13 @@ import styles from './MistakesPage.module.css';
 type TopicFilter = 'all' | MistakeTopic;
 type ReviewFilter = 'all' | 'reviewed' | 'due';
 type CauseFilter = 'all' | MistakeCause;
+
+const RATING_LABELS: Record<1 | 2 | 3 | 4, string> = {
+  1: '仍需复习',
+  2: '有困难',
+  3: '已掌握',
+  4: '很轻松',
+};
 const PracticeView = lazy(() =>
   import('./practice/PracticeView').then((module) => ({
     default: module.PracticeView,
@@ -74,6 +81,7 @@ export default function MistakesPage() {
     remove,
     setReviewed,
     completeRedo,
+    undoLastReview,
     syncPracticeResult,
     importMistakes,
     reset,
@@ -499,6 +507,23 @@ export default function MistakesPage() {
               >
                 {item.reviewedAt === null ? '标记已复习' : '取消复习'}
               </Button>,
+              <Popconfirm
+                key="undo"
+                title="撤销最近一次评分？"
+                description="会恢复评分前的复习计划与复习标记。"
+                okText="撤销"
+                cancelText="取消"
+                disabled={!item.reviewLog?.length}
+                onConfirm={() => void undoLastReview(item)}
+              >
+                <Button
+                  type="link"
+                  icon={<UndoOutlined />}
+                  disabled={!item.reviewLog?.length}
+                >
+                  撤销评分
+                </Button>
+              </Popconfirm>,
               <Button
                 key="edit"
                 type="link"
@@ -538,6 +563,21 @@ export default function MistakesPage() {
               {item.reviewedAt !== null &&
                 ` · 最近复习：${formatMistakeTime(item.reviewedAt)}`}
             </p>
+            {(item.reviewLog?.length ?? 0) > 0 && (
+              <p className={styles.meta}>
+                最近一次评分：
+                {
+                  RATING_LABELS[
+                    item.reviewLog![item.reviewLog!.length - 1].rating
+                  ]
+                }
+                （
+                {formatMistakeTime(
+                  item.reviewLog![item.reviewLog!.length - 1].at,
+                )}
+                ）
+              </p>
+            )}
             <p className={styles.schedule}>
               {item.schedule
                 ? `下次复习：${formatMistakeTime(item.schedule.due)}${isReviewDue(item.schedule, now) ? '（已到期）' : ''}`

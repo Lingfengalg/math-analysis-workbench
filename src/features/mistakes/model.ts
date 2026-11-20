@@ -44,8 +44,28 @@ export const MISTAKE_LIMITS = {
   items: 200,
 } as const;
 
+/** 每条错题保留的复习记录条数上限（#83）。 */
+export const REVIEW_LOG_LIMIT = 10;
+
 // JavaScript Date 的可表示范围；防止损坏备份导致日期格式化异常。
 const timestamp = z.number().int().nonnegative().max(8_640_000_000_000_000);
+
+/**
+ * 一次复习评分的可回溯记录。
+ *
+ * 只保存「能否撤销」所需的最小状态：评分、时间、评分前的计划与复习标记、评分后的到期时间。
+ * 历史记录只反映真实发生过的评分，不生成虚构条目；上限 REVIEW_LOG_LIMIT，超出丢弃最旧的。
+ */
+export const reviewLogEntrySchema = z
+  .object({
+    at: timestamp,
+    rating: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
+    beforeSchedule: reviewScheduleSchema.optional(),
+    beforeReviewedAt: timestamp.nullable(),
+    dueAfter: timestamp,
+  })
+  .strict();
+export type ReviewLogEntry = z.infer<typeof reviewLogEntrySchema>;
 
 /** 单条错题。时间使用 epoch 毫秒，避免时区字符串带来的解析歧义。 */
 export const mistakeSchema = z.object({
@@ -89,6 +109,8 @@ export const mistakeSchema = z.object({
   /** 最近一次复习时间；null 表示未复习。旧数据缺少该字段时按未复习处理。 */
   reviewedAt: timestamp.nullable().default(null),
   schedule: reviewScheduleSchema.optional(),
+  /** 复习记录（#83）：最新的在末尾，最多 REVIEW_LOG_LIMIT 条。 */
+  reviewLog: z.array(reviewLogEntrySchema).max(REVIEW_LOG_LIMIT).optional(),
 });
 
 export type Mistake = z.infer<typeof mistakeSchema>;
@@ -185,4 +207,30 @@ export function formatMistakeTime(timestamp: number): string {
     minute: '2-digit',
     hour12: false,
   });
+}
+
+/** 追加一条复习记录，保留最近的 REVIEW_LOG_LIMIT 条。 */
+export function appendReviewLog(item: Mistake, entry: ReviewLogEntry): Mistake {
+  const log = [...(item.reviewLog ?? []), entry];
+  return {
+    ...item,
+    reviewLog: log.slice(Math.max(0, log.length - REVIEW_LOG_LIMIT)),
+  };
+}
+
+/**
+ * 撤销最近一次评分：恢复复习前的计划与 reviewedAt，并移除该条记录。
+ * 没有记录时返回 null（调用方据此提示「无可撤销的评分」）。
+ */
+export function undoReviewLog(item: Mistake, now: number): Mistake | null {
+  const log = item.reviewLog ?? [];
+  const last = log[log.length - 1];
+  if (!last) return null;
+  return {
+    ...item,
+    schedule: last.beforeSchedule,
+    reviewedAt: last.beforeReviewedAt,
+    reviewLog: log.slice(0, -1),
+    updatedAt: now,
+  };
 }

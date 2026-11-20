@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  appendReviewLog,
   createMistake,
   formatMistakeTime,
+  REVIEW_LOG_LIMIT,
+  undoReviewLog,
   mistakeListSchema,
   mistakeSchema,
   sortMistakes,
@@ -135,5 +138,64 @@ describe('关联知识卡片字段（#70）', () => {
     expect(
       mistakeSchema.safeParse({ ...base, knowledgeIds: [''] }).success,
     ).toBe(false);
+  });
+});
+
+describe('复习记录与撤销（#83）', () => {
+  const entry = (at: number) => ({
+    at,
+    rating: 3 as const,
+    beforeReviewedAt: null,
+    dueAfter: at + 1000,
+  });
+
+  it('追加记录并保留最近 REVIEW_LOG_LIMIT 条', () => {
+    let item = createMistake(draft, 0);
+    for (let index = 1; index <= REVIEW_LOG_LIMIT + 2; index += 1) {
+      item = appendReviewLog(item, entry(index));
+    }
+    expect(item.reviewLog).toHaveLength(REVIEW_LOG_LIMIT);
+    expect(item.reviewLog?.at(-1)?.at).toBe(REVIEW_LOG_LIMIT + 2);
+  });
+
+  it('撤销恢复评分前的计划与复习标记，并移除该条记录', () => {
+    const schedule = {
+      version: 1 as const,
+      algorithm: 'FSRS-6' as const,
+      due: 5000,
+      lastReview: 1000,
+      stability: 1,
+      difficulty: 1,
+      elapsedDays: 0,
+      scheduledDays: 0,
+      learningSteps: 0,
+      reps: 1,
+      lapses: 0,
+      state: 2 as const,
+      lastRating: 3 as const,
+    };
+    const item = appendReviewLog(
+      {
+        ...createMistake(draft, 0),
+        schedule,
+        reviewedAt: 1000,
+      },
+      {
+        at: 2000,
+        rating: 3 as const,
+        beforeSchedule: undefined,
+        beforeReviewedAt: null,
+        dueAfter: 3000,
+      },
+    );
+    const undone = undoReviewLog(item, 4000);
+    expect(undone?.schedule).toBeUndefined();
+    expect(undone?.reviewedAt).toBeNull();
+    expect(undone?.reviewLog).toHaveLength(0);
+    expect(undone?.updatedAt).toBe(4000);
+  });
+
+  it('没有记录时撤销返回 null', () => {
+    expect(undoReviewLog(createMistake(draft, 0), 1)).toBeNull();
   });
 });
