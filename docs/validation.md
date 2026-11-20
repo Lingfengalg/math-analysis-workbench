@@ -771,4 +771,4 @@ order)` 循环做「符号求导 → 白名单校验 → 编译求值」，系�
   - `actions/configure-pages@v5` 失败：`Get Pages site failed ... Not Found`，deploy job 被跳过。
 - 结论：**仓库尚未启用 Pages**（需要管理员在 Settings → Pages 选择 GitHub Actions 作为来源）。
   因此本轮没有真实站点 URL，也没有验证子路径资源、hash 路由刷新、知识示例跳转或 Worker；
-  这些验证在 Pages 启用并成功部署后再补，不能提前写成已完成。
+  这些验证在 Pages 启用并成功部署后再补，不能提前写成已完成。管理员操作与部署后验收清单见 [docs/pages-setup.md](pages-setup.md)。
