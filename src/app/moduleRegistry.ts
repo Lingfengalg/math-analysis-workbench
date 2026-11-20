@@ -2,13 +2,35 @@ import { createElement, lazy, type ComponentType } from 'react';
 import {
   AppstoreOutlined,
   BookOutlined,
+  DatabaseOutlined,
   EditOutlined,
   LineChartOutlined,
   RobotOutlined,
 } from '@ant-design/icons';
+
 import type { NavigationModule } from '@/shared/navigation/modules';
 
 const DashboardPage = lazy(() => import('@/features/dashboard'));
+
+/**
+ * 备份页与适配器一起懒加载：适配器会连带引入各模块存储代码，
+ * 静态放进 index chunk 会撑大首屏（#85，perf:budget 曾在这里超标）。
+ */
+const BackupPage = lazy(async () => {
+  const [{ default: Page }, { backupAdapters }] = await Promise.all([
+    import('@/features/backup'),
+    import('./backupAdapters'),
+  ]);
+  return {
+    default: () =>
+      createElement(
+        Page as ComponentType<{ adapters: typeof backupAdapters }>,
+        {
+          adapters: backupAdapters,
+        },
+      ),
+  };
+});
 
 /** 应用层组合模块：路由组件只在这里与共享的导航展示信息相遇。 */
 export interface RegisteredModule extends NavigationModule {
@@ -78,6 +100,16 @@ export const modules = defineModuleRegistry([
     status: 'available',
     Icon: EditOutlined,
     Page: lazy(() => import('@/features/mistakes')),
+    showOnDashboard: true,
+  },
+  {
+    id: 'backup',
+    path: '/backup',
+    title: '数据备份',
+    caption: '导出与恢复本机数据',
+    status: 'available',
+    Icon: DatabaseOutlined,
+    Page: BackupPage,
     showOnDashboard: true,
   },
   {
