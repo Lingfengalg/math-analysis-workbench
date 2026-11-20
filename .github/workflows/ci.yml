@@ -25,6 +25,7 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm run perf:budget
+      - run: npm run perf:routes
   e2e:
     name: Browser tests
     runs-on: ubuntu-latest

@@ -1,0 +1,32 @@
+{
+  "updated": "2026-11-21",
+  "note": "gzip 预算按 2026-11-21 实测留约 10% 余量；入口缺失会直接失败，不会静默跳过。闭包含静态 imports，需要时可用 includeDynamic 打开一层动态导入。",
+  "routes": [
+    { "name": "home", "entry": "index.html", "gzipKb": 285 },
+    {
+      "name": "plotting",
+      "entry": "src/features/plotting/index.ts",
+      "gzipKb": 580
+    },
+    {
+      "name": "knowledge",
+      "entry": "src/features/knowledge/index.ts",
+      "gzipKb": 390
+    },
+    {
+      "name": "mistakes",
+      "entry": "src/features/mistakes/index.ts",
+      "gzipKb": 375
+    },
+    {
+      "name": "math-input",
+      "entry": "src/shared/ui/math-input/MathEditor.tsx",
+      "gzipKb": 525
+    },
+    {
+      "name": "limit-lab",
+      "entry": "src/features/knowledge/LimitChart.tsx",
+      "gzipKb": 670
+    }
+  ]
+}
